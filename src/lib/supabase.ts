@@ -6,7 +6,7 @@ const SUPABASE_URL = 'https://qjqbgbbrzovimyutzvps.supabase.co';
 
 // Paste the Supabase publishable key (sb_publishable_...) here.
 // Never put the sb_secret_ key or Gemini API key in this file.
-const SUPABASE_PUBLISHABLE_KEY = 'PASTE_YOUR_SUPABASE_PUBLISHABLE_KEY_HERE';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_9kpaRSH8gj1f7Z8SvZBm5g_6i-ng8hd';
 
 export const supabase = createClient(
   SUPABASE_URL,
