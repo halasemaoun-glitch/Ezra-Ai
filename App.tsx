@@ -248,7 +248,7 @@ export default function App() {
           <TouchableOpacity style={styles.quickButton} onPress={() => setMessage('Help me plan my day.')}>
             <Text style={styles.quickText}>◷  MY DAY</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.quickButton} onPress={() => setMessage('Show my saved chat.')}>
+          <TouchableOpacity style={styles.quickButton} onPress={() => Alert.alert('Saved chat', `${messages.length} messages are stored on this device. Long-term AI memory is not connected yet.`)}>
             <Text style={styles.quickText}>♡  MEMORIES</Text>
           </TouchableOpacity>
         </View>
