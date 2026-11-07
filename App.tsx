@@ -20,6 +20,7 @@ import {
   useSpeechRecognitionEvent,
 } from 'expo-speech-recognition';
 import { StatusBar } from 'expo-status-bar';
+import { supabase } from './src/lib/supabase';
 
 type Attachment = {
   uri: string;
@@ -48,6 +49,44 @@ export default function App() {
   const [attachment, setAttachment] = useState<Attachment | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [ready, setReady] = useState(false);
+  const [session, setSession] = useState<import('@supabase/supabase-js').Session | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [signingIn, setSigningIn] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (!mounted) return;
+      if (error) setAuthError(error.message);
+      setSession(data.session);
+      setAuthLoading(false);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+    });
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const signIn = async () => {
+    if (!email.trim() || !password) {
+      setAuthError('Enter your email and password.');
+      return;
+    }
+    setSigningIn(true);
+    setAuthError('');
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    if (error) setAuthError(error.message);
+    setSigningIn(false);
+  };
 
   useEffect(() => {
     const restore = async () => {
@@ -160,6 +199,61 @@ export default function App() {
     Speech.speak(text, { language: 'ar', rate: 0.92, pitch: 0.92 });
   };
 
+  if (authLoading) {
+    return (
+      <SafeAreaView style={styles.authSafe}>
+        <StatusBar style="light" />
+        <Text style={styles.authBrand}>EZRA</Text>
+        <Text style={styles.authHint}>Preparing your private space…</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (!session) {
+    return (
+      <SafeAreaView style={styles.authSafe}>
+        <StatusBar style="light" />
+        <View style={styles.authCard}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>E</Text>
+          </View>
+          <Text style={styles.authBrand}>EZRA</Text>
+          <Text style={styles.authTitle}>Your private space.</Text>
+          <Text style={styles.authHint}>Sign in to continue to your personal companion.</Text>
+          <TextInput
+            style={styles.authInput}
+            placeholder="Email"
+            placeholderTextColor="#777680"
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            autoComplete="email"
+          />
+          <TextInput
+            style={styles.authInput}
+            placeholder="Password"
+            placeholderTextColor="#777680"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            autoCapitalize="none"
+            autoComplete="password"
+          />
+          {!!authError && <Text style={styles.authError}>{authError}</Text>}
+          <TouchableOpacity
+            style={[styles.authButton, signingIn && styles.authButtonDisabled]}
+            onPress={signIn}
+            disabled={signingIn}
+          >
+            <Text style={styles.authButtonText}>{signingIn ? 'SIGNING IN…' : 'SIGN IN'}</Text>
+          </TouchableOpacity>
+          <Text style={styles.authFootnote}>Private access · Authorized account only</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar style="light" />
@@ -180,9 +274,15 @@ export default function App() {
               </View>
             </View>
           </View>
-          <View style={styles.privateTag}>
-            <Text style={styles.privateText}>PRIVATE</Text>
-          </View>
+          <TouchableOpacity
+            style={styles.privateTag}
+            onPress={() => Alert.alert('Sign out', 'Sign out of your EZRA account?', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Sign out', style: 'destructive', onPress: () => { supabase.auth.signOut(); } },
+            ])}
+          >
+            <Text style={styles.privateText}>SIGN OUT</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.line} />
@@ -300,6 +400,17 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  authSafe: { flex: 1, backgroundColor: '#101014', alignItems: 'center', justifyContent: 'center', padding: 26 },
+  authCard: { width: '100%', maxWidth: 420, alignItems: 'center' },
+  authBrand: { color: '#F5F0F5', fontSize: 24, fontWeight: '700', letterSpacing: 6, marginTop: 18 },
+  authTitle: { color: '#F5F0F5', fontSize: 23, fontWeight: '600', marginTop: 26 },
+  authHint: { color: '#918B98', fontSize: 13, textAlign: 'center', lineHeight: 20, marginTop: 9, marginBottom: 22 },
+  authInput: { width: '100%', color: '#F5F0F5', backgroundColor: '#211F27', borderWidth: 1, borderColor: '#39323D', borderRadius: 14, paddingHorizontal: 15, paddingVertical: 15, marginBottom: 12, fontSize: 14 },
+  authError: { width: '100%', color: '#F0A4A4', fontSize: 12, marginBottom: 12 },
+  authButton: { width: '100%', backgroundColor: '#B58DAE', borderRadius: 14, alignItems: 'center', paddingVertical: 16, marginTop: 4 },
+  authButtonDisabled: { opacity: 0.6 },
+  authButtonText: { color: '#171219', fontSize: 12, fontWeight: '700', letterSpacing: 2 },
+  authFootnote: { color: '#68636E', fontSize: 10, letterSpacing: 0.6, marginTop: 20 },
   safe: { flex: 1, backgroundColor: '#101014' },
   container: { flex: 1, backgroundColor: '#101014' },
   header: {
