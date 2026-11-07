@@ -35,6 +35,11 @@
           "cameraPermission": "Allow EZRA to take photos you choose to attach."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "c790b378-137b-48ad-a2e0-47e9f7fd22ff"
+      }
+    }
   }
 }
