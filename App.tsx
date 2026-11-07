@@ -196,16 +196,45 @@ export default function App() {
           ? `Continue this conversation naturally. Use the previous messages as context.\n\n${recentContext}\nUser: ${text}`
           : text;
 
-        const { data: aiData, error: aiError } = await supabase.functions.invoke(
-          'smart-service',
-          { body: { input: conversationInput } }
-        );
+        let timeoutId: ReturnType<typeof setTimeout> | undefined;
+        const aiRequest = await Promise.race([
+          supabase.functions.invoke('smart-service', {
+            body: { input: conversationInput },
+          }).then(result => ({ kind: 'response' as const, result })),
+          new Promise<{ kind: 'timeout' }>(resolve => {
+            timeoutId = setTimeout(() => resolve({ kind: 'timeout' }), 30000);
+          }),
+        ]);
+        if (timeoutId) clearTimeout(timeoutId);
 
+        if (aiRequest.kind === 'timeout') {
+          console.error('EZRA AI request timed out after 30 seconds.');
+          Alert.alert(
+            'EZRA response timed out',
+            'Your message was saved, but smart-service did not respond within 30 seconds. The next build will stop the endless sending state so we can diagnose the service.'
+          );
+          setSending(false);
+          return;
+        }
+
+        const { data: aiData, error: aiError } = aiRequest.result;
         if (aiError || typeof aiData?.reply !== 'string' || !aiData.reply.trim()) {
-          console.error('EZRA AI request failed:', aiError);
+          const context = (aiError as any)?.context;
+          const details = [
+            aiError?.message,
+            context?.status ? `HTTP status: ${context.status}` : null,
+            context?.statusText,
+            typeof context?.body === 'string'
+              ? context.body
+              : context?.body
+                ? JSON.stringify(context.body)
+                : null,
+            !aiError && aiData ? JSON.stringify(aiData) : null,
+          ].filter(Boolean).join('\\n\\n');
+          console.error('EZRA AI request failed:', { aiError, aiData });
           Alert.alert(
             'EZRA could not reply',
-            'Your message was saved, but the AI response failed. Please try sending it again.'
+            details || 'Your message was saved, but smart-service returned an empty response.'
           );
           setSending(false);
           return;
