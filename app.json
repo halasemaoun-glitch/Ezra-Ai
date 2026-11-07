@@ -7,12 +7,34 @@
     "userInterfaceStyle": "dark",
     "scheme": "ezra",
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "com.halasemaoun.ezra",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "EZRA uses the microphone so you can speak to your personal assistant.",
+        "NSSpeechRecognitionUsageDescription": "EZRA converts your speech into text so you can send messages by voice."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#101014"
-      }
-    }
+      },
+      "package": "com.halasemaoun.ezra"
+    },
+    "plugins": [
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow EZRA to use your microphone for voice messages.",
+          "speechRecognitionPermission": "Allow EZRA to convert your speech into text."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow EZRA to access photos you choose to attach.",
+          "cameraPermission": "Allow EZRA to take photos you choose to attach."
+        }
+      ]
+    ]
   }
 }
