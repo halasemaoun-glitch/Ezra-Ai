@@ -1,19 +1,18 @@
 {
-      "expo": {
-          "name": "EZRA",
-              "slug": "ezra-ai",
-                  "version": "1.0.0",
-                      "orientation": "portrait",
-                          "userInterfaceStyle": "dark",
-                              "scheme": "ezra",
-                                  "ios": {
-                                        "supportsTablet": false
-                                            },
-                                                "android": {
-                                                      "adaptiveIcon": {
-                                                              "backgroundColor": "#101014"
-                                                                    }
-                                                                        }
-                                                                          }
-                                                                          }
+  "expo": {
+    "name": "EZRA",
+    "slug": "ezra-ai",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "scheme": "ezra",
+    "ios": {
+      "supportsTablet": false
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#101014"
+      }
+    }
+  }
 }
