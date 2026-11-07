@@ -35,20 +35,20 @@ type Message = {
   attachment?: Attachment;
 };
 
-const STORAGE_KEY = 'ezra.chat.messages.v1';
+const WELCOME_MESSAGE: Message = {
+  id: 'welcome',
+  sender: 'ezra',
+  text: 'مرحبًا. أنا إزرا. أنا هنا، احكيلي… شو في بالك اليوم؟',
+};
+const CONVERSATION_ID = '00000000-0000-4000-8000-000000000001';
 
 export default function App() {
   const [message, setMessage] = useState('');
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 'welcome',
-      sender: 'ezra',
-      text: 'مرحبًا. أنا إزرا. أنا هنا، احكيلي… شو في بالك اليوم؟',
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [attachment, setAttachment] = useState<Attachment | null>(null);
   const [isListening, setIsListening] = useState(false);
-  const [ready, setReady] = useState(false);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [sending, setSending] = useState(false);
   const [session, setSession] = useState<import('@supabase/supabase-js').Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [email, setEmail] = useState('');
@@ -89,25 +89,48 @@ export default function App() {
   };
 
   useEffect(() => {
-    const restore = async () => {
-      try {
-        const saved = await AsyncStorage.getItem(STORAGE_KEY);
-        if (saved) setMessages(JSON.parse(saved) as Message[]);
-      } catch {
-        Alert.alert('Storage unavailable', 'Could not restore your saved chat.');
-      } finally {
-        setReady(true);
-      }
-    };
-    restore();
-  }, []);
+    if (!session) {
+      setMessages([WELCOME_MESSAGE]);
+      return;
+    }
 
-  useEffect(() => {
-    if (!ready) return;
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(messages)).catch(() => {
-      Alert.alert('Save failed', 'Your latest messages could not be saved.');
-    });
-  }, [messages, ready]);
+    let active = true;
+    const loadMessages = async () => {
+      setChatLoading(true);
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .select('id, role, content, attachment_name, attachment_type')
+        .eq('owner_id', session.user.id)
+        .eq('conversation_id', CONVERSATION_ID)
+        .order('created_at', { ascending: true });
+
+      if (!active) return;
+      if (error) {
+        Alert.alert('Chat unavailable', 'Could not load your saved messages. Please try again.');
+      } else if (data && data.length > 0) {
+        setMessages(data.map((row: any) => ({
+          id: row.id,
+          sender: row.role === 'assistant' ? 'ezra' : 'user',
+          text: row.content,
+          ...(row.attachment_name ? {
+            attachment: {
+              uri: '',
+              name: row.attachment_name,
+              kind: row.attachment_type === 'image' ? 'image' : 'file',
+            },
+          } : {}),
+        })));
+      } else {
+        setMessages([WELCOME_MESSAGE]);
+      }
+      setChatLoading(false);
+    };
+
+    loadMessages();
+    return () => {
+      active = false;
+    };
+  }, [session?.user.id]);
 
   useSpeechRecognitionEvent('start', () => setIsListening(true));
   useSpeechRecognitionEvent('end', () => setIsListening(false));
@@ -117,12 +140,32 @@ export default function App() {
   });
   useSpeechRecognitionEvent('error', () => setIsListening(false));
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     const text = message.trim();
-    if (!text && !attachment) return;
+    if ((!text && !attachment) || !session || sending) return;
+
+    setSending(true);
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .insert({
+        owner_id: session.user.id,
+        conversation_id: CONVERSATION_ID,
+        role: 'user',
+        content: text,
+        attachment_name: attachment?.name ?? null,
+        attachment_type: attachment?.kind ?? null,
+      })
+      .select('id')
+      .single();
+
+    if (error || !data) {
+      Alert.alert('Message not saved', 'Your message could not be saved to your private chat. Please try again.');
+      setSending(false);
+      return;
+    }
 
     const nextMessage: Message = {
-      id: String(Date.now()),
+      id: data.id,
       sender: 'user',
       text,
       ...(attachment ? { attachment } : {}),
@@ -130,6 +173,7 @@ export default function App() {
     setMessages(previous => [...previous, nextMessage]);
     setMessage('');
     setAttachment(null);
+    setSending(false);
   };
 
   const startListening = async () => {
@@ -388,12 +432,12 @@ export default function App() {
           >
             <Text style={styles.voiceIcon}>{isListening ? '■' : '⌁'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.sendButton} onPress={sendMessage}>
+          <TouchableOpacity style={styles.sendButton} onPress={sendMessage} disabled={sending || chatLoading}>
             <Text style={styles.sendIcon}>↑</Text>
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.footer}>YOUR CHAT IS SAVED ON THIS DEVICE</Text>
+        <Text style={styles.footer}>{chatLoading ? 'LOADING YOUR PRIVATE CHAT…' : 'YOUR CHAT IS SAVED PRIVATELY'}</Text>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
