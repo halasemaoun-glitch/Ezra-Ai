@@ -144,34 +144,89 @@ export default function App() {
     if ((!text && !attachment) || !session || sending) return;
 
     setSending(true);
-    const { data, error } = await supabase
-      .from('chat_messages')
-      .insert({
-        owner_id: session.user.id,
-        conversation_id: CONVERSATION_ID,
-        role: 'user',
-        content: text,
-        attachment_name: attachment?.name ?? null,
-        attachment_type: attachment?.kind ?? null,
-      })
-      .select('id')
-      .single();
 
-    if (error || !data) {
-      Alert.alert('Message not saved', 'Your message could not be saved to your private chat. Please try again.');
-      setSending(false);
-      return;
+    try {
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .insert({
+          owner_id: session.user.id,
+          conversation_id: CONVERSATION_ID,
+          role: 'user',
+          content: text,
+          attachment_name: attachment?.name ?? null,
+          attachment_type: attachment?.kind ?? null,
+        })
+        .select('id')
+        .single();
+
+      if (error || !data) {
+        Alert.alert('Message not saved', 'Your message could not be saved to your private chat. Please try again.');
+        setSending(false);
+        return;
+      }
+
+      const nextMessage: Message = {
+        id: data.id,
+        sender: 'user',
+        text,
+        ...(attachment ? { attachment } : {}),
+      };
+      setMessages(previous => [...previous, nextMessage]);
+      setMessage('');
+      setAttachment(null);
+
+      if (text) {
+        const { data: aiData, error: aiError } = await supabase.functions.invoke(
+          'smart-service',
+          { body: { input: text } }
+        );
+
+        if (aiError || typeof aiData?.reply !== 'string' || !aiData.reply.trim()) {
+          console.error('EZRA AI request failed:', aiError);
+          Alert.alert(
+            'EZRA could not reply',
+            'Your message was saved, but the AI response failed. Please try sending it again.'
+          );
+          setSending(false);
+          return;
+        }
+
+        const reply = aiData.reply.trim();
+        const { data: savedReply, error: saveReplyError } = await supabase
+          .from('chat_messages')
+          .insert({
+            owner_id: session.user.id,
+            conversation_id: CONVERSATION_ID,
+            role: 'assistant',
+            content: reply,
+          })
+          .select('id')
+          .single();
+
+        if (saveReplyError || !savedReply) {
+          console.error('Could not save EZRA reply:', saveReplyError);
+          setMessages(previous => [
+            ...previous,
+            { id: `unsaved-${Date.now()}`, sender: 'ezra', text: reply },
+          ]);
+          Alert.alert('Reply not saved', 'EZRA replied, but the response could not be saved to chat history.');
+        } else {
+          setMessages(previous => [
+            ...previous,
+            { id: savedReply.id, sender: 'ezra', text: reply },
+          ]);
+        }
+      } else {
+        Alert.alert(
+          'Attachment saved',
+          'The attachment name was saved. Sending the actual file to EZRA will be added in a later step.'
+        );
+      }
+    } catch (error) {
+      console.error('Message sending failed:', error);
+      Alert.alert('Something went wrong', 'Please try sending your message again.');
     }
 
-    const nextMessage: Message = {
-      id: data.id,
-      sender: 'user',
-      text,
-      ...(attachment ? { attachment } : {}),
-    };
-    setMessages(previous => [...previous, nextMessage]);
-    setMessage('');
-    setAttachment(null);
     setSending(false);
   };
 
