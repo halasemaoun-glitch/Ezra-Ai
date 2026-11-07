@@ -160,7 +160,18 @@ export default function App() {
         .single();
 
       if (error || !data) {
-        Alert.alert('Message not saved', 'Your message could not be saved to your private chat. Please try again.');
+        console.error('Could not save user message to chat_messages:', {
+          message: error?.message,
+          details: error?.details,
+          hint: error?.hint,
+          code: error?.code,
+        });
+        const diagnostic = error
+          ? [error.message, error.details, error.hint, error.code ? `Code: ${error.code}` : null]
+              .filter(Boolean)
+              .join('\\n\\n')
+          : 'Supabase returned no saved message row.';
+        Alert.alert('Message not saved', diagnostic);
         setSending(false);
         return;
       }
