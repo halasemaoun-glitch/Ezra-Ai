@@ -176,9 +176,18 @@ export default function App() {
       setAttachment(null);
 
       if (text) {
+        const recentContext = messages
+          .filter(item => item.id !== 'welcome' && !!item.text.trim())
+          .slice(-12)
+          .map(item => `${item.sender === 'user' ? 'User' : 'EZRA'}: ${item.text}`)
+          .join('\n');
+        const conversationInput = recentContext
+          ? `Continue this conversation naturally. Use the previous messages as context.\n\n${recentContext}\nUser: ${text}`
+          : text;
+
         const { data: aiData, error: aiError } = await supabase.functions.invoke(
           'smart-service',
-          { body: { input: text } }
+          { body: { input: conversationInput } }
         );
 
         if (aiError || typeof aiData?.reply !== 'string' || !aiData.reply.trim()) {
