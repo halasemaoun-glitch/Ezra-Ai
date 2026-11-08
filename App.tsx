@@ -1009,7 +1009,7 @@ export default function App() {
           >
             <Text style={styles.voiceIcon}>{isListening ? '■' : '⌁'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.sendButton} onPress={sendMessage} disabled={sending || chatLoading}>
+          <TouchableOpacity style={styles.sendButton} onPress={() => sendMessage()} disabled={sending || chatLoading}>
             <Text style={styles.sendIcon}>↑</Text>
           </TouchableOpacity>
         </View>
