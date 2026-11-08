@@ -13,13 +13,12 @@ Private personal AI companion built with Expo and React Native.
 - Arabic speech-to-text input through the device speech-recognition service.
 - Text-to-speech playback for EZRA messages using the device voice engine.
 - Photo and document selection; currently only the attachment name and type are stored with the message.
-- User-controlled memory center: users can add memory suggestions, approve or reject them, and delete memories.
+- User-controlled memory center: users can add memory suggestions, approve or reject them, and delete memories; only approved memories are retrieved for that authenticated owner and supplied to EZRA when generating replies.
 - Android preview APK build profile through EAS Build.
 - GitHub Actions checks for Expo configuration, TypeScript, and Android bundling.
 
 ## Current limitations
 
-- Approved memories are stored securely but are not yet automatically included in the AI prompt.
 - Selected photos and documents are not uploaded or analyzed by the AI yet.
 - Voice input depends on the device speech-recognition service; native speech modules require an EAS build and are not supported by standard Expo Go.
 - The orb is currently a 2D animated React Native illustration, not a 3D model.
