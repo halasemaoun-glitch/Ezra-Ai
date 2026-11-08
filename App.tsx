@@ -89,7 +89,7 @@ export default function App() {
       try {
         const storageKey = `ezra:conversation:${session.user.id}`;
         const savedId = await AsyncStorage.getItem(storageKey);
-        const nextId = savedId || createConversationId();
+        const nextId = savedId || '00000000-0000-4000-8000-000000000001';
         if (!savedId) await AsyncStorage.setItem(storageKey, nextId);
         if (active) setConversationId(nextId);
       } catch (error) {
