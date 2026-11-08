@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Alert,
+  Animated,
+  Easing,
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
@@ -45,6 +47,36 @@ const createConversationId = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replac
   const value = character === 'x' ? random : (random & 0x3) | 0x8;
   return value.toString(16);
 });
+
+function EzraOrb({ status }: { status: string }) {
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 1900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 1900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ])
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [pulse]);
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1.07] });
+  const glow = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.42, 0.9] });
+  return (
+    <View style={styles.orbSection}>
+      <View style={styles.orbStage}>
+        <Animated.View style={[styles.orbHalo, { opacity: glow, transform: [{ scale }] }]} />
+        <View style={styles.orbRingOuter} />
+        <View style={styles.orbRingInner} />
+        <Animated.View style={[styles.orbCore, { transform: [{ scale }] }]}>
+          <View style={styles.orbCoreHighlight} />
+        </Animated.View>
+      </View>
+      <Text style={styles.orbStatus}>{status}</Text>
+      <Text style={styles.orbCaption}>مساحتك الخاصة للحديث والتفكير</Text>
+    </View>
+  );
+}
 
 export default function App() {
   const [message, setMessage] = useState('');
@@ -113,13 +145,13 @@ export default function App() {
       setAttachment(null);
     } catch (error) {
       console.error('Could not start a new conversation:', error);
-      Alert.alert('Could not start a new chat', 'Please try again.');
+      Alert.alert('تعذّر بدء محادثة جديدة', 'حاول مرة أخرى.');
     }
   };
 
   const signIn = async () => {
     if (!email.trim() || !password) {
-      setAuthError('Enter your email and password.');
+      setAuthError('أدخل البريد الإلكتروني وكلمة المرور.');
       return;
     }
     setSigningIn(true);
@@ -150,7 +182,7 @@ export default function App() {
 
       if (!active) return;
       if (error) {
-        Alert.alert('Chat unavailable', 'Could not load your saved messages. Please try again.');
+        Alert.alert('Chat unavailable', 'Could not load your saved messages. حاول مرة أخرى.');
       } else if (data && data.length > 0) {
         setMessages(data.map((row: any) => ({
           id: row.id,
@@ -216,7 +248,7 @@ export default function App() {
               .filter(Boolean)
               .join('\\n\\n')
           : 'Supabase returned no saved message row.';
-        Alert.alert('Message not saved', diagnostic);
+        Alert.alert('لم تُحفظ الرسالة', diagnostic);
         setSending(false);
         return;
       }
@@ -278,7 +310,7 @@ export default function App() {
           ].filter(Boolean).join('\\n\\n');
           console.error('EZRA AI request failed:', { aiError, aiData });
           Alert.alert(
-            'EZRA could not reply',
+            'تعذّر على إزرا الرد',
             details || 'Your message was saved, but smart-service returned an empty response.'
           );
           setSending(false);
@@ -312,13 +344,13 @@ export default function App() {
         }
       } else {
         Alert.alert(
-          'Attachment saved',
-          'The attachment name was saved. Sending the actual file to EZRA will be added in a later step.'
+          'تم حفظ المرفق',
+          'تم حفظ اسم المرفق. سنضيف إرسال الملف نفسه إلى إزرا في مرحلة لاحقة.'
         );
       }
     } catch (error) {
       console.error('Message sending failed:', error);
-      Alert.alert('Something went wrong', 'Please try sending your message again.');
+      Alert.alert('حدث خطأ', 'حاول إرسال رسالتك مرة أخرى.');
     }
 
     setSending(false);
@@ -332,7 +364,7 @@ export default function App() {
       }
       const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert('Microphone permission', 'Allow microphone and speech recognition access in your device settings.');
+        Alert.alert('إذن الميكروفون', 'اسمح باستخدام الميكروفون والتعرّف على الكلام من إعدادات الجهاز.');
         return;
       }
       ExpoSpeechRecognitionModule.start({
@@ -342,7 +374,7 @@ export default function App() {
       });
     } catch {
       setIsListening(false);
-      Alert.alert('Voice unavailable', 'Speech recognition is not available on this device right now.');
+      Alert.alert('الصوت غير متاح', 'التعرّف على الكلام غير متاح على هذا الجهاز حاليًا.');
     }
   };
 
@@ -360,11 +392,11 @@ export default function App() {
         kind: 'image',
       });
     } catch {
-      Alert.alert('Photo unavailable', 'Could not open your photo library.');
+      Alert.alert('صورة unavailable', 'تعذّر فتح معرض الصور.');
     }
   };
 
-  const pickFile = async () => {
+  const pickملف = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
         copyToCacheDirectory: true,
@@ -374,15 +406,15 @@ export default function App() {
       const file = result.assets[0];
       setAttachment({ uri: file.uri, name: file.name, kind: 'file' });
     } catch {
-      Alert.alert('File unavailable', 'Could not open the file picker.');
+      Alert.alert('ملف unavailable', 'تعذّر فتح مستعرض الملفات.');
     }
   };
 
   const chooseAttachment = () => {
-    Alert.alert('Attach to message', 'Choose what you want to attach.', [
-      { text: 'Photo', onPress: pickImage },
-      { text: 'File', onPress: pickFile },
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert('إرفاق بالرسالة', 'اختر ما تريد إرفاقه.', [
+      { text: 'صورة', onPress: pickImage },
+      { text: 'ملف', onPress: pickملف },
+      { text: 'إلغاء', style: 'cancel' },
     ]);
   };
 
@@ -396,7 +428,7 @@ export default function App() {
       <SafeAreaView style={styles.authSafe}>
         <StatusBar style="light" />
         <Text style={styles.authBrand}>EZRA</Text>
-        <Text style={styles.authHint}>Preparing your private space…</Text>
+        <Text style={styles.authHint}>نجهّز مساحتك الخاصة…</Text>
       </SafeAreaView>
     );
   }
@@ -410,11 +442,13 @@ export default function App() {
             <Text style={styles.avatarText}>E</Text>
           </View>
           <Text style={styles.authBrand}>EZRA</Text>
-          <Text style={styles.authTitle}>Your private space.</Text>
-          <Text style={styles.authHint}>Sign in to continue to your personal companion.</Text>
+          <Text style={styles.authTitle}>مساحتك الخاصة.</Text>
+          <Text style={styles.authHint}>سجّل الدخول للمتابعة مع مساعدك الشخصي.</Text>
           <TextInput
             style={styles.authInput}
-            placeholder="Email"
+            textAlign="right"
+            writingDirection="rtl"
+            placeholder="البريد الإلكتروني"
             placeholderTextColor="#777680"
             value={email}
             onChangeText={setEmail}
@@ -424,7 +458,7 @@ export default function App() {
           />
           <TextInput
             style={styles.authInput}
-            placeholder="Password"
+            placeholder="كلمة المرور"
             placeholderTextColor="#777680"
             value={password}
             onChangeText={setPassword}
@@ -438,9 +472,9 @@ export default function App() {
             onPress={signIn}
             disabled={signingIn}
           >
-            <Text style={styles.authButtonText}>{signingIn ? 'SIGNING IN…' : 'SIGN IN'}</Text>
+            <Text style={styles.authButtonText}>{signingIn ? 'جارٍ تسجيل الدخول…' : 'تسجيل الدخول'}</Text>
           </TouchableOpacity>
-          <Text style={styles.authFootnote}>Private access · Authorized account only</Text>
+          <Text style={styles.authFootnote}>دخول خاص · للحساب المصرّح فقط</Text>
         </View>
       </SafeAreaView>
     );
@@ -462,35 +496,37 @@ export default function App() {
               <Text style={styles.name}>EZRA</Text>
               <View style={styles.statusRow}>
                 <View style={styles.onlineDot} />
-                <Text style={styles.status}>YOUR PRIVATE COMPANION</Text>
+                <Text style={styles.status}>مساعدك الشخصي</Text>
               </View>
             </View>
           </View>
           <TouchableOpacity
             style={styles.newChatButton}
             onPress={startNewConversation}
-            accessibilityLabel="Start a new conversation"
+            accessibilityLabel="بدء محادثة جديدة"
           >
-            <Text style={styles.newChatText}>＋ NEW CHAT</Text>
+            <Text style={styles.newChatText}>＋ محادثة جديدة</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.privateTag}
             onPress={() => Alert.alert('Sign out', 'Sign out of your EZRA account?', [
-              { text: 'Cancel', style: 'cancel' },
+              { text: 'إلغاء', style: 'cancel' },
               { text: 'Sign out', style: 'destructive', onPress: () => { supabase.auth.signOut(); } },
             ])}
           >
-            <Text style={styles.privateText}>SIGN OUT</Text>
+            <Text style={styles.privateText}>تسجيل الخروج</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.line} />
 
         <View style={styles.welcome}>
-          <Text style={styles.welcomeSmall}>A SPACE JUST FOR YOU</Text>
-          <Text style={styles.welcomeTitle}>Good to see you.</Text>
-          <Text style={styles.welcomeSubtitle}>Your thoughts have a place here.</Text>
+          <Text style={styles.welcomeSmall}>مساحة صُممت لأجلك</Text>
+          <Text style={styles.welcomeTitle}>أهلًا بعودتك.</Text>
+          <Text style={styles.welcomeSubtitle}>أنا هنا لأستمع إليك وأساعدك.</Text>
         </View>
+
+        <EzraOrb status={isListening ? 'أستمع إليك الآن' : (sending || chatLoading) ? 'أفكر في كلامك…' : 'أنا معك'} />
 
         <ScrollView
           style={styles.chat}
@@ -530,9 +566,9 @@ export default function App() {
                   <TouchableOpacity
                     style={styles.speakButton}
                     onPress={() => speak(item.text)}
-                    accessibilityLabel="Read message aloud"
+                    accessibilityLabel="استمع إلى الرد"
                   >
-                    <Text style={styles.speakText}>▶  Listen</Text>
+                    <Text style={styles.speakText}>▶  استمع</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -542,20 +578,20 @@ export default function App() {
 
         <View style={styles.quickActions}>
           <TouchableOpacity style={styles.quickButton} onPress={() => setMessage('Let’s talk.')}>
-            <Text style={styles.quickText}>✧  LET’S TALK</Text>
+            <Text style={styles.quickText}>✧  لنتحدث</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.quickButton} onPress={() => setMessage('Help me plan my day.')}>
-            <Text style={styles.quickText}>◷  MY DAY</Text>
+            <Text style={styles.quickText}>◷  يومي</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.quickButton} onPress={() => Alert.alert('Saved chat', `${messages.length} messages are stored on this device. Long-term AI memory is not connected yet.`)}>
-            <Text style={styles.quickText}>♡  MEMORIES</Text>
+            <Text style={styles.quickText}>♡  الذكريات</Text>
           </TouchableOpacity>
         </View>
 
         {attachment && (
           <View style={styles.pendingAttachment}>
             <Text style={styles.pendingText} numberOfLines={1}>
-              {attachment.kind === 'image' ? 'Photo: ' : 'File: '}{attachment.name}
+              {attachment.kind === 'image' ? 'صورة: ' : 'ملف: '}{attachment.name}
             </Text>
             <TouchableOpacity onPress={() => setAttachment(null)}>
               <Text style={styles.removeAttachment}>×</Text>
@@ -567,13 +603,15 @@ export default function App() {
           <TouchableOpacity
             style={styles.attachButton}
             onPress={chooseAttachment}
-            accessibilityLabel="Attach photo or file"
+            accessibilityLabel="إرفاق صورة أو ملف"
           >
             <Text style={styles.attachText}>＋</Text>
           </TouchableOpacity>
           <TextInput
             style={styles.input}
-            placeholder="Message Ezra..."
+            textAlign="right"
+            writingDirection="rtl"
+            placeholder="اكتب رسالتك إلى إزرا…"
             placeholderTextColor="#777680"
             value={message}
             onChangeText={setMessage}
@@ -583,7 +621,7 @@ export default function App() {
           <TouchableOpacity
             style={[styles.voiceButton, isListening && styles.voiceButtonActive]}
             onPress={startListening}
-            accessibilityLabel={isListening ? 'Stop voice input' : 'Start voice input'}
+            accessibilityLabel={isListening ? 'إيقاف الإدخال الصوتي' : 'بدء الإدخال الصوتي'}
           >
             <Text style={styles.voiceIcon}>{isListening ? '■' : '⌁'}</Text>
           </TouchableOpacity>
@@ -592,19 +630,28 @@ export default function App() {
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.footer}>{chatLoading ? 'LOADING YOUR PRIVATE CHAT…' : 'YOUR CHAT IS SAVED PRIVATELY'}</Text>
+        <Text style={styles.footer}>{chatLoading ? 'جارٍ تحميل محادثتك…' : 'محادثتك محفوظة بخصوصية'}</Text>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  orbSection: { alignItems: 'center', paddingTop: 0, paddingBottom: 8 },
+  orbStage: { width: 142, height: 142, alignItems: 'center', justifyContent: 'center' },
+  orbHalo: { position: 'absolute', width: 126, height: 126, borderRadius: 63, backgroundColor: '#8E3B78', shadowColor: '#E34BB5', shadowOpacity: 0.9, shadowRadius: 32, shadowOffset: { width: 0, height: 0 }, elevation: 18 },
+  orbRingOuter: { position: 'absolute', width: 132, height: 132, borderRadius: 66, borderWidth: 1, borderColor: '#A85B91', opacity: 0.55 },
+  orbRingInner: { position: 'absolute', width: 108, height: 108, borderRadius: 54, borderWidth: 1, borderColor: '#D17AB7', opacity: 0.7 },
+  orbCore: { width: 86, height: 86, borderRadius: 43, backgroundColor: '#672B5A', borderWidth: 1, borderColor: '#E6A0D0', alignItems: 'center', justifyContent: 'center', shadowColor: '#D84AAE', shadowOpacity: 0.9, shadowRadius: 22, shadowOffset: { width: 0, height: 0 }, elevation: 16 },
+  orbCoreHighlight: { width: 45, height: 45, borderRadius: 23, backgroundColor: '#B85A9D', opacity: 0.55, borderWidth: 1, borderColor: '#F0B7DF' },
+  orbStatus: { color: '#E7B9D8', fontSize: 12, fontWeight: '600', marginTop: 1 },
+  orbCaption: { color: '#77717E', fontSize: 9, marginTop: 4 },
   authSafe: { flex: 1, backgroundColor: '#101014', alignItems: 'center', justifyContent: 'center', padding: 26 },
   authCard: { width: '100%', maxWidth: 420, alignItems: 'center' },
   authBrand: { color: '#F5F0F5', fontSize: 24, fontWeight: '700', letterSpacing: 6, marginTop: 18 },
   authTitle: { color: '#F5F0F5', fontSize: 23, fontWeight: '600', marginTop: 26 },
   authHint: { color: '#918B98', fontSize: 13, textAlign: 'center', lineHeight: 20, marginTop: 9, marginBottom: 22 },
-  authInput: { width: '100%', color: '#F5F0F5', backgroundColor: '#211F27', borderWidth: 1, borderColor: '#39323D', borderRadius: 14, paddingHorizontal: 15, paddingVertical: 15, marginBottom: 12, fontSize: 14 },
+  authInput: { width: '100%', textAlign: 'right', writingDirection: 'rtl', color: '#F5F0F5', backgroundColor: '#211F27', borderWidth: 1, borderColor: '#39323D', borderRadius: 14, paddingHorizontal: 15, paddingVertical: 15, marginBottom: 12, fontSize: 14 },
   authError: { width: '100%', color: '#F0A4A4', fontSize: 12, marginBottom: 12 },
   authButton: { width: '100%', backgroundColor: '#B58DAE', borderRadius: 14, alignItems: 'center', paddingVertical: 16, marginTop: 4 },
   authButtonDisabled: { opacity: 0.6 },
@@ -654,10 +701,10 @@ const styles = StyleSheet.create({
   },
   privateText: { color: '#D5A9CC', fontSize: 9, letterSpacing: 1.2 },
   line: { height: 1, backgroundColor: '#26242C' },
-  welcome: { paddingHorizontal: 24, paddingTop: 29, paddingBottom: 24 },
-  welcomeSmall: { color: '#B58DAE', fontSize: 9, letterSpacing: 3, marginBottom: 10 },
-  welcomeTitle: { color: '#F5F0F5', fontSize: 27, fontWeight: '600' },
-  welcomeSubtitle: { color: '#918B98', fontSize: 13, marginTop: 7 },
+  welcome: { paddingHorizontal: 24, paddingTop: 22, paddingBottom: 6, alignItems: 'flex-end' },
+  welcomeSmall: { color: '#B58DAE', fontSize: 10, marginBottom: 10, textAlign: 'right' },
+  welcomeTitle: { color: '#F5F0F5', fontSize: 27, fontWeight: '600', textAlign: 'right' },
+  welcomeSubtitle: { color: '#918B98', fontSize: 13, marginTop: 7, textAlign: 'right' },
   chat: { flex: 1 },
   chatContent: { paddingHorizontal: 19, paddingBottom: 20, gap: 17 },
   messageRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 9 },
@@ -675,7 +722,7 @@ const styles = StyleSheet.create({
   messageBubble: { maxWidth: '100%', paddingHorizontal: 15, paddingVertical: 12, borderRadius: 17 },
   ezraBubble: { backgroundColor: '#201E26', borderBottomLeftRadius: 5 },
   userBubble: { backgroundColor: '#493449', borderBottomRightRadius: 5 },
-  messageText: { color: '#F1ECF2', fontSize: 14, lineHeight: 22 },
+  messageText: { color: '#F1ECF2', fontSize: 14, lineHeight: 22, textAlign: 'right', writingDirection: 'rtl' },
   speakButton: { alignSelf: 'flex-start', paddingHorizontal: 7, paddingVertical: 3 },
   speakText: { color: '#B58DAE', fontSize: 10 },
   attachmentChip: {
@@ -725,7 +772,7 @@ const styles = StyleSheet.create({
   },
   attachButton: { width: 29, alignItems: 'center' },
   attachText: { color: '#BBA7BB', fontSize: 25 },
-  input: { flex: 1, color: '#F5F0F5', fontSize: 14, maxHeight: 95, paddingVertical: 13 },
+  input: { flex: 1, color: '#F5F0F5', fontSize: 14, maxHeight: 95, paddingVertical: 13, textAlign: 'right', writingDirection: 'rtl' },
   voiceButton: { width: 32, height: 35, alignItems: 'center', justifyContent: 'center' },
   voiceButtonActive: { backgroundColor: '#493449', borderRadius: 10 },
   voiceIcon: { color: '#D5A9CC', fontSize: 21 },
