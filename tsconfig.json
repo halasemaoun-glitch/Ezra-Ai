@@ -5,5 +5,8 @@
     "noEmit": true,
     "skipLibCheck": true,
     "allowImportingTsExtensions": true
-  }
+  },
+  "exclude": [
+    "supabase/functions/**"
+  ]
 }
