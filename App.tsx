@@ -677,12 +677,10 @@ export default function App() {
           <Text style={styles.authTitle}>مساحتك الخاصة.</Text>
           <Text style={styles.authHint}>سجّل الدخول للمتابعة مع مساعدك الشخصي.</Text>
           <TextInput
-            style={styles.authInput}
-            textAlign="right"
+            style={[styles.authInput, styles.authInputLtr]}
             placeholder="البريد الإلكتروني"
             placeholderTextColor="#777680"
             textAlign="left"
-            writingDirection="ltr"
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -690,11 +688,10 @@ export default function App() {
             autoComplete="email"
           />
           <TextInput
-            style={styles.authInput}
+            style={[styles.authInput, styles.authInputLtr]}
             placeholder="كلمة المرور"
             placeholderTextColor="#777680"
             textAlign="left"
-            writingDirection="ltr"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -868,7 +865,6 @@ export default function App() {
                 onChangeText={setMemoryDraft}
                 placeholder="مثال: أفضل الإجابات المختصرة باللغة العربية…"
                 placeholderTextColor="#777680"
-                writingDirection="rtl"
                 multiline
                 maxLength={1000}
                 textAlign="right"
@@ -1064,7 +1060,6 @@ export default function App() {
             textAlign="right"
             placeholder="اكتب رسالتك إلى إزرا…"
             placeholderTextColor="#777680"
-            writingDirection="rtl"
             value={message}
             onChangeText={setMessage}
             multiline
@@ -1147,6 +1142,7 @@ const styles = StyleSheet.create({
   authTitle: { color: '#F5F0F5', fontSize: 23, fontWeight: '600', marginTop: 26 },
   authHint: { color: '#918B98', fontSize: 13, textAlign: 'center', lineHeight: 20, marginTop: 9, marginBottom: 22 },
   authInput: { width: '100%', textAlign: 'right', writingDirection: 'rtl', color: '#F5F0F5', backgroundColor: '#211F27', borderWidth: 1, borderColor: '#39323D', borderRadius: 14, paddingHorizontal: 15, paddingVertical: 15, marginBottom: 12, fontSize: 14 },
+  authInputLtr: { textAlign: 'left', writingDirection: 'ltr' },
   authError: { width: '100%', color: '#F0A4A4', fontSize: 12, marginBottom: 12 },
   authButton: { width: '100%', backgroundColor: '#B58DAE', borderRadius: 14, alignItems: 'center', paddingVertical: 16, marginTop: 4 },
   authButtonDisabled: { opacity: 0.6 },
@@ -1213,7 +1209,7 @@ const styles = StyleSheet.create({
   historyCurrent: { color: '#D5A9CC', fontSize: 10, textAlign: 'right', marginTop: 7 },
   memoryPanel: { height: '88%', backgroundColor: '#15131A', borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderColor: '#493849', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 24 },
   memoryNotice: { color: '#A69BAA', fontSize: 11, lineHeight: 18, textAlign: 'right', marginBottom: 10 },
-  memoryInput: { minHeight: 76, maxHeight: 120, color: '#F5F0F5', backgroundColor: '#211F27', borderWidth: 1, borderColor: '#493849', borderRadius: 13, padding: 12, textAlignVertical: 'top', fontSize: 12 },
+  memoryInput: { minHeight: 76, maxHeight: 120, color: '#F5F0F5', backgroundColor: '#211F27', borderWidth: 1, borderColor: '#493849', borderRadius: 13, padding: 12, textAlignVertical: 'top', textAlign: 'right', writingDirection: 'rtl', fontSize: 12 },
   memorySaveButton: { backgroundColor: '#B58DAE', borderRadius: 12, paddingVertical: 12, alignItems: 'center', marginTop: 9 },
   memorySaveText: { color: '#171219', fontSize: 12, fontWeight: '700' },
   memorySectionTitle: { color: '#E7B9D8', fontSize: 12, fontWeight: '700', textAlign: 'right', marginTop: 20, marginBottom: 10 },
