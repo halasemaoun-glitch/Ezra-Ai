@@ -50,29 +50,45 @@ const createConversationId = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replac
 
 function EzraOrb({ status }: { status: string }) {
   const pulse = useRef(new Animated.Value(0)).current;
+  const rotation = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    const animation = Animated.loop(
+    const breathing = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 1900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0, duration: 1900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 1850, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 1850, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
       ])
     );
-    animation.start();
-    return () => animation.stop();
-  }, [pulse]);
+    const orbit = Animated.loop(
+      Animated.timing(rotation, { toValue: 1, duration: 14500, easing: Easing.linear, useNativeDriver: true })
+    );
+    breathing.start();
+    orbit.start();
+    return () => { breathing.stop(); orbit.stop(); };
+  }, [pulse, rotation]);
   const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1.07] });
-  const glow = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.42, 0.9] });
+  const glow = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.38, 0.88] });
+  const spin = rotation.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const reverseSpin = rotation.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-360deg'] });
+  const active = status !== 'أنا معك';
   return (
     <View style={styles.orbSection}>
       <View style={styles.orbStage}>
         <Animated.View style={[styles.orbHalo, { opacity: glow, transform: [{ scale }] }]} />
-        <View style={styles.orbRingOuter} />
-        <View style={styles.orbRingInner} />
+        <Animated.View style={[styles.orbRingOuter, { transform: [{ rotate: spin }] }]}>
+          <View style={styles.orbOrbitDot} />
+        </Animated.View>
+        <Animated.View style={[styles.orbRingInner, { transform: [{ rotate: reverseSpin }] }]}>
+          <View style={styles.orbOrbitDotSmall} />
+        </Animated.View>
         <Animated.View style={[styles.orbCore, { transform: [{ scale }] }]}>
           <View style={styles.orbCoreHighlight} />
+          <View style={styles.orbCoreSpark} />
         </Animated.View>
       </View>
-      <Text style={styles.orbStatus}>{status}</Text>
+      <View style={[styles.orbStatusPill, active && styles.orbStatusPillActive]}>
+        <View style={[styles.orbStatusDot, active && styles.orbStatusDotActive]} />
+        <Text style={styles.orbStatus}>{status}</Text>
+      </View>
       <Text style={styles.orbCaption}>مساحتك الخاصة للحديث والتفكير</Text>
     </View>
   );
@@ -182,7 +198,7 @@ export default function App() {
 
       if (!active) return;
       if (error) {
-        Alert.alert('Chat unavailable', 'Could not load your saved messages. حاول مرة أخرى.');
+        Alert.alert('تعذّر تحميل المحادثة', 'حاول مرة أخرى.');
       } else if (data && data.length > 0) {
         setMessages(data.map((row: any) => ({
           id: row.id,
@@ -335,7 +351,7 @@ export default function App() {
             ...previous,
             { id: `unsaved-${Date.now()}`, sender: 'ezra', text: reply },
           ]);
-          Alert.alert('Reply not saved', 'EZRA replied, but the response could not be saved to chat history.');
+          Alert.alert('لم يُحفظ الرد', 'إزرا أجاب، لكن تعذّر حفظ الرد في سجل المحادثة.');
         } else {
           setMessages(previous => [
             ...previous,
@@ -406,7 +422,7 @@ export default function App() {
       const file = result.assets[0];
       setAttachment({ uri: file.uri, name: file.name, kind: 'file' });
     } catch {
-      Alert.alert('ملف unavailable', 'تعذّر فتح مستعرض الملفات.');
+      Alert.alert('تعذّر فتح الملفات', 'حاول مرة أخرى.');
     }
   };
 
@@ -509,9 +525,9 @@ export default function App() {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.privateTag}
-            onPress={() => Alert.alert('Sign out', 'Sign out of your EZRA account?', [
+            onPress={() => Alert.alert('تسجيل الخروج', 'هل تريد تسجيل الخروج من حساب EZRA؟', [
               { text: 'إلغاء', style: 'cancel' },
-              { text: 'Sign out', style: 'destructive', onPress: () => { supabase.auth.signOut(); } },
+              { text: 'تسجيل الخروج', style: 'destructive', onPress: () => { supabase.auth.signOut(); } },
             ])}
           >
             <Text style={styles.privateText}>تسجيل الخروج</Text>
@@ -583,7 +599,7 @@ export default function App() {
           <TouchableOpacity style={styles.quickButton} onPress={() => setMessage('Help me plan my day.')}>
             <Text style={styles.quickText}>◷  يومي</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.quickButton} onPress={() => Alert.alert('Saved chat', `${messages.length} messages are stored on this device. Long-term AI memory is not connected yet.`)}>
+          <TouchableOpacity style={styles.quickButton} onPress={() => Alert.alert('الذكريات', `لديك ${messages.length} رسائل في هذه المحادثة. الذاكرة الذكية طويلة الأمد سنضيفها في مرحلة لاحقة.`)}>
             <Text style={styles.quickText}>♡  الذكريات</Text>
           </TouchableOpacity>
         </View>
@@ -637,15 +653,22 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  orbSection: { alignItems: 'center', paddingTop: 0, paddingBottom: 8 },
-  orbStage: { width: 142, height: 142, alignItems: 'center', justifyContent: 'center' },
+  orbSection: { alignItems: 'center', paddingTop: 0, paddingBottom: 10 },
+  orbStage: { width: 150, height: 150, alignItems: 'center', justifyContent: 'center' },
   orbHalo: { position: 'absolute', width: 126, height: 126, borderRadius: 63, backgroundColor: '#8E3B78', shadowColor: '#E34BB5', shadowOpacity: 0.9, shadowRadius: 32, shadowOffset: { width: 0, height: 0 }, elevation: 18 },
-  orbRingOuter: { position: 'absolute', width: 132, height: 132, borderRadius: 66, borderWidth: 1, borderColor: '#A85B91', opacity: 0.55 },
-  orbRingInner: { position: 'absolute', width: 108, height: 108, borderRadius: 54, borderWidth: 1, borderColor: '#D17AB7', opacity: 0.7 },
+  orbRingOuter: { position: 'absolute', width: 138, height: 138, borderRadius: 69, borderWidth: 1, borderColor: '#A85B91', borderStyle: 'dashed', opacity: 0.62, alignItems: 'flex-start', justifyContent: 'center' },
+  orbRingInner: { position: 'absolute', width: 108, height: 108, borderRadius: 54, borderWidth: 1, borderColor: '#D17AB7', opacity: 0.7, alignItems: 'flex-end', justifyContent: 'center' },
+  orbOrbitDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#F0B7DF', marginLeft: -3 },
+  orbOrbitDotSmall: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#C58BE2', marginRight: -2 },
   orbCore: { width: 86, height: 86, borderRadius: 43, backgroundColor: '#672B5A', borderWidth: 1, borderColor: '#E6A0D0', alignItems: 'center', justifyContent: 'center', shadowColor: '#D84AAE', shadowOpacity: 0.9, shadowRadius: 22, shadowOffset: { width: 0, height: 0 }, elevation: 16 },
   orbCoreHighlight: { width: 45, height: 45, borderRadius: 23, backgroundColor: '#B85A9D', opacity: 0.55, borderWidth: 1, borderColor: '#F0B7DF' },
-  orbStatus: { color: '#E7B9D8', fontSize: 12, fontWeight: '600', marginTop: 1 },
-  orbCaption: { color: '#77717E', fontSize: 9, marginTop: 4 },
+  orbCoreSpark: { position: 'absolute', width: 12, height: 12, borderRadius: 6, backgroundColor: '#F4D7EC', top: 21, right: 23, opacity: 0.8 },
+  orbStatusPill: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 13, paddingVertical: 6, borderRadius: 20, backgroundColor: '#211B27', borderWidth: 1, borderColor: '#493044', marginTop: -1 },
+  orbStatusPillActive: { borderColor: '#9C5C91', backgroundColor: '#2B1C2D' },
+  orbStatusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#9EBD9D' },
+  orbStatusDotActive: { backgroundColor: '#E7A6D2' },
+  orbStatus: { color: '#E7B9D8', fontSize: 11, fontWeight: '600' },
+  orbCaption: { color: '#77717E', fontSize: 9, marginTop: 6 },
   authSafe: { flex: 1, backgroundColor: '#101014', alignItems: 'center', justifyContent: 'center', padding: 26 },
   authCard: { width: '100%', maxWidth: 420, alignItems: 'center' },
   authBrand: { color: '#F5F0F5', fontSize: 24, fontWeight: '700', letterSpacing: 6, marginTop: 18 },
