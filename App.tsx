@@ -463,7 +463,6 @@ export default function App() {
           <TextInput
             style={styles.authInput}
             textAlign="right"
-            writingDirection="rtl"
             placeholder="البريد الإلكتروني"
             placeholderTextColor="#777680"
             value={email}
@@ -626,7 +625,6 @@ export default function App() {
           <TextInput
             style={styles.input}
             textAlign="right"
-            writingDirection="rtl"
             placeholder="اكتب رسالتك إلى إزرا…"
             placeholderTextColor="#777680"
             value={message}
