@@ -5,6 +5,7 @@ import {
   Animated,
   Easing,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   SafeAreaView,
   ScrollView,
@@ -28,6 +29,12 @@ type Attachment = {
   uri: string;
   name: string;
   kind: 'image' | 'file';
+};
+
+type ConversationSummary = {
+  id: string;
+  title: string;
+  updatedAt: string;
 };
 
 type Message = {
@@ -108,6 +115,9 @@ export default function App() {
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
   const [signingIn, setSigningIn] = useState(false);
+  const [historyVisible, setHistoryVisible] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
 
   useEffect(() => {
     let mounted = true;
@@ -149,6 +159,65 @@ export default function App() {
     restoreConversation();
     return () => { active = false; };
   }, [session?.user.id]);
+
+  const openConversationHistory = async () => {
+    if (!session) return;
+    setHistoryVisible(true);
+    setHistoryLoading(true);
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .select('conversation_id, role, content, created_at')
+      .eq('owner_id', session.user.id)
+      .order('created_at', { ascending: true })
+      .limit(500);
+
+    if (error) {
+      console.error('Could not load conversation history:', error);
+      Alert.alert('تعذّر تحميل سجل المحادثات', 'حاول مرة أخرى بعد قليل.');
+      setHistoryLoading(false);
+      return;
+    }
+
+    const grouped = new Map<string, ConversationSummary>();
+    (data ?? []).forEach((row: any) => {
+      if (!row.conversation_id) return;
+      const existing = grouped.get(row.conversation_id);
+      const content = typeof row.content === 'string' ? row.content.trim() : '';
+      if (!existing) {
+        grouped.set(row.conversation_id, {
+          id: row.conversation_id,
+          title: row.role === 'user' && content ? content : 'محادثة جديدة',
+          updatedAt: row.created_at,
+        });
+      } else {
+        existing.updatedAt = row.created_at;
+        if (existing.title === 'محادثة جديدة' && row.role === 'user' && content) {
+          existing.title = content;
+        }
+      }
+    });
+
+    setConversations(
+      Array.from(grouped.values())
+        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    );
+    setHistoryLoading(false);
+  };
+
+  const selectConversation = async (selectedId: string) => {
+    if (!session) return;
+    try {
+      await AsyncStorage.setItem(`ezra:conversation:${session.user.id}`, selectedId);
+      setConversationId(selectedId);
+      setMessages([WELCOME_MESSAGE]);
+      setMessage('');
+      setAttachment(null);
+      setHistoryVisible(false);
+    } catch (error) {
+      console.error('Could not restore selected conversation:', error);
+      Alert.alert('تعذّر فتح المحادثة', 'حاول مرة أخرى.');
+    }
+  };
 
   const startNewConversation = async () => {
     if (!session) return;
@@ -515,13 +584,22 @@ export default function App() {
               </View>
             </View>
           </View>
-          <TouchableOpacity
-            style={styles.newChatButton}
-            onPress={startNewConversation}
-            accessibilityLabel="بدء محادثة جديدة"
-          >
-            <Text style={styles.newChatText}>＋ محادثة جديدة</Text>
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.historyButton}
+              onPress={openConversationHistory}
+              accessibilityLabel="سجل المحادثات"
+            >
+              <Text style={styles.newChatText}>☷ المحادثات</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.newChatButton}
+              onPress={startNewConversation}
+              accessibilityLabel="بدء محادثة جديدة"
+            >
+              <Text style={styles.newChatText}>＋ جديدة</Text>
+            </TouchableOpacity>
+          </View>
           <TouchableOpacity
             style={styles.privateTag}
             onPress={() => Alert.alert('تسجيل الخروج', 'هل تريد تسجيل الخروج من حساب EZRA؟', [
@@ -532,6 +610,48 @@ export default function App() {
             <Text style={styles.privateText}>تسجيل الخروج</Text>
           </TouchableOpacity>
         </View>
+
+        <Modal
+          visible={historyVisible}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setHistoryVisible(false)}
+        >
+          <View style={styles.historyBackdrop}>
+            <View style={styles.historyPanel}>
+              <View style={styles.historyHeader}>
+                <TouchableOpacity onPress={() => setHistoryVisible(false)} style={styles.historyClose}>
+                  <Text style={styles.historyCloseText}>×</Text>
+                </TouchableOpacity>
+                <View style={styles.historyHeadingWrap}>
+                  <Text style={styles.historyTitle}>محادثاتك السابقة</Text>
+                  <Text style={styles.historySubtitle}>كل حديثك محفوظ هنا</Text>
+                </View>
+              </View>
+              {historyLoading ? (
+                <Text style={styles.historyEmpty}>جارٍ تحميل المحادثات…</Text>
+              ) : conversations.length === 0 ? (
+                <Text style={styles.historyEmpty}>لا توجد محادثات سابقة حتى الآن.</Text>
+              ) : (
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  {conversations.map(item => (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={[styles.historyItem, item.id === conversationId && styles.historyItemActive]}
+                      onPress={() => selectConversation(item.id)}
+                    >
+                      <Text style={styles.historyDate}>
+                        {new Date(item.updatedAt).toLocaleDateString('ar-DZ')}
+                      </Text>
+                      <Text style={styles.historyItemTitle} numberOfLines={2}>{item.title}</Text>
+                      {item.id === conversationId && <Text style={styles.historyCurrent}>المحادثة الحالية</Text>}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+          </View>
+        </Modal>
 
         <View style={styles.line} />
 
@@ -703,6 +823,8 @@ const styles = StyleSheet.create({
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
   onlineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#9EBD9D' },
   status: { color: '#96919D', fontSize: 9, letterSpacing: 0.6 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  historyButton: { paddingHorizontal: 8, paddingVertical: 7, borderRadius: 10, backgroundColor: '#211F27', borderWidth: 1, borderColor: '#493849' },
   newChatButton: {
     paddingHorizontal: 10,
     paddingVertical: 7,
@@ -721,6 +843,20 @@ const styles = StyleSheet.create({
     borderColor: '#39323D',
   },
   privateText: { color: '#D5A9CC', fontSize: 9, letterSpacing: 1.2 },
+  historyBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'flex-end' },
+  historyPanel: { height: '78%', backgroundColor: '#15131A', borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderColor: '#493849', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 28 },
+  historyHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
+  historyHeadingWrap: { alignItems: 'flex-end', flex: 1 },
+  historyTitle: { color: '#F5F0F5', fontSize: 19, fontWeight: '700' },
+  historySubtitle: { color: '#918B98', fontSize: 11, marginTop: 5 },
+  historyClose: { width: 34, height: 34, borderRadius: 12, backgroundColor: '#29212B', alignItems: 'center', justifyContent: 'center' },
+  historyCloseText: { color: '#E7B9D8', fontSize: 25, lineHeight: 28 },
+  historyEmpty: { color: '#A69BAA', textAlign: 'center', marginTop: 45, fontSize: 13 },
+  historyItem: { padding: 15, marginBottom: 9, borderRadius: 14, backgroundColor: '#211F27', borderWidth: 1, borderColor: '#39323D' },
+  historyItemActive: { borderColor: '#B58DAE', backgroundColor: '#2B202D' },
+  historyDate: { color: '#A98BA5', fontSize: 10, textAlign: 'right', marginBottom: 7 },
+  historyItemTitle: { color: '#F1ECF2', fontSize: 13, lineHeight: 20, textAlign: 'right' },
+  historyCurrent: { color: '#D5A9CC', fontSize: 10, textAlign: 'right', marginTop: 7 },
   line: { height: 1, backgroundColor: '#26242C' },
   welcome: { paddingHorizontal: 24, paddingTop: 22, paddingBottom: 6, alignItems: 'flex-end' },
   welcomeSmall: { color: '#B58DAE', fontSize: 10, marginBottom: 10, textAlign: 'right' },
