@@ -2,6 +2,11 @@ name: Build EZRA Android APK
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - ezra/free-gemini-service
+    paths:
+      - '.github/build-apk.trigger'
 
 jobs:
   build-android:
