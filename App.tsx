@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -39,11 +40,16 @@ const WELCOME_MESSAGE: Message = {
   sender: 'ezra',
   text: 'مرحبًا. أنا إزرا. أنا هنا، احكيلي… شو في بالك اليوم؟',
 };
-const CONVERSATION_ID = '00000000-0000-4000-8000-000000000001';
+const createConversationId = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, character => {
+  const random = Math.floor(Math.random() * 16);
+  const value = character === 'x' ? random : (random & 0x3) | 0x8;
+  return value.toString(16);
+});
 
 export default function App() {
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const [attachment, setAttachment] = useState<Attachment | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [chatLoading, setChatLoading] = useState(false);
@@ -72,6 +78,45 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!session) {
+      setConversationId(null);
+      return;
+    }
+
+    let active = true;
+    const restoreConversation = async () => {
+      try {
+        const storageKey = `ezra:conversation:${session.user.id}`;
+        const savedId = await AsyncStorage.getItem(storageKey);
+        const nextId = savedId || createConversationId();
+        if (!savedId) await AsyncStorage.setItem(storageKey, nextId);
+        if (active) setConversationId(nextId);
+      } catch (error) {
+        console.error('Could not restore conversation ID:', error);
+        if (active) setConversationId(createConversationId());
+      }
+    };
+
+    restoreConversation();
+    return () => { active = false; };
+  }, [session?.user.id]);
+
+  const startNewConversation = async () => {
+    if (!session) return;
+    const nextId = createConversationId();
+    try {
+      await AsyncStorage.setItem(`ezra:conversation:${session.user.id}`, nextId);
+      setConversationId(nextId);
+      setMessages([WELCOME_MESSAGE]);
+      setMessage('');
+      setAttachment(null);
+    } catch (error) {
+      console.error('Could not start a new conversation:', error);
+      Alert.alert('Could not start a new chat', 'Please try again.');
+    }
+  };
+
   const signIn = async () => {
     if (!email.trim() || !password) {
       setAuthError('Enter your email and password.');
@@ -88,7 +133,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (!session) {
+    if (!session || !conversationId) {
       setMessages([WELCOME_MESSAGE]);
       return;
     }
@@ -100,7 +145,7 @@ export default function App() {
         .from('chat_messages')
         .select('id, role, content, attachment_name, attachment_type')
         .eq('owner_id', session.user.id)
-        .eq('conversation_id', CONVERSATION_ID)
+        .eq('conversation_id', conversationId)
         .order('created_at', { ascending: true });
 
       if (!active) return;
@@ -129,7 +174,7 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [session?.user.id]);
+  }, [session?.user.id, conversationId]);
 
   useSpeechRecognitionEvent('start', () => setIsListening(true));
   useSpeechRecognitionEvent('end', () => setIsListening(false));
@@ -141,7 +186,7 @@ export default function App() {
 
   const sendMessage = async () => {
     const text = message.trim();
-    if ((!text && !attachment) || !session || sending) return;
+    if ((!text && !attachment) || !session || !conversationId || sending) return;
 
     setSending(true);
 
@@ -150,7 +195,7 @@ export default function App() {
         .from('chat_messages')
         .insert({
           owner_id: session.user.id,
-          conversation_id: CONVERSATION_ID,
+          conversation_id: conversationId,
           role: 'user',
           content: text,
           attachment_name: attachment?.name ?? null,
@@ -245,7 +290,7 @@ export default function App() {
           .from('chat_messages')
           .insert({
             owner_id: session.user.id,
-            conversation_id: CONVERSATION_ID,
+            conversation_id: conversationId,
             role: 'assistant',
             content: reply,
           })
@@ -422,6 +467,13 @@ export default function App() {
             </View>
           </View>
           <TouchableOpacity
+            style={styles.newChatButton}
+            onPress={startNewConversation}
+            accessibilityLabel="Start a new conversation"
+          >
+            <Text style={styles.newChatText}>＋ NEW CHAT</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={styles.privateTag}
             onPress={() => Alert.alert('Sign out', 'Sign out of your EZRA account?', [
               { text: 'Cancel', style: 'cancel' },
@@ -583,6 +635,15 @@ const styles = StyleSheet.create({
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
   onlineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#9EBD9D' },
   status: { color: '#96919D', fontSize: 9, letterSpacing: 0.6 },
+  newChatButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: '#29212B',
+    borderWidth: 1,
+    borderColor: '#6E4D69',
+  },
+  newChatText: { color: '#E7B9D8', fontSize: 9, letterSpacing: 0.8 },
   privateTag: {
     paddingHorizontal: 10,
     paddingVertical: 7,
