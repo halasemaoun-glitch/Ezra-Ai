@@ -546,7 +546,7 @@ export default function App() {
             },
           }).then(result => ({ kind: 'response' as const, result })),
           new Promise<{ kind: 'timeout' }>(resolve => {
-            timeoutId = setTimeout(() => resolve({ kind: 'timeout' }), 30000);
+            timeoutId = setTimeout(() => resolve({ kind: 'timeout' }), attachment ? 60000 : 30000);
           }),
         ]);
         if (timeoutId) clearTimeout(timeoutId);
