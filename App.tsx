@@ -120,6 +120,7 @@ export default function App() {
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [autoSpeak, setAutoSpeak] = useState(true);
   const [speechRate, setSpeechRate] = useState(0.92);
+  const [recognitionLanguage, setRecognitionLanguage] = useState<'ar' | 'en'>('ar');
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [attachment, setAttachment] = useState<Attachment | null>(null);
@@ -143,9 +144,11 @@ export default function App() {
   const [memories, setMemories] = useState<MemoryItem[]>([]);
 
   useEffect(() => {
-    AsyncStorage.multiGet(['ezra:autoSpeak', 'ezra:speechRate']).then(values => {
+    AsyncStorage.multiGet(['ezra:autoSpeak', 'ezra:speechRate', 'ezra:recognitionLanguage']).then(values => {
       const savedAutoSpeak = values[0]?.[1];
       const savedRate = values[1]?.[1];
+      const savedLanguage = values[2]?.[1];
+      if (savedLanguage === 'ar' || savedLanguage === 'en') setRecognitionLanguage(savedLanguage);
       if (savedAutoSpeak !== null) setAutoSpeak(savedAutoSpeak === 'true');
       if (savedRate) {
         const parsed = Number(savedRate);
@@ -247,8 +250,7 @@ export default function App() {
     const { error } = await supabase
       .from('memories')
       .update({ approval_status: status, updated_at: new Date().toISOString() })
-      .eq('id', memoryId)      .eq('owner_id', session.user.id);
-    if (error) {
+      .eq('id', memoryId)      .eq('owner_id', session.user.id);    if (error) {
       console.error('Could not update memory status:', error);
       Alert.alert('تعذّر تحديث الذكرى', 'حاول مرة أخرى.');
       return;
@@ -497,8 +499,7 @@ export default function App() {
             'EZRA response timed out',
             'Your message was saved, but smart-service did not respond within 30 seconds. The next build will stop the endless sending state so we can diagnose the service.'
           );          setSending(false);
-          return;
-        }
+          return;        }
 
         const { data: aiData, error: aiError } = aiRequest.result;
         if (aiError || typeof aiData?.reply !== 'string' || !aiData.reply.trim()) {
@@ -577,7 +578,7 @@ export default function App() {
         return;
       }
       ExpoSpeechRecognitionModule.start({
-        lang: 'ar',
+        lang: recognitionLanguage,
         interimResults: true,
         continuous: false,
       });
@@ -747,8 +748,7 @@ export default function App() {
               <View style={styles.settingsPanel}>
                 <View style={styles.historyHeader}>
                   <Text style={styles.historyTitle}>إعدادات الصوت</Text>                  <TouchableOpacity style={styles.historyClose} onPress={() => setSettingsVisible(false)}><Text style={styles.historyCloseText}>×</Text></TouchableOpacity>
-                </View>
-                <View style={styles.settingRow}>
+                </View>                <View style={styles.settingRow}>
                   <View style={styles.settingCopy}><Text style={styles.settingTitle}>قراءة ردود EZRA تلقائيًا</Text><Text style={styles.settingHint}>ينطق الرد بعد وصوله</Text></View>
                   <Switch value={autoSpeak} onValueChange={value => { setAutoSpeak(value); AsyncStorage.setItem('ezra:autoSpeak', String(value)).catch(() => {}); }} trackColor={{ false: '#39323D', true: '#875477' }} thumbColor={autoSpeak ? '#F2C8E5' : '#AAA'} />
                 </View>
@@ -757,6 +757,13 @@ export default function App() {
                   <View style={styles.rateControls}>
                     <TouchableOpacity style={styles.rateButton} onPress={() => { const v = Math.max(0.75, Number((speechRate - 0.05).toFixed(2))); setSpeechRate(v); AsyncStorage.setItem('ezra:speechRate', String(v)).catch(() => {}); }}><Text style={styles.rateButtonText}>−</Text></TouchableOpacity>
                     <TouchableOpacity style={styles.rateButton} onPress={() => { const v = Math.min(1.15, Number((speechRate + 0.05).toFixed(2))); setSpeechRate(v); AsyncStorage.setItem('ezra:speechRate', String(v)).catch(() => {}); }}><Text style={styles.rateButtonText}>＋</Text></TouchableOpacity>
+                  </View>
+                </View>
+                <View style={styles.settingRow}>
+                  <View style={styles.settingCopy}><Text style={styles.settingTitle}>لغة التعرّف الصوتي</Text><Text style={styles.settingHint}>{recognitionLanguage === 'ar' ? 'العربية' : 'English'}</Text></View>
+                  <View style={styles.rateControls}>
+                    <TouchableOpacity style={[styles.rateButton, recognitionLanguage === 'ar' && styles.languageButtonActive]} onPress={() => { setRecognitionLanguage('ar'); AsyncStorage.setItem('ezra:recognitionLanguage', 'ar').catch(() => {}); }}><Text style={styles.rateButtonText}>ع</Text></TouchableOpacity>
+                    <TouchableOpacity style={[styles.rateButton, recognitionLanguage === 'en' && styles.languageButtonActive]} onPress={() => { setRecognitionLanguage('en'); AsyncStorage.setItem('ezra:recognitionLanguage', 'en').catch(() => {}); }}><Text style={styles.rateButtonText}>EN</Text></TouchableOpacity>
                   </View>
                 </View>
                 <Text style={styles.settingsFootnote}>الصوت المتاح يعتمد على أصوات النظام المثبتة في هاتفك.</Text>
@@ -1096,3 +1103,4 @@ const styles = StyleSheet.create({
   settingHint: { color: '#9D899C', fontSize: 11, marginTop: 5 },
   rateControls: { flexDirection: 'row', gap: 8 },
   rateButton: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#38263A', alignItems: 'center', justifyContent: 'center' },
+  languageButtonActive: { backgroundColor: '#875477', borderWidth: 1, borderColor: '#E6A0D0' },
