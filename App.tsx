@@ -37,6 +37,14 @@ type ConversationSummary = {
   updatedAt: string;
 };
 
+type MemoryItem = {
+  id: string;
+  content: string;
+  category: string;
+  approval_status: 'pending' | 'approved' | 'rejected';
+  created_at: string;
+};
+
 type Message = {
   id: string;
   text: string;
@@ -118,6 +126,11 @@ export default function App() {
   const [historyVisible, setHistoryVisible] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [memoryVisible, setMemoryVisible] = useState(false);
+  const [memoryLoading, setMemoryLoading] = useState(false);
+  const [memorySaving, setMemorySaving] = useState(false);
+  const [memoryDraft, setMemoryDraft] = useState('');
+  const [memories, setMemories] = useState<MemoryItem[]>([]);
 
   useEffect(() => {
     let mounted = true;
@@ -159,6 +172,94 @@ export default function App() {
     restoreConversation();
     return () => { active = false; };
   }, [session?.user.id]);
+
+  const openMemoryCenter = async () => {
+    if (!session) return;
+    setMemoryVisible(true);
+    setMemoryLoading(true);
+    const { data, error } = await supabase
+      .from('memories')
+      .select('id, content, category, approval_status, created_at')
+      .eq('owner_id', session.user.id)
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    if (error) {
+      console.error('Could not load memories:', error);
+      Alert.alert('تعذّر تحميل الذكريات', 'حاول مرة أخرى بعد قليل.');
+      setMemoryLoading(false);
+      return;
+    }
+    setMemories((data ?? []) as MemoryItem[]);
+    setMemoryLoading(false);
+  };
+
+  const saveMemory = async () => {
+    const content = memoryDraft.trim();
+    if (!session || !content || memorySaving) return;
+    setMemorySaving(true);
+    const { data, error } = await supabase
+      .from('memories')
+      .insert({
+        owner_id: session.user.id,
+        content,
+        category: 'general',
+        approval_status: 'pending',
+      })
+      .select('id, content, category, approval_status, created_at')
+      .single();
+
+    if (error || !data) {
+      console.error('Could not save memory:', error);
+      Alert.alert('تعذّر حفظ الذكرى', 'تحقق من الاتصال ثم حاول مرة أخرى.');
+    } else {
+      setMemories(previous => [data as MemoryItem, ...previous]);
+      setMemoryDraft('');
+      Alert.alert('تم حفظ الاقتراح', 'أُضيفت الذكرى كاقتراح بانتظار موافقتك.');
+    }
+    setMemorySaving(false);
+  };
+
+  const updateMemoryStatus = async (memoryId: string, status: 'approved' | 'rejected') => {
+    if (!session) return;
+    const { error } = await supabase
+      .from('memories')
+      .update({ approval_status: status, updated_at: new Date().toISOString() })
+      .eq('id', memoryId)
+      .eq('owner_id', session.user.id);
+    if (error) {
+      console.error('Could not update memory status:', error);
+      Alert.alert('تعذّر تحديث الذكرى', 'حاول مرة أخرى.');
+      return;
+    }
+    setMemories(previous => previous.map(item =>
+      item.id === memoryId ? { ...item, approval_status: status } : item
+    ));
+  };
+
+  const deleteMemory = (memoryId: string) => {
+    if (!session) return;
+    Alert.alert('حذف الذكرى', 'هل تريد حذف هذه الذكرى نهائيًا؟', [
+      { text: 'إلغاء', style: 'cancel' },
+      {
+        text: 'حذف',
+        style: 'destructive',
+        onPress: async () => {
+          const { error } = await supabase
+            .from('memories')
+            .delete()
+            .eq('id', memoryId)
+            .eq('owner_id', session.user.id);
+          if (error) {
+            console.error('Could not delete memory:', error);
+            Alert.alert('تعذّر حذف الذكرى', 'حاول مرة أخرى.');
+            return;
+          }
+          setMemories(previous => previous.filter(item => item.id !== memoryId));
+        },
+      },
+    ]);
+  };
 
   const openConversationHistory = async () => {
     if (!session) return;
@@ -612,6 +713,92 @@ export default function App() {
         </View>
 
         <Modal
+          visible={memoryVisible}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setMemoryVisible(false)}
+        >
+          <View style={styles.historyBackdrop}>
+            <View style={styles.memoryPanel}>
+              <View style={styles.historyHeader}>
+                <TouchableOpacity onPress={() => setMemoryVisible(false)} style={styles.historyClose}>
+                  <Text style={styles.historyCloseText}>×</Text>
+                </TouchableOpacity>
+                <View style={styles.historyHeadingWrap}>
+                  <Text style={styles.historyTitle}>ذاكرة إزرا</Text>
+                  <Text style={styles.historySubtitle}>أنت تتحكم بما تحتفظ به إزرا</Text>
+                </View>
+              </View>
+
+              <Text style={styles.memoryNotice}>
+                أضف ما تريد أن تتذكره إزرا. لن تُعتمد أي ذكرى إلا بعد موافقتك.
+              </Text>
+              <TextInput
+                style={styles.memoryInput}
+                value={memoryDraft}
+                onChangeText={setMemoryDraft}
+                placeholder="مثال: أفضل الإجابات المختصرة باللغة العربية…"
+                placeholderTextColor="#777680"
+                multiline
+                maxLength={1000}
+                textAlign="right"
+              />
+              <TouchableOpacity
+                style={[styles.memorySaveButton, (!memoryDraft.trim() || memorySaving) && styles.authButtonDisabled]}
+                onPress={saveMemory}
+                disabled={!memoryDraft.trim() || memorySaving}
+              >
+                <Text style={styles.memorySaveText}>
+                  {memorySaving ? 'جارٍ الحفظ…' : '＋ حفظ كاقتراح'}
+                </Text>
+              </TouchableOpacity>
+
+              <Text style={styles.memorySectionTitle}>الذكريات المحفوظة والاقتراحات</Text>
+              {memoryLoading ? (
+                <Text style={styles.historyEmpty}>جارٍ تحميل الذكريات…</Text>
+              ) : memories.length === 0 ? (
+                <Text style={styles.historyEmpty}>لا توجد ذكريات بعد. يمكنك إضافة أول ذكرى أعلاه.</Text>
+              ) : (
+                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.memoryList}>
+                  {memories.map(item => (
+                    <View key={item.id} style={styles.memoryItem}>
+                      <Text style={styles.memoryItemText}>{item.content}</Text>
+                      <Text style={styles.memoryStatus}>
+                        {item.approval_status === 'approved' ? 'معتمدة' : item.approval_status === 'pending' ? 'بانتظار موافقتك' : 'مرفوضة'}
+                      </Text>
+                      <View style={styles.memoryActions}>
+                        {item.approval_status !== 'approved' && (
+                          <TouchableOpacity
+                            style={styles.memoryApprove}
+                            onPress={() => updateMemoryStatus(item.id, 'approved')}
+                          >
+                            <Text style={styles.memoryActionText}>موافقة</Text>
+                          </TouchableOpacity>
+                        )}
+                        {item.approval_status === 'pending' && (
+                          <TouchableOpacity
+                            style={styles.memoryReject}
+                            onPress={() => updateMemoryStatus(item.id, 'rejected')}
+                          >
+                            <Text style={styles.memoryActionText}>رفض</Text>
+                          </TouchableOpacity>
+                        )}
+                        <TouchableOpacity
+                          style={styles.memoryDelete}
+                          onPress={() => deleteMemory(item.id)}
+                        >
+                          <Text style={styles.memoryActionText}>حذف</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+          </View>
+        </Modal>
+
+        <Modal
           visible={historyVisible}
           transparent
           animationType="slide"
@@ -718,7 +905,7 @@ export default function App() {
           <TouchableOpacity style={styles.quickButton} onPress={() => setMessage('Help me plan my day.')}>
             <Text style={styles.quickText}>◷  يومي</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.quickButton} onPress={() => Alert.alert('الذكريات', `لديك ${messages.length} رسائل في هذه المحادثة. الذاكرة الذكية طويلة الأمد سنضيفها في مرحلة لاحقة.`)}>
+          <TouchableOpacity style={styles.quickButton} onPress={openMemoryCenter}>
             <Text style={styles.quickText}>♡  الذكريات</Text>
           </TouchableOpacity>
         </View>
@@ -857,6 +1044,21 @@ const styles = StyleSheet.create({
   historyDate: { color: '#A98BA5', fontSize: 10, textAlign: 'right', marginBottom: 7 },
   historyItemTitle: { color: '#F1ECF2', fontSize: 13, lineHeight: 20, textAlign: 'right' },
   historyCurrent: { color: '#D5A9CC', fontSize: 10, textAlign: 'right', marginTop: 7 },
+  memoryPanel: { height: '88%', backgroundColor: '#15131A', borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderColor: '#493849', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 24 },
+  memoryNotice: { color: '#A69BAA', fontSize: 11, lineHeight: 18, textAlign: 'right', marginBottom: 10 },
+  memoryInput: { minHeight: 76, maxHeight: 120, color: '#F5F0F5', backgroundColor: '#211F27', borderWidth: 1, borderColor: '#493849', borderRadius: 13, padding: 12, textAlignVertical: 'top', fontSize: 12 },
+  memorySaveButton: { backgroundColor: '#B58DAE', borderRadius: 12, paddingVertical: 12, alignItems: 'center', marginTop: 9 },
+  memorySaveText: { color: '#171219', fontSize: 12, fontWeight: '700' },
+  memorySectionTitle: { color: '#E7B9D8', fontSize: 12, fontWeight: '700', textAlign: 'right', marginTop: 20, marginBottom: 10 },
+  memoryList: { paddingBottom: 16, gap: 9 },
+  memoryItem: { padding: 13, borderRadius: 13, backgroundColor: '#211F27', borderWidth: 1, borderColor: '#39323D' },
+  memoryItemText: { color: '#F1ECF2', fontSize: 12, lineHeight: 19, textAlign: 'right' },
+  memoryStatus: { color: '#B58DAE', fontSize: 10, textAlign: 'right', marginTop: 8 },
+  memoryActions: { flexDirection: 'row', justifyContent: 'flex-start', gap: 7, marginTop: 10 },
+  memoryApprove: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 9, backgroundColor: '#3B3040' },
+  memoryReject: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 9, backgroundColor: '#49313A' },
+  memoryDelete: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 9, backgroundColor: '#38252B' },
+  memoryActionText: { color: '#E7B9D8', fontSize: 10, fontWeight: '600' },
   line: { height: 1, backgroundColor: '#26242C' },
   welcome: { paddingHorizontal: 24, paddingTop: 22, paddingBottom: 6, alignItems: 'flex-end' },
   welcomeSmall: { color: '#B58DAE', fontSize: 10, marginBottom: 10, textAlign: 'right' },
