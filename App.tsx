@@ -30,6 +30,9 @@ type Attachment = {
   uri: string;
   name: string;
   kind: 'image' | 'file';
+  mimeType?: string;
+  base64?: string;
+  textContent?: string;
 };
 
 type ConversationSummary = {
@@ -516,20 +519,31 @@ export default function App() {
       setMessage('');
       setAttachment(null);
 
-      if (text) {
+      if (text || attachment) {
+        const attachmentPrompt = attachment?.kind === 'image'
+          ? 'Please inspect the attached image carefully and answer the user\'s question. If no question was provided, describe the image and any readable text.'
+          : attachment?.textContent
+            ? `The user attached a text document named ${attachment.name}. Analyze its contents below:\n\n${attachment.textContent}`
+            : '';
+        const userInput = [text, attachmentPrompt].filter(Boolean).join('\n\n');
         const recentContext = messages
           .filter(item => item.id !== 'welcome' && !!item.text.trim())
           .slice(-12)
           .map(item => `${item.sender === 'user' ? 'User' : 'EZRA'}: ${item.text}`)
           .join('\n');
         const conversationInput = recentContext
-          ? `Continue this conversation naturally. Use the previous messages as context.\n\n${recentContext}\nUser: ${text}`
-          : text;
+          ? `Continue this conversation naturally. Use the previous messages as context.\n\n${recentContext}\nUser: ${userInput}`
+          : userInput;
 
         let timeoutId: ReturnType<typeof setTimeout> | undefined;
         const aiRequest = await Promise.race([
           supabase.functions.invoke('smart-service', {
-            body: { input: conversationInput },
+            body: {
+              input: conversationInput,
+              ...(attachment?.kind === 'image' && attachment.base64
+                ? { imageDataUrl: `data:${attachment.mimeType || 'image/jpeg'};base64,${attachment.base64}` }
+                : {}),
+            },
           }).then(result => ({ kind: 'response' as const, result })),
           new Promise<{ kind: 'timeout' }>(resolve => {
             timeoutId = setTimeout(() => resolve({ kind: 'timeout' }), 30000);
@@ -636,14 +650,25 @@ export default function App() {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.8,
+        quality: 0.7,
+        base64: true,
       });
       if (result.canceled || !result.assets[0]) return;
       const asset = result.assets[0];
+      if (!asset.base64) {
+        Alert.alert('تعذّر قراءة الصورة', 'لم نتمكن من تجهيز الصورة لإرسالها. حاول اختيار صورة أخرى.');
+        return;
+      }
+      if (asset.base64.length > 4 * 1024 * 1024) {
+        Alert.alert('الصورة كبيرة جدًا', 'اختر صورة أصغر من 4 ميغابايت حتى نتمكن من تحليلها.');
+        return;
+      }
       setAttachment({
         uri: asset.uri,
-        name: asset.fileName || 'Selected photo',
+        name: asset.fileName || 'صورة مرفقة',
         kind: 'image',
+        mimeType: asset.mimeType || 'image/jpeg',
+        base64: asset.base64,
       });
     } catch {
       Alert.alert('الصورة غير متاحة', 'تعذّر فتح معرض الصور.');
@@ -658,7 +683,23 @@ export default function App() {
       });
       if (result.canceled || !result.assets[0]) return;
       const file = result.assets[0];
-      setAttachment({ uri: file.uri, name: file.name, kind: 'file' });
+      const extension = file.name.split('.').pop()?.toLowerCase() || '';
+      const supportedTextTypes = ['txt', 'md', 'csv', 'json'];
+      if (!supportedTextTypes.includes(extension)) {
+        Alert.alert('نوع الملف غير مدعوم بعد', 'حاليًا يستطيع إزرا قراءة ملفات TXT وMD وCSV وJSON. دعم PDF وWord قادم لاحقًا.');
+        return;
+      }
+      if (typeof file.size === 'number' && file.size > 1024 * 1024) {
+        Alert.alert('الملف كبير جدًا', 'اختر ملفًا نصيًا أصغر من 1 ميغابايت.');
+        return;
+      }
+      const response = await fetch(file.uri);
+      const textContent = await response.text();
+      if (!textContent.trim()) {
+        Alert.alert('الملف فارغ', 'لم نعثر على نص قابل للقراءة داخل الملف.');
+        return;
+      }
+      setAttachment({ uri: file.uri, name: file.name, kind: 'file', mimeType: file.mimeType, textContent });
     } catch {
       Alert.alert('تعذّر فتح الملفات', 'حاول مرة أخرى.');
     }
@@ -1119,7 +1160,7 @@ export default function App() {
         {attachment && (
           <View style={styles.pendingAttachment}>
             <Text style={styles.pendingText} numberOfLines={1}>
-              {attachment.kind === 'image' ? 'صورة: ' : 'ملف: '}{attachment.name}
+              {attachment.kind === 'image' ? 'صورة جاهزة للتحليل: ' : 'ملف جاهز للقراءة: '}{attachment.name}
             </Text>
             <TouchableOpacity onPress={() => setAttachment(null)}>
               <Text style={styles.removeAttachment}>×</Text>
