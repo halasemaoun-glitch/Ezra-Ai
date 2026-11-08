@@ -142,6 +142,17 @@ export default function App() {
   const [memorySaving, setMemorySaving] = useState(false);
   const [memoryDraft, setMemoryDraft] = useState('');
   const [memories, setMemories] = useState<MemoryItem[]>([]);
+  const [memorySearch, setMemorySearch] = useState('');
+  const [memoryFilter, setMemoryFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [historySearch, setHistorySearch] = useState('');
+
+  const visibleMemories = memories.filter(item => {
+    const matchesSearch = item.content.toLocaleLowerCase().includes(memorySearch.trim().toLocaleLowerCase());
+    return matchesSearch && (memoryFilter === 'all' || item.approval_status === memoryFilter);
+  });
+  const visibleConversations = conversations.filter(item =>
+    item.title.toLocaleLowerCase().includes(historySearch.trim().toLocaleLowerCase())
+  );
 
   useEffect(() => {
     AsyncStorage.multiGet(['ezra:autoSpeak', 'ezra:speechRate', 'ezra:recognitionLanguage']).then(values => {
@@ -356,6 +367,31 @@ export default function App() {
       console.error('Could not start a new conversation:', error);
       Alert.alert('تعذّر بدء محادثة جديدة', 'حاول مرة أخرى.');
     }
+  };
+
+  const deleteConversation = (selectedId: string) => {
+    if (!session) return;
+    Alert.alert('حذف المحادثة', 'سيتم حذف رسائل هذه المحادثة نهائيًا. هل تريد المتابعة؟', [
+      { text: 'إلغاء', style: 'cancel' },
+      {
+        text: 'حذف',
+        style: 'destructive',
+        onPress: async () => {
+          const { error } = await supabase
+            .from('chat_messages')
+            .delete()
+            .eq('owner_id', session.user.id)
+            .eq('conversation_id', selectedId);
+          if (error) {
+            console.error('Could not delete conversation:', error);
+            Alert.alert('تعذّر حذف المحادثة', 'حاول مرة أخرى بعد قليل.');
+            return;
+          }
+          setConversations(previous => previous.filter(item => item.id !== selectedId));
+          if (selectedId === conversationId) await startNewConversation();
+        },
+      },
+    ]);
   };
 
   const signIn = async () => {
@@ -880,13 +916,39 @@ export default function App() {
               </TouchableOpacity>
 
               <Text style={styles.memorySectionTitle}>الذكريات المحفوظة والاقتراحات</Text>
+              <TextInput
+                style={styles.memorySearchInput}
+                value={memorySearch}
+                onChangeText={setMemorySearch}
+                placeholder="ابحث داخل ذكرياتك…"
+                placeholderTextColor="#777680"
+                textAlign="right"
+              />
+              <View style={styles.memoryFilters}>
+                {([
+                  ['all', 'الكل'],
+                  ['pending', 'بانتظار الموافقة'],
+                  ['approved', 'معتمدة'],
+                  ['rejected', 'مرفوضة'],
+                ] as const).map(([value, label]) => (
+                  <TouchableOpacity
+                    key={value}
+                    style={[styles.memoryFilter, memoryFilter === value && styles.memoryFilterActive]}
+                    onPress={() => setMemoryFilter(value)}
+                  >
+                    <Text style={[styles.memoryFilterText, memoryFilter === value && styles.memoryFilterTextActive]}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
               {memoryLoading ? (
                 <Text style={styles.historyEmpty}>جارٍ تحميل الذكريات…</Text>
               ) : memories.length === 0 ? (
                 <Text style={styles.historyEmpty}>لا توجد ذكريات بعد. يمكنك إضافة أول ذكرى أعلاه.</Text>
+              ) : visibleMemories.length === 0 ? (
+                <Text style={styles.historyEmpty}>لا توجد ذكريات تطابق البحث أو التصفية.</Text>
               ) : (
                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.memoryList}>
-                  {memories.map(item => (
+                  {visibleMemories.map(item => (
                     <View key={item.id} style={styles.memoryItem}>
                       <Text style={styles.memoryItemText}>{item.content}</Text>
                       <Text style={styles.memoryStatus}>
@@ -941,24 +1003,42 @@ export default function App() {
                   <Text style={styles.historySubtitle}>كل حديثك محفوظ هنا</Text>
                 </View>
               </View>
+              <TextInput
+                style={styles.memorySearchInput}
+                value={historySearch}
+                onChangeText={setHistorySearch}
+                placeholder="ابحث في المحادثات…"
+                placeholderTextColor="#777680"
+                textAlign="right"
+              />
               {historyLoading ? (
                 <Text style={styles.historyEmpty}>جارٍ تحميل المحادثات…</Text>
               ) : conversations.length === 0 ? (
                 <Text style={styles.historyEmpty}>لا توجد محادثات سابقة حتى الآن.</Text>
+              ) : visibleConversations.length === 0 ? (
+                <Text style={styles.historyEmpty}>لا توجد محادثات تطابق البحث.</Text>
               ) : (
                 <ScrollView showsVerticalScrollIndicator={false}>
-                  {conversations.map(item => (
-                    <TouchableOpacity
-                      key={item.id}
-                      style={[styles.historyItem, item.id === conversationId && styles.historyItemActive]}
-                      onPress={() => selectConversation(item.id)}
-                    >
-                      <Text style={styles.historyDate}>
-                        {new Date(item.updatedAt).toLocaleDateString('ar-DZ')}
-                      </Text>
-                      <Text style={styles.historyItemTitle} numberOfLines={2}>{item.title}</Text>
-                      {item.id === conversationId && <Text style={styles.historyCurrent}>المحادثة الحالية</Text>}
-                    </TouchableOpacity>
+                  {visibleConversations.map(item => (
+                    <View key={item.id} style={styles.historyItemRow}>
+                      <TouchableOpacity
+                        style={[styles.historyItem, styles.historyItemOpen, item.id === conversationId && styles.historyItemActive]}
+                        onPress={() => selectConversation(item.id)}
+                      >
+                        <Text style={styles.historyDate}>
+                          {new Date(item.updatedAt).toLocaleDateString('ar-DZ')}
+                        </Text>
+                        <Text style={styles.historyItemTitle} numberOfLines={2}>{item.title}</Text>
+                        {item.id === conversationId && <Text style={styles.historyCurrent}>المحادثة الحالية</Text>}
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.historyDeleteButton}
+                        onPress={() => deleteConversation(item.id)}
+                        accessibilityLabel="حذف المحادثة"
+                      >
+                        <Text style={styles.historyDeleteText}>حذف</Text>
+                      </TouchableOpacity>
+                    </View>
                   ))}
                 </ScrollView>
               )}
@@ -1203,6 +1283,10 @@ const styles = StyleSheet.create({
   historyCloseText: { color: '#E7B9D8', fontSize: 25, lineHeight: 28 },
   historyEmpty: { color: '#A69BAA', textAlign: 'center', marginTop: 45, fontSize: 13 },
   historyItem: { padding: 15, marginBottom: 9, borderRadius: 14, backgroundColor: '#211F27', borderWidth: 1, borderColor: '#39323D' },
+  historyItemRow: { flexDirection: 'row', alignItems: 'stretch', gap: 8, marginBottom: 9 },
+  historyItemOpen: { flex: 1, marginBottom: 0 },
+  historyDeleteButton: { paddingHorizontal: 12, justifyContent: 'center', alignItems: 'center', borderRadius: 12, backgroundColor: '#38252B', borderWidth: 1, borderColor: '#63404B' },
+  historyDeleteText: { color: '#E7B9D8', fontSize: 10, fontWeight: '600' },
   historyItemActive: { borderColor: '#B58DAE', backgroundColor: '#2B202D' },
   historyDate: { color: '#A98BA5', fontSize: 10, textAlign: 'right', marginBottom: 7 },
   historyItemTitle: { color: '#F1ECF2', fontSize: 13, lineHeight: 20, textAlign: 'right' },
@@ -1213,6 +1297,12 @@ const styles = StyleSheet.create({
   memorySaveButton: { backgroundColor: '#B58DAE', borderRadius: 12, paddingVertical: 12, alignItems: 'center', marginTop: 9 },
   memorySaveText: { color: '#171219', fontSize: 12, fontWeight: '700' },
   memorySectionTitle: { color: '#E7B9D8', fontSize: 12, fontWeight: '700', textAlign: 'right', marginTop: 20, marginBottom: 10 },
+  memorySearchInput: { minHeight: 42, color: '#F5F0F5', backgroundColor: '#211F27', borderWidth: 1, borderColor: '#493849', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, textAlign: 'right', fontSize: 12, marginBottom: 9 },
+  memoryFilters: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 6, marginBottom: 10 },
+  memoryFilter: { paddingHorizontal: 9, paddingVertical: 7, borderRadius: 10, backgroundColor: '#211F27', borderWidth: 1, borderColor: '#39323D' },
+  memoryFilterActive: { backgroundColor: '#3B3040', borderColor: '#B58DAE' },
+  memoryFilterText: { color: '#A69BAA', fontSize: 9 },
+  memoryFilterTextActive: { color: '#F0C9E4', fontWeight: '700' },
   memoryList: { paddingBottom: 16, gap: 9 },
   memoryItem: { padding: 13, borderRadius: 13, backgroundColor: '#211F27', borderWidth: 1, borderColor: '#39323D' },
   memoryItemText: { color: '#F1ECF2', fontSize: 12, lineHeight: 19, textAlign: 'right' },
