@@ -111,6 +111,7 @@ function EzraOrb({ status }: { status: string }) {
 
 export default function App() {
   const [message, setMessage] = useState('');
+  const [voiceHome, setVoiceHome] = useState(true);
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [attachment, setAttachment] = useState<Attachment | null>(null);
@@ -681,6 +682,41 @@ export default function App() {
     );
   }
 
+  if (voiceHome) {
+    const voiceStatus = isListening
+      ? 'EZRA IS LISTENING'
+      : speakingMessageId
+        ? 'EZRA IS SPEAKING'
+        : (sending || chatLoading)
+          ? 'ONE MOMENT, I’M THINKING…'
+          : 'أنا هنا… تحدث معي';
+    return (
+      <SafeAreaView style={styles.voiceSafe}>
+        <StatusBar style="light" />
+        <View style={styles.voiceHome}>
+          <Text style={styles.voiceWordmark}>EZRA</Text>
+          <View style={styles.voiceOrbWrap}>
+            <EzraOrb status={voiceStatus} />
+          </View>
+          <Text style={styles.voiceHint}>مساحة هادئة… لك وحدك</Text>
+          <TouchableOpacity
+            style={[styles.voiceMic, isListening && styles.voiceMicActive]}
+            onPress={startListening}
+            accessibilityLabel={isListening ? 'إيقاف الاستماع' : 'ابدأ التحدث مع إزرا'}
+          >
+            <Text style={styles.voiceMicIcon}>{isListening ? '■' : '⌁'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.voiceTextLink} onPress={() => setVoiceHome(false)}>
+            <Text style={styles.voiceTextLinkLabel}>المحادثة النصية  ·  السجل والملفات</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.voiceMemoryLink} onPress={openMemoryCenter}>
+            <Text style={styles.voiceMemoryLabel}>الذاكرة</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar style="light" />
@@ -975,21 +1011,33 @@ export default function App() {
 
 const styles = StyleSheet.create({
   orbSection: { alignItems: 'center', paddingTop: 0, paddingBottom: 10 },
-  orbStage: { width: 150, height: 150, alignItems: 'center', justifyContent: 'center' },
-  orbHalo: { position: 'absolute', width: 126, height: 126, borderRadius: 63, backgroundColor: '#8E3B78', shadowColor: '#E34BB5', shadowOpacity: 0.9, shadowRadius: 32, shadowOffset: { width: 0, height: 0 }, elevation: 18 },
-  orbRingOuter: { position: 'absolute', width: 138, height: 138, borderRadius: 69, borderWidth: 1, borderColor: '#A85B91', borderStyle: 'dashed', opacity: 0.62, alignItems: 'flex-start', justifyContent: 'center' },
-  orbRingInner: { position: 'absolute', width: 108, height: 108, borderRadius: 54, borderWidth: 1, borderColor: '#D17AB7', opacity: 0.7, alignItems: 'flex-end', justifyContent: 'center' },
+  orbStage: { width: 264, height: 264, alignItems: 'center', justifyContent: 'center' },
+  orbHalo: { position: 'absolute', width: 224, height: 224, borderRadius: 112, backgroundColor: '#8E3B78', shadowColor: '#E34BB5', shadowOpacity: 0.9, shadowRadius: 32, shadowOffset: { width: 0, height: 0 }, elevation: 18 },
+  orbRingOuter: { position: 'absolute', width: 244, height: 244, borderRadius: 122, borderWidth: 1, borderColor: '#A85B91', borderStyle: 'dashed', opacity: 0.62, alignItems: 'flex-start', justifyContent: 'center' },
+  orbRingInner: { position: 'absolute', width: 184, height: 184, borderRadius: 92, borderWidth: 1, borderColor: '#D17AB7', opacity: 0.7, alignItems: 'flex-end', justifyContent: 'center' },
   orbOrbitDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#F0B7DF', marginLeft: -3 },
   orbOrbitDotSmall: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#C58BE2', marginRight: -2 },
-  orbCore: { width: 86, height: 86, borderRadius: 43, backgroundColor: '#672B5A', borderWidth: 1, borderColor: '#E6A0D0', alignItems: 'center', justifyContent: 'center', shadowColor: '#D84AAE', shadowOpacity: 0.9, shadowRadius: 22, shadowOffset: { width: 0, height: 0 }, elevation: 16 },
-  orbCoreHighlight: { width: 45, height: 45, borderRadius: 23, backgroundColor: '#B85A9D', opacity: 0.55, borderWidth: 1, borderColor: '#F0B7DF' },
-  orbCoreSpark: { position: 'absolute', width: 12, height: 12, borderRadius: 6, backgroundColor: '#F4D7EC', top: 21, right: 23, opacity: 0.8 },
+  orbCore: { width: 146, height: 146, borderRadius: 73, backgroundColor: '#672B5A', borderWidth: 1, borderColor: '#E6A0D0', alignItems: 'center', justifyContent: 'center', shadowColor: '#D84AAE', shadowOpacity: 0.9, shadowRadius: 22, shadowOffset: { width: 0, height: 0 }, elevation: 16 },
+  orbCoreHighlight: { width: 78, height: 78, borderRadius: 39, backgroundColor: '#B85A9D', opacity: 0.55, borderWidth: 1, borderColor: '#F0B7DF' },
+  orbCoreSpark: { position: 'absolute', width: 12, height: 12, borderRadius: 6, backgroundColor: '#F4D7EC', top: 34, right: 38, opacity: 0.8 },
   orbStatusPill: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 13, paddingVertical: 6, borderRadius: 20, backgroundColor: '#211B27', borderWidth: 1, borderColor: '#493044', marginTop: -1 },
   orbStatusPillActive: { borderColor: '#9C5C91', backgroundColor: '#2B1C2D' },
   orbStatusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#9EBD9D' },
   orbStatusDotActive: { backgroundColor: '#E7A6D2' },
   orbStatus: { color: '#E7B9D8', fontSize: 11, fontWeight: '600' },
   orbCaption: { color: '#77717E', fontSize: 9, marginTop: 6 },
+  voiceSafe: { flex: 1, backgroundColor: '#08070D' },
+  voiceHome: { flex: 1, alignItems: 'center', justifyContent: 'space-between', paddingTop: 34, paddingBottom: 24, paddingHorizontal: 24, backgroundColor: '#08070D' },
+  voiceWordmark: { color: '#E9B3D7', fontSize: 16, fontWeight: '700', letterSpacing: 8, marginTop: 8 },
+  voiceOrbWrap: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center' },
+  voiceHint: { color: '#A99AAA', fontSize: 12, letterSpacing: 1.2, marginTop: -4, marginBottom: 20 },
+  voiceMic: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', backgroundColor: '#35182F', borderWidth: 1, borderColor: '#C46BA9', shadowColor: '#D64BAF', shadowOpacity: 0.55, shadowRadius: 22, shadowOffset: { width: 0, height: 0 }, elevation: 12 },
+  voiceMicActive: { backgroundColor: '#7A285F', borderColor: '#F0B5DE' },
+  voiceMicIcon: { color: '#F7D8ED', fontSize: 30, fontWeight: '600' },
+  voiceTextLink: { marginTop: 20, padding: 10 },
+  voiceTextLinkLabel: { color: '#B58DAE', fontSize: 11, letterSpacing: 0.5 },
+  voiceMemoryLink: { padding: 7 },
+  voiceMemoryLabel: { color: '#766B7B', fontSize: 10 },
   authSafe: { flex: 1, backgroundColor: '#101014', alignItems: 'center', justifyContent: 'center', padding: 26 },
   authCard: { width: '100%', maxWidth: 420, alignItems: 'center' },
   authBrand: { color: '#F5F0F5', fontSize: 24, fontWeight: '700', letterSpacing: 6, marginTop: 18 },
