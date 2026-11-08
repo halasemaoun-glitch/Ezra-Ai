@@ -523,14 +523,14 @@ export default function App() {
         const attachmentPrompt = attachment?.kind === 'image'
           ? 'Please inspect the attached image carefully and answer the user\'s question. If no question was provided, describe the image and any readable text.'
           : attachment?.textContent
-            ? `The user attached a text document named ${attachment.name}. Analyze its contents below:\n\n${attachment.textContent.slice(0, 12000)}${attachment.textContent.length > 12000 ? '\\n\\n[The document was shortened to fit the request.]' : ''}`
+            ? `The user attached a text document named ${attachment.name}. Analyze its contents below:\n\n${attachment.textContent.slice(0, 8000)}${attachment.textContent.length > 12000 ? '\\n\\n[The document was shortened to fit the request.]' : ''}`
             : '';
         const userInput = [text, attachmentPrompt].filter(Boolean).join('\n\n');
         const recentContext = messages
           .filter(item => item.id !== 'welcome' && !!item.text.trim())
           .slice(-12)
           .map(item => `${item.sender === 'user' ? 'User' : 'EZRA'}: ${item.text}`)
-          .join('\n');
+          .join('\n').slice(-4000);
         const conversationInput = recentContext
           ? `Continue this conversation naturally. Use the previous messages as context.\n\n${recentContext}\nUser: ${userInput}`
           : userInput;
