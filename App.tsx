@@ -408,7 +408,7 @@ export default function App() {
   });
   useSpeechRecognitionEvent('error', () => setIsListening(false));
 
-  const sendMessage = async () => {
+  const sendMessage = async (voiceReply = false) => {
     const text = message.trim();
     if ((!text && !attachment) || !session || !conversationId || sending) return;
 
@@ -533,6 +533,7 @@ export default function App() {
             ...previous,
             { id: savedReply.id, sender: 'ezra', text: reply },
           ]);
+          if (voiceReply) speak(reply, savedReply.id);
         }
       } else {
         Alert.alert(
@@ -711,7 +712,7 @@ export default function App() {
           {!!message.trim() && !isListening && (
             <View style={styles.voiceTranscriptCard}>
               <Text style={styles.voiceTranscript} numberOfLines={3}>{message}</Text>
-              <TouchableOpacity style={styles.voiceSendButton} onPress={() => { setVoiceHome(false); sendMessage(); }} disabled={sending}>
+              <TouchableOpacity style={styles.voiceSendButton} onPress={() => { setVoiceHome(false); sendMessage(true); }} disabled={sending}>
                 <Text style={styles.voiceSendLabel}>إرسال إلى إزرا  ↑</Text>
               </TouchableOpacity>
             </View>
