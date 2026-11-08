@@ -639,7 +639,7 @@ export default function App() {
     setSpeakingMessageId(messageId);
     Speech.speak(text, {
       language: 'ar',
-      rate: 0.92,
+      rate: speechRate,
       pitch: 0.92,
       onDone: () => setSpeakingMessageId(current => current === messageId ? null : current),
       onStopped: () => setSpeakingMessageId(current => current === messageId ? null : current),
