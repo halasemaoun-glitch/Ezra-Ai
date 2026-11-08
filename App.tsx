@@ -373,6 +373,14 @@ export default function App() {
     setSigningIn(false);
   };
 
+  const returnToVoiceHome = () => {
+    if (isListening) ExpoSpeechRecognitionModule.stop();
+    Speech.stop();
+    setIsListening(false);
+    setSpeakingMessageId(null);
+    setVoiceHome(true);
+  };
+
   useEffect(() => {
     if (!session || !conversationId) {
       setMessages([WELCOME_MESSAGE]);
@@ -673,6 +681,8 @@ export default function App() {
             textAlign="right"
             placeholder="البريد الإلكتروني"
             placeholderTextColor="#777680"
+            textAlign="left"
+            writingDirection="ltr"
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -683,6 +693,8 @@ export default function App() {
             style={styles.authInput}
             placeholder="كلمة المرور"
             placeholderTextColor="#777680"
+            textAlign="left"
+            writingDirection="ltr"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -705,9 +717,9 @@ export default function App() {
 
   if (voiceHome) {
     const voiceStatus = isListening
-      ? 'إيزرا يستمع'
+      ? 'إزرا يستمع'
       : speakingMessageId
-        ? 'إيزرا يتحدث'
+        ? 'إزرا يتحدث'
         : (sending || chatLoading)
           ? 'لحظة، أفكر…'
           : 'أنا هنا';
@@ -798,6 +810,13 @@ export default function App() {
           <View style={styles.headerActions}>
             <TouchableOpacity
               style={styles.historyButton}
+              onPress={returnToVoiceHome}
+              accessibilityLabel="العودة إلى الشاشة الصوتية"
+            >
+              <Text style={styles.newChatText}>◉ الصوت</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.historyButton}
               onPress={openConversationHistory}
               accessibilityLabel="سجل المحادثات"
             >
@@ -849,6 +868,7 @@ export default function App() {
                 onChangeText={setMemoryDraft}
                 placeholder="مثال: أفضل الإجابات المختصرة باللغة العربية…"
                 placeholderTextColor="#777680"
+                writingDirection="rtl"
                 multiline
                 maxLength={1000}
                 textAlign="right"
@@ -1009,10 +1029,10 @@ export default function App() {
         </ScrollView>
 
         <View style={styles.quickActions}>
-          <TouchableOpacity style={styles.quickButton} onPress={() => setMessage('Let’s talk.')}>
+          <TouchableOpacity style={styles.quickButton} onPress={() => setMessage('مرحبًا إزرا، أريد أن نتحدث.')}>
             <Text style={styles.quickText}>✧  لنتحدث</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.quickButton} onPress={() => setMessage('Help me plan my day.')}>
+          <TouchableOpacity style={styles.quickButton} onPress={() => setMessage('ساعدني في تنظيم يومي.')}>
             <Text style={styles.quickText}>◷  يومي</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.quickButton} onPress={openMemoryCenter}>
@@ -1044,6 +1064,7 @@ export default function App() {
             textAlign="right"
             placeholder="اكتب رسالتك إلى إزرا…"
             placeholderTextColor="#777680"
+            writingDirection="rtl"
             value={message}
             onChangeText={setMessage}
             multiline
