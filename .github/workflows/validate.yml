@@ -2,7 +2,9 @@ name: EZRA checks
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - ezra/arabic-navigation-polish
   pull_request:
     branches: [main]
   workflow_dispatch:
