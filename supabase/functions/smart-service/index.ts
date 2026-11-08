@@ -31,7 +31,7 @@ Deno.serve(async (req: Request) => {
     const input = typeof body?.input === "string" ? body.input.trim() : "";
     const imageDataUrl = typeof body?.imageDataUrl === "string" ? body.imageDataUrl : "";
 
-    if (imageDataUrl && (!/^data:image\\/(jpeg|png|webp);base64,/i.test(imageDataUrl) || imageDataUrl.length > 4 * 1024 * 1024)) {
+    if (imageDataUrl && (!/^data:image\/(jpeg|png|webp);base64,/i.test(imageDataUrl) || imageDataUrl.length > 4 * 1024 * 1024)) {
       return new Response(JSON.stringify({ error: "The image format is unsupported or the image is too large." }), {
         status: 400, headers: jsonHeaders,
       });
