@@ -1104,3 +1104,4 @@ const styles = StyleSheet.create({
   rateControls: { flexDirection: 'row', gap: 8 },
   rateButton: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#38263A', alignItems: 'center', justifyContent: 'center' },
   languageButtonActive: { backgroundColor: '#875477', borderWidth: 1, borderColor: '#E6A0D0' },
+});
