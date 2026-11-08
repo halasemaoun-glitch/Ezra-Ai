@@ -84,18 +84,22 @@ function EzraOrb({ status }: { status: string }) {
   const glow = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.38, 0.88] });
   const spin = rotation.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
   const reverseSpin = rotation.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-360deg'] });
-  const active = status !== 'أنا معك';
+  const active = status !== 'أنا هنا';
+  const listening = status.includes('يستمع');
+  const thinking = status.includes('أفكر');
+  const speaking = status.includes('يتحدث');
   return (
     <View style={styles.orbSection}>
       <View style={styles.orbStage}>
-        <Animated.View style={[styles.orbHalo, { opacity: glow, transform: [{ scale }] }]} />
+        <Animated.View style={[styles.orbHalo, listening && styles.orbHaloListening, thinking && styles.orbHaloThinking, speaking && styles.orbHaloSpeaking, { opacity: glow, transform: [{ scale }] }]} />
+        <Animated.View style={[styles.orbAura, { opacity: glow, transform: [{ scale }] }]} />
         <Animated.View style={[styles.orbRingOuter, { transform: [{ rotate: spin }] }]}>
           <View style={styles.orbOrbitDot} />
         </Animated.View>
         <Animated.View style={[styles.orbRingInner, { transform: [{ rotate: reverseSpin }] }]}>
           <View style={styles.orbOrbitDotSmall} />
         </Animated.View>
-        <Animated.View style={[styles.orbCore, { transform: [{ scale }] }]}>
+        <Animated.View style={[styles.orbCore, listening && styles.orbCoreListening, thinking && styles.orbCoreThinking, speaking && styles.orbCoreSpeaking, { transform: [{ scale }] }]}>
           <View style={styles.orbCoreHighlight} />
           <View style={styles.orbCoreSpark} />
         </Animated.View>
@@ -684,21 +688,19 @@ export default function App() {
 
   if (voiceHome) {
     const voiceStatus = isListening
-      ? 'EZRA IS LISTENING'
+      ? 'إيزرا يستمع'
       : speakingMessageId
-        ? 'EZRA IS SPEAKING'
+        ? 'إيزرا يتحدث'
         : (sending || chatLoading)
-          ? 'ONE MOMENT, I’M THINKING…'
-          : 'أنا هنا… تحدث معي';
+          ? 'لحظة، أفكر…'
+          : 'أنا هنا';
     return (
       <SafeAreaView style={styles.voiceSafe}>
         <StatusBar style="light" />
         <View style={styles.voiceHome}>
-          <Text style={styles.voiceWordmark}>EZRA</Text>
           <View style={styles.voiceOrbWrap}>
             <EzraOrb status={voiceStatus} />
           </View>
-          <Text style={styles.voiceHint}>مساحة هادئة… لك وحدك</Text>
           <TouchableOpacity
             style={[styles.voiceMic, isListening && styles.voiceMicActive]}
             onPress={startListening}
@@ -706,6 +708,14 @@ export default function App() {
           >
             <Text style={styles.voiceMicIcon}>{isListening ? '■' : '⌁'}</Text>
           </TouchableOpacity>
+          {!!message.trim() && !isListening && (
+            <View style={styles.voiceTranscriptCard}>
+              <Text style={styles.voiceTranscript} numberOfLines={3}>{message}</Text>
+              <TouchableOpacity style={styles.voiceSendButton} onPress={() => { setVoiceHome(false); sendMessage(); }} disabled={sending}>
+                <Text style={styles.voiceSendLabel}>إرسال إلى إزرا  ↑</Text>
+              </TouchableOpacity>
+            </View>
+          )}
           <TouchableOpacity style={styles.voiceTextLink} onPress={() => setVoiceHome(false)}>
             <Text style={styles.voiceTextLinkLabel}>المحادثة النصية  ·  السجل والملفات</Text>
           </TouchableOpacity>
@@ -1011,13 +1021,20 @@ export default function App() {
 
 const styles = StyleSheet.create({
   orbSection: { alignItems: 'center', paddingTop: 0, paddingBottom: 10 },
-  orbStage: { width: 264, height: 264, alignItems: 'center', justifyContent: 'center' },
+  orbStage: { width: 292, height: 292, alignItems: 'center', justifyContent: 'center' },
   orbHalo: { position: 'absolute', width: 224, height: 224, borderRadius: 112, backgroundColor: '#8E3B78', shadowColor: '#E34BB5', shadowOpacity: 0.9, shadowRadius: 32, shadowOffset: { width: 0, height: 0 }, elevation: 18 },
+  orbAura: { position: 'absolute', width: 278, height: 278, borderRadius: 139, borderWidth: 1, borderColor: 'rgba(191,92,164,0.22)' },
+  orbHaloListening: { backgroundColor: '#A13E86', shadowColor: '#F05CC4' },
+  orbHaloThinking: { backgroundColor: '#633C91', shadowColor: '#A77AFF' },
+  orbHaloSpeaking: { backgroundColor: '#87366E', shadowColor: '#FF8AD5' },
   orbRingOuter: { position: 'absolute', width: 244, height: 244, borderRadius: 122, borderWidth: 1, borderColor: '#A85B91', borderStyle: 'dashed', opacity: 0.62, alignItems: 'flex-start', justifyContent: 'center' },
   orbRingInner: { position: 'absolute', width: 184, height: 184, borderRadius: 92, borderWidth: 1, borderColor: '#D17AB7', opacity: 0.7, alignItems: 'flex-end', justifyContent: 'center' },
   orbOrbitDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#F0B7DF', marginLeft: -3 },
   orbOrbitDotSmall: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#C58BE2', marginRight: -2 },
   orbCore: { width: 146, height: 146, borderRadius: 73, backgroundColor: '#672B5A', borderWidth: 1, borderColor: '#E6A0D0', alignItems: 'center', justifyContent: 'center', shadowColor: '#D84AAE', shadowOpacity: 0.9, shadowRadius: 22, shadowOffset: { width: 0, height: 0 }, elevation: 16 },
+  orbCoreListening: { backgroundColor: '#81366D', borderColor: '#F4B2E1' },
+  orbCoreThinking: { backgroundColor: '#4D326E', borderColor: '#C5A5F5' },
+  orbCoreSpeaking: { backgroundColor: '#79345F', borderColor: '#FFD0EB' },
   orbCoreHighlight: { width: 78, height: 78, borderRadius: 39, backgroundColor: '#B85A9D', opacity: 0.55, borderWidth: 1, borderColor: '#F0B7DF' },
   orbCoreSpark: { position: 'absolute', width: 12, height: 12, borderRadius: 6, backgroundColor: '#F4D7EC', top: 34, right: 38, opacity: 0.8 },
   orbStatusPill: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 13, paddingVertical: 6, borderRadius: 20, backgroundColor: '#211B27', borderWidth: 1, borderColor: '#493044', marginTop: -1 },
@@ -1028,13 +1045,17 @@ const styles = StyleSheet.create({
   orbCaption: { color: '#77717E', fontSize: 9, marginTop: 6 },
   voiceSafe: { flex: 1, backgroundColor: '#08070D' },
   voiceHome: { flex: 1, alignItems: 'center', justifyContent: 'space-between', paddingTop: 34, paddingBottom: 24, paddingHorizontal: 24, backgroundColor: '#08070D' },
-  voiceWordmark: { color: '#E9B3D7', fontSize: 16, fontWeight: '700', letterSpacing: 8, marginTop: 8 },
+
   voiceOrbWrap: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center' },
-  voiceHint: { color: '#A99AAA', fontSize: 12, letterSpacing: 1.2, marginTop: -4, marginBottom: 20 },
+
   voiceMic: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', backgroundColor: '#35182F', borderWidth: 1, borderColor: '#C46BA9', shadowColor: '#D64BAF', shadowOpacity: 0.55, shadowRadius: 22, shadowOffset: { width: 0, height: 0 }, elevation: 12 },
   voiceMicActive: { backgroundColor: '#7A285F', borderColor: '#F0B5DE' },
   voiceMicIcon: { color: '#F7D8ED', fontSize: 30, fontWeight: '600' },
-  voiceTextLink: { marginTop: 20, padding: 10 },
+  voiceTranscriptCard: { width: '100%', maxWidth: 360, padding: 14, borderRadius: 18, backgroundColor: '#19131F', borderWidth: 1, borderColor: '#57364F', marginBottom: 12 },
+  voiceTranscript: { color: '#F5EAF3', textAlign: 'right', fontSize: 13, lineHeight: 21 },
+  voiceSendButton: { alignSelf: 'flex-end', marginTop: 10, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 14, backgroundColor: '#A94F91' },
+  voiceSendLabel: { color: '#FFF5FC', fontSize: 12, fontWeight: '700' },
+  voiceTextLink: { marginTop: 12, padding: 10 },
   voiceTextLinkLabel: { color: '#B58DAE', fontSize: 11, letterSpacing: 0.5 },
   voiceMemoryLink: { padding: 7 },
   voiceMemoryLabel: { color: '#766B7B', fontSize: 10 },
