@@ -732,7 +732,7 @@ export default function App() {
           {!!message.trim() && !isListening && (
             <View style={styles.voiceTranscriptCard}>
               <Text style={styles.voiceTranscript} numberOfLines={3}>{message}</Text>
-              <TouchableOpacity style={styles.voiceSendButton} onPress={() => { setVoiceHome(false); sendMessage(true); }} disabled={sending}>
+              <TouchableOpacity style={styles.voiceSendButton} onPress={() => sendMessage(true)} disabled={sending}>
                 <Text style={styles.voiceSendLabel}>إرسال إلى إزرا  ↑</Text>
               </TouchableOpacity>
             </View>
