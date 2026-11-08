@@ -523,7 +523,7 @@ export default function App() {
         const attachmentPrompt = attachment?.kind === 'image'
           ? 'Please inspect the attached image carefully and answer the user\'s question. If no question was provided, describe the image and any readable text.'
           : attachment?.textContent
-            ? `The user attached a text document named ${attachment.name}. Analyze its contents below:\n\n${attachment.textContent}`
+            ? `The user attached a text document named ${attachment.name}. Analyze its contents below:\n\n${attachment.textContent.slice(0, 12000)}${attachment.textContent.length > 12000 ? '\\n\\n[The document was shortened to fit the request.]' : ''}`
             : '';
         const userInput = [text, attachmentPrompt].filter(Boolean).join('\n\n');
         const recentContext = messages
@@ -608,11 +608,6 @@ export default function App() {
           ]);
           if (voiceReply || autoSpeak) speak(reply, savedReply.id);
         }
-      } else {
-        Alert.alert(
-          'تم حفظ المرفق',
-          'تم حفظ اسم المرفق. سنضيف إرسال الملف نفسه إلى إزرا في مرحلة لاحقة.'
-        );
       }
     } catch (error) {
       console.error('Message sending failed:', error);
@@ -659,15 +654,20 @@ export default function App() {
         Alert.alert('تعذّر قراءة الصورة', 'لم نتمكن من تجهيز الصورة لإرسالها. حاول اختيار صورة أخرى.');
         return;
       }
-      if (asset.base64.length > 4 * 1024 * 1024) {
-        Alert.alert('الصورة كبيرة جدًا', 'اختر صورة أصغر من 4 ميغابايت حتى نتمكن من تحليلها.');
+      if (asset.base64.length > 3.5 * 1024 * 1024) {
+        Alert.alert('الصورة كبيرة جدًا', 'اختر صورة أصغر حتى نتمكن من تحليلها.');
+        return;
+      }
+      const mimeType = asset.mimeType || 'image/jpeg';
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(mimeType)) {
+        Alert.alert('صيغة الصورة غير مدعومة', 'اختر صورة بصيغة JPG أو PNG أو WebP.');
         return;
       }
       setAttachment({
         uri: asset.uri,
         name: asset.fileName || 'صورة مرفقة',
         kind: 'image',
-        mimeType: asset.mimeType || 'image/jpeg',
+        mimeType,
         base64: asset.base64,
       });
     } catch {
@@ -697,6 +697,10 @@ export default function App() {
       const textContent = await response.text();
       if (!textContent.trim()) {
         Alert.alert('الملف فارغ', 'لم نعثر على نص قابل للقراءة داخل الملف.');
+        return;
+      }
+      if (textContent.length > 1024 * 1024) {
+        Alert.alert('الملف كبير جدًا', 'اختر ملفًا نصيًا أصغر من 1 ميغابايت.');
         return;
       }
       setAttachment({ uri: file.uri, name: file.name, kind: 'file', mimeType: file.mimeType, textContent });
