@@ -29,6 +29,13 @@ Deno.serve(async (req: Request) => {
   try {
     const body = await req.json();
     const input = typeof body?.input === "string" ? body.input.trim() : "";
+    const imageDataUrl = typeof body?.imageDataUrl === "string" ? body.imageDataUrl : "";
+
+    if (imageDataUrl && (!/^data:image\\/(jpeg|png|webp);base64,/i.test(imageDataUrl) || imageDataUrl.length > 4 * 1024 * 1024)) {
+      return new Response(JSON.stringify({ error: "The image format is unsupported or the image is too large." }), {
+        status: 400, headers: jsonHeaders,
+      });
+    }
 
     if (!input) {
       return new Response(JSON.stringify({ error: "A non-empty input is required." }), {
@@ -108,10 +115,18 @@ Deno.serve(async (req: Request) => {
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "openai/gpt-oss-120b",
+        model: imageDataUrl ? "qwen/qwen3.8-27b" : "openai/gpt-oss-120b",
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: input },
+          {
+            role: "user",
+            content: imageDataUrl
+              ? [
+                  { type: "text", text: input },
+                  { type: "image_url", image_url: { url: imageDataUrl } },
+                ]
+              : input,
+          },
         ],
         temperature: 0.7,
         max_completion_tokens: 1200,
