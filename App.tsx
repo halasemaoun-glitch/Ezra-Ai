@@ -496,8 +496,8 @@ export default function App() {
         if (aiRequest.kind === 'timeout') {
           console.error('EZRA AI request timed out after 30 seconds.');
           Alert.alert(
-            'EZRA response timed out',
-            'Your message was saved, but smart-service did not respond within 30 seconds. The next build will stop the endless sending state so we can diagnose the service.'
+            'انتهت مهلة انتظار الرد',
+            'تم حفظ رسالتك، لكن إزرا لم يرد خلال 30 ثانية. يمكنك المحاولة مرة أخرى بعد قليل.'
           );          setSending(false);
           return;        }
 
@@ -518,7 +518,7 @@ export default function App() {
           console.error('EZRA AI request failed:', { aiError, aiData });
           Alert.alert(
             'تعذّر على إزرا الرد',
-            details || 'Your message was saved, but smart-service returned an empty response.'
+            details || 'تم حفظ رسالتك، لكن الخدمة لم تُرجع ردًا. حاول مرة أخرى بعد قليل.'
           );
           setSending(false);
           return;
@@ -602,7 +602,7 @@ export default function App() {
         kind: 'image',
       });
     } catch {
-      Alert.alert('صورة unavailable', 'تعذّر فتح معرض الصور.');
+      Alert.alert('الصورة غير متاحة', 'تعذّر فتح معرض الصور.');
     }
   };
 
