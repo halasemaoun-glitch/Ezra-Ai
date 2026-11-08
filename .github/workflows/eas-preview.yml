@@ -2,15 +2,6 @@ name: EZRA Android preview
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/eas-preview.yml"
-      - "App.tsx"
-      - "app.json"
-      - "eas.json"
-      - "package.json"
-      - "src/**"
 
 jobs:
   build:
@@ -25,7 +16,7 @@ jobs:
           node-version: 20.19.4
       - name: Install dependencies
         run: npm install
-      - name: Build Android preview APK
+      - name: Build Android preview
         run: npx --yes eas-cli@latest build --platform android --profile preview --non-interactive --wait
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
