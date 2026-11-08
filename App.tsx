@@ -10,6 +10,7 @@ import {
   SafeAreaView,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -116,6 +117,9 @@ function EzraOrb({ status }: { status: string }) {
 export default function App() {
   const [message, setMessage] = useState('');
   const [voiceHome, setVoiceHome] = useState(true);
+  const [settingsVisible, setSettingsVisible] = useState(false);
+  const [autoSpeak, setAutoSpeak] = useState(true);
+  const [speechRate, setSpeechRate] = useState(0.92);
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [attachment, setAttachment] = useState<Attachment | null>(null);
@@ -137,6 +141,18 @@ export default function App() {
   const [memorySaving, setMemorySaving] = useState(false);
   const [memoryDraft, setMemoryDraft] = useState('');
   const [memories, setMemories] = useState<MemoryItem[]>([]);
+
+  useEffect(() => {
+    AsyncStorage.multiGet(['ezra:autoSpeak', 'ezra:speechRate']).then(values => {
+      const savedAutoSpeak = values[0]?.[1];
+      const savedRate = values[1]?.[1];
+      if (savedAutoSpeak !== null) setAutoSpeak(savedAutoSpeak === 'true');
+      if (savedRate) {
+        const parsed = Number(savedRate);
+        if (Number.isFinite(parsed)) setSpeechRate(Math.min(1.15, Math.max(0.75, parsed)));
+      }
+    }).catch(error => console.warn('Could not restore voice preferences:', error));
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -533,7 +549,7 @@ export default function App() {
             ...previous,
             { id: savedReply.id, sender: 'ezra', text: reply },
           ]);
-          if (voiceReply) speak(reply, savedReply.id);
+          if (voiceReply || autoSpeak) speak(reply, savedReply.id);
         }
       } else {
         Alert.alert(
@@ -699,6 +715,10 @@ export default function App() {
       <SafeAreaView style={styles.voiceSafe}>
         <StatusBar style="light" />
         <View style={styles.voiceHome}>
+          <View style={styles.voiceTopActions}>
+            <TouchableOpacity onPress={() => setSettingsVisible(true)} style={styles.voiceTopButton}><Text style={styles.voiceTopButtonText}>الإعدادات</Text></TouchableOpacity>
+            <TouchableOpacity onPress={openConversationHistory} style={styles.voiceTopButton}><Text style={styles.voiceTopButtonText}>السجل</Text></TouchableOpacity>
+          </View>
           <View style={styles.voiceOrbWrap}>
             <EzraOrb status={voiceStatus} />
           </View>
@@ -723,6 +743,28 @@ export default function App() {
           <TouchableOpacity style={styles.voiceMemoryLink} onPress={openMemoryCenter}>
             <Text style={styles.voiceMemoryLabel}>الذاكرة</Text>
           </TouchableOpacity>
+          <Modal visible={settingsVisible} transparent animationType="slide" onRequestClose={() => setSettingsVisible(false)}>
+            <View style={styles.settingsBackdrop}>
+              <View style={styles.settingsPanel}>
+                <View style={styles.historyHeader}>
+                  <Text style={styles.historyTitle}>إعدادات الصوت</Text>
+                  <TouchableOpacity style={styles.historyClose} onPress={() => setSettingsVisible(false)}><Text style={styles.historyCloseText}>×</Text></TouchableOpacity>
+                </View>
+                <View style={styles.settingRow}>
+                  <View style={styles.settingCopy}><Text style={styles.settingTitle}>قراءة ردود EZRA تلقائيًا</Text><Text style={styles.settingHint}>ينطق الرد بعد وصوله</Text></View>
+                  <Switch value={autoSpeak} onValueChange={value => { setAutoSpeak(value); AsyncStorage.setItem('ezra:autoSpeak', String(value)).catch(() => {}); }} trackColor={{ false: '#39323D', true: '#875477' }} thumbColor={autoSpeak ? '#F2C8E5' : '#AAA'} />
+                </View>
+                <View style={styles.settingRow}>
+                  <View style={styles.settingCopy}><Text style={styles.settingTitle}>سرعة الصوت</Text><Text style={styles.settingHint}>{speechRate.toFixed(2)}×</Text></View>
+                  <View style={styles.rateControls}>
+                    <TouchableOpacity style={styles.rateButton} onPress={() => { const v = Math.max(0.75, Number((speechRate - 0.05).toFixed(2))); setSpeechRate(v); AsyncStorage.setItem('ezra:speechRate', String(v)).catch(() => {}); }}><Text style={styles.rateButtonText}>−</Text></TouchableOpacity>
+                    <TouchableOpacity style={styles.rateButton} onPress={() => { const v = Math.min(1.15, Number((speechRate + 0.05).toFixed(2))); setSpeechRate(v); AsyncStorage.setItem('ezra:speechRate', String(v)).catch(() => {}); }}><Text style={styles.rateButtonText}>＋</Text></TouchableOpacity>
+                  </View>
+                </View>
+                <Text style={styles.settingsFootnote}>الصوت المتاح يعتمد على أصوات النظام المثبتة في هاتفك.</Text>
+              </View>
+            </View>
+          </Modal>
         </View>
       </SafeAreaView>
     );
@@ -1045,6 +1087,19 @@ const styles = StyleSheet.create({
   orbStatus: { color: '#E7B9D8', fontSize: 11, fontWeight: '600' },
   orbCaption: { color: '#77717E', fontSize: 9, marginTop: 6 },
   voiceSafe: { flex: 1, backgroundColor: '#08070D' },
+  voiceTopActions: { width: '100%', flexDirection: 'row', justifyContent: 'space-between' },
+  voiceTopButton: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14, backgroundColor: 'rgba(36,24,38,0.72)', borderWidth: 1, borderColor: '#493044' },
+  voiceTopButtonText: { color: '#BFA4BA', fontSize: 11 },
+  settingsBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.76)', justifyContent: 'flex-end' },
+  settingsPanel: { backgroundColor: '#17131C', borderTopLeftRadius: 26, borderTopRightRadius: 26, borderWidth: 1, borderColor: '#56384F', padding: 22, paddingBottom: 34 },
+  settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 17, borderBottomWidth: 1, borderBottomColor: '#302532' },
+  settingCopy: { flex: 1, alignItems: 'flex-end', marginRight: 12 },
+  settingTitle: { color: '#F3EAF2', fontSize: 13, fontWeight: '600' },
+  settingHint: { color: '#9D899C', fontSize: 11, marginTop: 5 },
+  rateControls: { flexDirection: 'row', gap: 8 },
+  rateButton: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#38263A', alignItems: 'center', justifyContent: 'center' },
+  rateButtonText: { color: '#F0C9E4', fontSize: 21 },
+  settingsFootnote: { color: '#827684', fontSize: 10, textAlign: 'right', marginTop: 18, lineHeight: 17 },
   voiceHome: { flex: 1, alignItems: 'center', justifyContent: 'space-between', paddingTop: 34, paddingBottom: 24, paddingHorizontal: 24, backgroundColor: '#08070D' },
 
   voiceOrbWrap: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center' },
