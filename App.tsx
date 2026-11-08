@@ -115,6 +115,7 @@ export default function App() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [attachment, setAttachment] = useState<Attachment | null>(null);
   const [isListening, setIsListening] = useState(false);
+  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const [chatLoading, setChatLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [session, setSession] = useState<import('@supabase/supabase-js').Session | null>(null);
@@ -544,6 +545,8 @@ export default function App() {
 
   const startListening = async () => {
     try {
+      Speech.stop();
+      setSpeakingMessageId(null);
       if (isListening) {
         ExpoSpeechRecognitionModule.stop();
         return;
@@ -604,9 +607,22 @@ export default function App() {
     ]);
   };
 
-  const speak = (text: string) => {
+  const speak = (text: string, messageId: string) => {
+    if (speakingMessageId === messageId) {
+      Speech.stop();
+      setSpeakingMessageId(null);
+      return;
+    }
     Speech.stop();
-    Speech.speak(text, { language: 'ar', rate: 0.92, pitch: 0.92 });
+    setSpeakingMessageId(messageId);
+    Speech.speak(text, {
+      language: 'ar',
+      rate: 0.92,
+      pitch: 0.92,
+      onDone: () => setSpeakingMessageId(current => current === messageId ? null : current),
+      onStopped: () => setSpeakingMessageId(current => current === messageId ? null : current),
+      onError: () => setSpeakingMessageId(current => current === messageId ? null : current),
+    });
   };
 
   if (authLoading) {
@@ -848,7 +864,7 @@ export default function App() {
           <Text style={styles.welcomeSubtitle}>أنا هنا لأستمع إليك وأساعدك.</Text>
         </View>
 
-        <EzraOrb status={isListening ? 'أستمع إليك الآن' : (sending || chatLoading) ? 'أفكر في كلامك…' : 'أنا معك'} />
+        <EzraOrb status={isListening ? 'أستمع إليك الآن' : speakingMessageId ? 'أتحدث إليك' : (sending || chatLoading) ? 'أفكر في كلامك…' : 'أنا معك'} />
 
         <ScrollView
           style={styles.chat}
@@ -887,10 +903,10 @@ export default function App() {
                 {item.sender === 'ezra' && !!item.text && (
                   <TouchableOpacity
                     style={styles.speakButton}
-                    onPress={() => speak(item.text)}
-                    accessibilityLabel="استمع إلى الرد"
+                    onPress={() => speak(item.text, item.id)}
+                    accessibilityLabel={speakingMessageId === item.id ? 'إيقاف قراءة الرد' : 'استمع إلى الرد'}
                   >
-                    <Text style={styles.speakText}>▶  استمع</Text>
+                    <Text style={styles.speakText}>{speakingMessageId === item.id ? '■  إيقاف' : '▶  استمع'}</Text>
                   </TouchableOpacity>
                 )}
               </View>
