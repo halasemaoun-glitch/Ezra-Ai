@@ -5,6 +5,7 @@ import android.content.Context
 import android.os.Build
 import android.os.StatFs
 import android.media.MediaPlayer
+import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.File
@@ -129,7 +130,7 @@ class EzraHabibiTtsModule : Module() {
       player.prepare()
       player.start()
       mapOf("playing" to true)
-    }.runOnQueue(.main)
+    }.runOnQueue(Queues.MAIN)
 
     AsyncFunction("stopAudio") {
       mediaPlayer?.let { player ->
