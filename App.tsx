@@ -104,7 +104,7 @@ function EzraOrb({ status, voiceLevel = 0 }: { status: string; voiceLevel?: numb
       </View>
       <View style={[styles.orbStatusPill, active && styles.orbStatusPillActive]}>
         <View style={[styles.orbStatusDot, active && styles.orbStatusDotActive]} />
-        <Text style={styles.orbStatus}>{status}</Text>
+        <Text style={styles.orbStatus} accessibilityLiveRegion="polite">{status}</Text>
       </View>
       <View style={styles.orbWaveform} accessibilityLabel={listening ? 'موجات الاستماع' : speaking ? 'موجات التحدث' : 'موجات حالة إزرا'}>
         {waveform.map((bar, index) => (
@@ -1036,7 +1036,7 @@ export default function App() {
               <Text style={styles.voiceMicIcon}>{speakingMessageId ? 'Ⅱ' : isListening ? '■' : '⌁'}</Text>
             </TouchableOpacity>
           </View>
-          <Text style={styles.voiceMicHint}>{voiceRetrying ? (voiceRetryMessage || 'أعيد الاتصال بخدمة الاستماع…') : speakingMessageId ? 'اضغط للمقاطعة والتحدث' : isListening ? 'أنا أسمعك الآن…' : sending ? 'أجهّز لك الرد…' : 'اضغط وتحدث معي بحرية'}</Text>
+          <Text style={styles.voiceMicHint} accessibilityLiveRegion="polite">{voiceRetrying ? (voiceRetryMessage || 'أعيد الاتصال بخدمة الاستماع…') : speakingMessageId ? 'اضغط للمقاطعة والتحدث' : isListening ? 'أنا أسمعك الآن…' : sending ? 'أجهّز لك الرد…' : 'اضغط وتحدث معي بحرية'}</Text>
           {!!message.trim() && (
             <View style={styles.voiceTranscriptCard} accessibilityLiveRegion="polite">
               <Text style={styles.voiceTranscriptLabel}>{isListening ? 'ألتقط كلماتك الآن' : sending ? 'وصلني كلامك، أجهّز الرد' : 'النص الذي التقطته'}</Text>
