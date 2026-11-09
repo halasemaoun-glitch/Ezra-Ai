@@ -44,7 +44,10 @@ type HabibiTtsNativeModule = {
     threads: number
   ): Promise<HabibiInitialization>;
   synthesize(text: string, outputPath: string): Promise<HabibiSynthesisResult>;
+  playAudio(path: string): Promise<{ playing: true }>;
+  stopAudio(): Promise<{ stopped: true }>;
   shutdown(): Promise<{ ready: false }>;
+  addListener(eventName: 'onPlaybackFinished' | 'onPlaybackError', listener: (event: { path?: string; what?: number; extra?: number }) => void): { remove(): void };
 };
 
 export default requireNativeModule<HabibiTtsNativeModule>('EzraHabibiTts');
