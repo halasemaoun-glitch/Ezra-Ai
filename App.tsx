@@ -275,7 +275,14 @@ export default function App() {
       const savedPitch = Number(values[5]?.[1]);
       const savedBackgroundWake = values[6]?.[1];
       if (savedBackgroundWake !== null) setBackgroundWakeEnabled(savedBackgroundWake === 'true');
-      if (Number.isFinite(savedPitch) && savedPitch >= 0.75 && savedPitch <= 1.1) setSpeechPitch(savedPitch);
+      if (Number.isFinite(savedPitch) && savedPitch >= 0.75 && savedPitch <= 1.1) {
+        // Migrate the former factory pitch to EZRA's agreed deeper default.
+        const restoredPitch = Math.abs(savedPitch - 0.9) < 0.001 ? DEFAULT_EZRA_VOICE.pitch : savedPitch;
+        setSpeechPitch(restoredPitch);
+        if (restoredPitch !== savedPitch) {
+          AsyncStorage.setItem('ezra:speechPitch', String(restoredPitch)).catch(() => {});
+        }
+      }
       if (savedLanguage === 'ar' || savedLanguage === 'en') setRecognitionLanguage(savedLanguage);
       if (savedAutoListen !== null) {
         const enabled = savedAutoListen === 'true';
