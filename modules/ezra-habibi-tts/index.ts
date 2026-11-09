@@ -16,6 +16,17 @@ export type HabibiDeviceCapacity = {
   androidApi: number;
 };
 
+export type HabibiInitialization = {
+  ready: boolean;
+  engine: 'habibi-tts';
+  dialect: string;
+};
+
+export type HabibiSynthesisResult = {
+  path: string;
+  bytes: number;
+};
+
 type HabibiTtsNativeModule = {
   getRuntimeInfo(): Promise<HabibiRuntimeInfo>;
   getDeviceCapacity(): Promise<HabibiDeviceCapacity>;
@@ -25,6 +36,15 @@ type HabibiTtsNativeModule = {
     bytes: number;
     absolutePath: string;
   }>;
+  initialize(
+    modelPath: string,
+    referenceWavPath: string,
+    transcript: string,
+    dialect: string,
+    threads: number
+  ): Promise<HabibiInitialization>;
+  synthesize(text: string, outputPath: string): Promise<HabibiSynthesisResult>;
+  shutdown(): Promise<{ ready: false }>;
 };
 
 export default requireNativeModule<HabibiTtsNativeModule>('EzraHabibiTts');
