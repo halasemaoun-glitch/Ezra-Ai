@@ -81,7 +81,6 @@ jobs:
           ABI_DIR="modules/ezra-habibi-tts/android/src/main/jniLibs/arm64-v8a"
           mkdir -p "$ABI_DIR"
           cp build-habibi-android/bin/libaudiocpp.so "$ABI_DIR/"
-          cp "$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so" "$ABI_DIR/"
           export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.2.12479018"
           cmake -S modules/ezra-habibi-tts/android/src/main/cpp -B build-ezra-habibi-jni \
             -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
@@ -111,7 +110,6 @@ jobs:
           cp modules/ezra-habibi-tts/android/src/main/jniLibs/arm64-v8a/libezra_habibi_jni.so habibi-android-runtime/libs/
           cp audio-cpp/include/audiocpp.h habibi-android-runtime/include/
           cp audio-cpp/LICENSE habibi-android-runtime/
-          cp modules/ezra-habibi-tts/android/src/main/jniLibs/arm64-v8a/libc++_shared.so habibi-android-runtime/libs/
           "$NDK/llvm-readelf" -d "$LIB" > habibi-android-runtime/dependencies.txt
           "$NDK/llvm-nm" -D --defined-only "$LIB" | grep 'audiocpp_' > habibi-android-runtime/exports.txt
 
@@ -163,11 +161,9 @@ jobs:
           ABI_DIR="modules/ezra-habibi-tts/android/src/main/jniLibs/arm64-v8a"
           mkdir -p "$ABI_DIR"
           cp habibi-runtime/libs/libaudiocpp.so "$ABI_DIR/"
-          cp habibi-runtime/libs/libc++_shared.so "$ABI_DIR/"
           mkdir -p modules/ezra-habibi-tts/android/src/main/cpp/include
           cp habibi-runtime/include/audiocpp.h modules/ezra-habibi-tts/android/src/main/cpp/include/
           test -s "$ABI_DIR/libaudiocpp.so"
-          test -s "$ABI_DIR/libc++_shared.so"
           test -s modules/ezra-habibi-tts/android/src/main/cpp/include/audiocpp.h
 
       - name: Install JavaScript dependencies
