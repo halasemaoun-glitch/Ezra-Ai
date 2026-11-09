@@ -160,7 +160,7 @@ Java_expo_modules_ezrahabibitts_EzraHabibiTtsModule_nativeInitialize(
     return env->NewStringUTF("Reference audio must be a readable PCM WAV (8/16-bit) or float32 WAV, mono/stereo.");
   }
   if (g_reference.size() < static_cast<size_t>(g_reference_rate / 2) ||
-      g_reference.size() > static_cast<size_t>(g_reference_rate * 5)) {
+      g_reference.size() > static_cast<size_t>(g_reference_rate * 1.3)) {
     g_reference.clear();
     return env->NewStringUTF("Reference audio must be between 0.5 and 11 seconds.");
   }
