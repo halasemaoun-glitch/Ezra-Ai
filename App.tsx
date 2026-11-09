@@ -145,7 +145,8 @@ export default function App() {
   const voiceTranscriptRef = useRef('');
   const voiceTurnInProgressRef = useRef(false);
   const voiceRequestStartedRef = useRef(false);
-  const [ttsVoices, setTtsVoices] = useState<{ identifier: string; language: string; quality?: string }[]>([]);
+  const [ttsVoices, setTtsVoices] = useState<{ identifier: string; name: string; language: string; quality?: string }[]>([]);
+  const [selectedTtsVoice, setSelectedTtsVoice] = useState<string | null>(null);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const [chatLoading, setChatLoading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -176,11 +177,13 @@ export default function App() {
   );
 
   useEffect(() => {
-    AsyncStorage.multiGet(['ezra:autoSpeak', 'ezra:speechRate', 'ezra:recognitionLanguage', 'ezra:autoListen']).then(values => {
+    AsyncStorage.multiGet(['ezra:autoSpeak', 'ezra:speechRate', 'ezra:recognitionLanguage', 'ezra:autoListen', 'ezra:ttsVoice']).then(values => {
       const savedAutoSpeak = values[0]?.[1];
       const savedRate = values[1]?.[1];
       const savedLanguage = values[2]?.[1];
       const savedAutoListen = values[3]?.[1];
+      const savedTtsVoice = values[4]?.[1];
+      if (savedTtsVoice) setSelectedTtsVoice(savedTtsVoice);
       if (savedLanguage === 'ar' || savedLanguage === 'en') setRecognitionLanguage(savedLanguage);
       if (savedAutoListen !== null) {
         const enabled = savedAutoListen === 'true';
@@ -197,7 +200,7 @@ export default function App() {
 
   useEffect(() => {
     Speech.getAvailableVoicesAsync()
-      .then(voices => setTtsVoices(voices.map(voice => ({ identifier: voice.identifier, language: voice.language, quality: voice.quality }))))
+      .then(voices => setTtsVoices(voices.map(voice => ({ identifier: voice.identifier, name: voice.name, language: voice.language, quality: voice.quality }))))
       .catch(error => console.warn('Could not load device speech voices:', error));
   }, []);
 
@@ -811,9 +814,10 @@ export default function App() {
     const matchingVoice = ttsVoices
       .filter(voice => voice.language.toLowerCase().startsWith(speechLanguage))
       .sort((a, b) => Number(b.quality === 'Enhanced') - Number(a.quality === 'Enhanced'))[0];
+    const preferredVoice = ttsVoices.find(voice => voice.identifier === selectedTtsVoice && voice.language.toLowerCase().startsWith(speechLanguage)) || matchingVoice;
     Speech.speak(text, {
       language: speechLanguage,
-      ...(matchingVoice ? { voice: matchingVoice.identifier } : {}),
+      ...(preferredVoice ? { voice: preferredVoice.identifier } : {}),
       rate: speechRate,
       pitch: 1.0,
       volume: 1.0,
@@ -943,6 +947,28 @@ export default function App() {
                     <TouchableOpacity style={styles.rateButton} onPress={() => { const v = Math.max(0.75, Number((speechRate - 0.05).toFixed(2))); setSpeechRate(v); AsyncStorage.setItem('ezra:speechRate', String(v)).catch(() => {}); }}><Text style={styles.rateButtonText}>−</Text></TouchableOpacity>
                     <TouchableOpacity style={styles.rateButton} onPress={() => { const v = Math.min(1.15, Number((speechRate + 0.05).toFixed(2))); setSpeechRate(v); AsyncStorage.setItem('ezra:speechRate', String(v)).catch(() => {}); }}><Text style={styles.rateButtonText}>＋</Text></TouchableOpacity>
                   </View>
+                </View>
+                <View style={styles.settingRow}>
+                  <View style={styles.settingCopy}>
+                    <Text style={styles.settingTitle}>الصوت العربي</Text>
+                    <Text style={styles.settingHint}>{ttsVoices.find(voice => voice.identifier === selectedTtsVoice)?.name || 'تلقائي · أفضل صوت محسّن متاح'}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.voiceTopButton}
+                    onPress={() => {
+                      const arabicVoices = ttsVoices.filter(voice => voice.language.toLowerCase().startsWith('ar'));
+                      Alert.alert('اختيار الصوت العربي', 'اختر صوتًا متاحًا على هاتفك. يمكنك تجربة الأصوات لاختيار الأنسب لك.', [
+                        { text: 'تلقائي · الأفضل', onPress: () => { setSelectedTtsVoice(null); AsyncStorage.removeItem('ezra:ttsVoice').catch(() => {}); } },
+                        ...arabicVoices.slice(0, 6).map(voice => ({
+                          text: `${voice.name}${voice.quality === 'Enhanced' ? ' · محسّن' : ''}`,
+                          onPress: () => { setSelectedTtsVoice(voice.identifier); AsyncStorage.setItem('ezra:ttsVoice', voice.identifier).catch(() => {}); },
+                        })),
+                        { text: 'إغلاق', style: 'cancel' as const },
+                      ]);
+                    }}
+                  >
+                    <Text style={styles.voiceTopButtonText}>اختيار</Text>
+                  </TouchableOpacity>
                 </View>
                 <View style={styles.settingRow}>
                   <View style={styles.settingCopy}><Text style={styles.settingTitle}>لغة التعرّف الصوتي</Text><Text style={styles.settingHint}>{recognitionLanguage === 'ar' ? 'العربية' : 'English'}</Text></View>
