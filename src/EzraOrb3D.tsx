@@ -14,6 +14,7 @@ function OrbScene({ status, level = 0 }: OrbStatus) {
   const particles = useRef<THREE.Points>(null);
   const pinkLight = useRef<THREE.PointLight>(null);
   const violetLight = useRef<THREE.PointLight>(null);
+  const burgundyLight = useRef<THREE.PointLight>(null);
   const pulseRing = useRef<THREE.Mesh>(null);
   const rimRing = useRef<THREE.Mesh>(null);
   const smoothedLevel = useRef(0);
@@ -79,8 +80,12 @@ function OrbScene({ status, level = 0 }: OrbStatus) {
       pinkLight.current.intensity = THREE.MathUtils.damp(pinkLight.current.intensity, targetPink, 5, delta) * pulse;
     }
     if (violetLight.current) {
-      const targetViolet = thinking ? 3.5 : 2.5;
+      const targetViolet = thinking ? 3.8 : speaking ? 2.9 : listening ? 3.1 : 2.5;
       violetLight.current.intensity = THREE.MathUtils.damp(violetLight.current.intensity, targetViolet, 3.5, delta) * (0.92 + Math.sin(t * 0.8 + 1.4) * 0.08);
+    }
+    if (burgundyLight.current) {
+      const targetBurgundy = thinking ? 1.45 : speaking ? 1.25 : listening ? 1.55 : 2.0;
+      burgundyLight.current.intensity = THREE.MathUtils.damp(burgundyLight.current.intensity, targetBurgundy, 3.8, delta) * (0.94 + Math.sin(t * 0.66 + 2.1) * 0.06);
     }
     if (halo.current) halo.current.scale.setScalar(1.1 + activity * 0.035 + Math.sin(t * 1.15) * 0.018);
   });
@@ -90,6 +95,7 @@ function OrbScene({ status, level = 0 }: OrbStatus) {
       <ambientLight intensity={0.62} />
       <pointLight ref={pinkLight} position={[2.5, 2.2, 3]} color="#ff70c8" intensity={3.2} distance={8} />
       <pointLight ref={violetLight} position={[-2.8, -1.2, 2]} color="#7928ff" intensity={2.7} distance={7} />
+      <pointLight ref={burgundyLight} position={[0, -2.6, 2.3]} color="#9e174e" intensity={1.8} distance={7} />
       <pointLight position={[0, 0, -3]} color="#e51b83" intensity={2.2} distance={6} />
       <pointLight position={[0, 2.8, 0.8]} color="#f7b4e4" intensity={1.25} distance={5} />
       <group>
@@ -106,7 +112,7 @@ function OrbScene({ status, level = 0 }: OrbStatus) {
           <meshPhysicalMaterial
             ref={coreMaterial}
             color={thinking ? '#230d3d' : '#35091f'}
-            emissive={speaking ? '#b50b70' : listening ? '#8f145f' : '#64106d'}
+            emissive={speaking ? '#c01877' : listening ? '#a51a69' : thinking ? '#6b2aa8' : '#70113f'}
             emissiveIntensity={speaking ? 1.15 : listening ? 0.9 : 0.68}
             metalness={0.32}
             roughness={0.22}
@@ -166,7 +172,7 @@ export default function EzraOrb3D({ status, level = 0 }: OrbStatus) {
 }
 
 const styles = StyleSheet.create({
-  stage: { width: '100%', height: 292, alignItems: 'center', justifyContent: 'center' },
+  stage: { width: '100%', height: 344, alignItems: 'center', justifyContent: 'center' },
   canvas: { backgroundColor: 'transparent' },
   ornamentLayer: { ...StyleSheet.absoluteFillObject },
   orbitSpark: { position: 'absolute', width: 5, height: 5, borderRadius: 3, backgroundColor: '#E9A6D5', opacity: 0.58, shadowColor: '#E83CA8', shadowOpacity: 0.9, shadowRadius: 9, elevation: 4 },
