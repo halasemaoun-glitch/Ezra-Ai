@@ -19,6 +19,7 @@ import {
   View,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import * as Speech from 'expo-speech';
 import {
@@ -66,6 +67,12 @@ type HabibiDeviceCapacity = {
 const EzraHabibiTts = Platform.OS === 'android'
   ? requireNativeModule<{
       getDeviceCapacity: () => Promise<HabibiDeviceCapacity>;
+      initialize: (modelPath: string, referenceWavPath: string, transcript: string, dialect: string, threads: number) => Promise<{ ready: boolean; engine: 'habibi-tts'; dialect: string }>;
+      synthesize: (text: string, outputPath: string) => Promise<{ path: string; bytes: number }>;
+      playAudio: (path: string) => Promise<{ playing: true }>;
+      stopAudio: () => Promise<{ stopped: true }>;
+      shutdown: () => Promise<{ ready: false }>;
+      addListener: (eventName: 'onPlaybackFinished' | 'onPlaybackError', listener: (event: { path?: string; what?: number; extra?: number }) => void) => { remove: () => void };
     }>('EzraHabibiTts')
   : null;
 
@@ -172,6 +179,16 @@ export default function App() {
   const [habibiCapacity, setHabibiCapacity] = useState<HabibiDeviceCapacity | null>(null);
   const [habibiCapacityLoading, setHabibiCapacityLoading] = useState(false);
   const [habibiCapacityError, setHabibiCapacityError] = useState('');
+  const [habibiModelPath, setHabibiModelPath] = useState('');
+  const [habibiReferencePath, setHabibiReferencePath] = useState('');
+  const [habibiReferenceTranscript, setHabibiReferenceTranscript] = useState('');
+  const [habibiDialect, setHabibiDialect] = useState('ALG');
+  const [habibiModelDownloading, setHabibiModelDownloading] = useState(false);
+  const [habibiDownloadProgress, setHabibiDownloadProgress] = useState(0);
+  const [habibiEngineReady, setHabibiEngineReady] = useState(false);
+  const [habibiEngineBusy, setHabibiEngineBusy] = useState(false);
+  const [habibiEngineError, setHabibiEngineError] = useState('');
+  const activeHabibiSpeechRef = useRef<{ text: string; messageId: string } | null>(null);
   const [autoSpeak, setAutoSpeak] = useState(true);
   const [speechRate, setSpeechRate] = useState(DEFAULT_EZRA_VOICE.rate);
   const [speechPitch, setSpeechPitch] = useState(DEFAULT_EZRA_VOICE.pitch);
