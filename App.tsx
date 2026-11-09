@@ -38,6 +38,13 @@ type EzraWakeWordNative = {
   setTorch: (enabled: boolean) => Promise<boolean>;
   findContactPhone: (name: string) => Promise<string>;
   callNumber: (phone: string) => Promise<boolean>;
+  dialNumber: (phone: string) => Promise<boolean>;
+  composeSms: (phone: string, body: string) => Promise<boolean>;
+  createAlarm: (hour: number, minute: number, label: string) => Promise<boolean>;
+  createTimer: (seconds: number, label: string) => Promise<boolean>;
+  openSystemSettings: (target: string) => Promise<boolean>;
+  launchApp: (name: string) => Promise<boolean>;
+  adjustVolume: (direction: string) => Promise<boolean>;
 };
 
 const EzraWakeWord = Platform.OS === 'android'
@@ -847,12 +854,145 @@ export default function App() {
     return true;
   };
 
+  const handleSystemCommand = async (commandText: string, voiceReply: boolean) => {
+    if (Platform.OS !== 'android' || !EzraWakeWord) return false;
+    const normalized = commandText.trim().toLowerCase()
+      .replace(/[إأآ]/g, 'ا')
+      .replace(/[\u064B-\u065F\u0670ـ]/g, '')
+      .replace(/[٠-٩]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)));
+    const sayResult = async (reply: string) => {
+      const userId = `system-user-${Date.now()}`;
+      const replyId = `system-reply-${Date.now()}`;
+      try {
+        const { error } = await supabase.from('chat_messages').insert([
+          { owner_id: session!.user.id, conversation_id: conversationId!, role: 'user', content: commandText },
+          { owner_id: session!.user.id, conversation_id: conversationId!, role: 'assistant', content: reply },
+        ]);
+        if (error) console.warn('Could not save system action to history:', error);
+      } catch (error) {
+        console.warn('Could not save system action to history:', error);
+      }
+      setMessages(previous => [
+        ...previous,
+        { id: userId, sender: 'user', text: commandText },
+        { id: replyId, sender: 'ezra', text: reply },
+      ]);
+      setMessage('');
+      if (voiceReply || autoSpeak) speak(reply, replyId);
+    };
+    const run = async (action: () => Promise<boolean>, success: string, failure: string) => {
+      setSending(true);
+      try {
+        const ok = await action();
+        await sayResult(ok ? success : failure);
+      } catch (error) {
+        console.warn('EZRA system action failed:', error);
+        await sayResult('لم أتمكن من تنفيذ الأمر. قد لا يدعم الهاتف هذه العملية أو يحتاج إلى إعداد إضافي.');
+      } finally {
+        setSending(false);
+      }
+    };
+
+    const timerMatch = normalized.match(/(?:مؤقت|تايمر|timer)\\s*(?:لمدة)?\\s*(\\d+)\\s*(ثاني(?:ة|تين)?|دقيق(?:ة|تين)|ساع(?:ة|تين)|second(?:s)?|minute(?:s)?|hour(?:s)?)/i);
+    if (timerMatch) {
+      const amount = Number(timerMatch[1]);
+      const unit = timerMatch[2];
+      const factor = /ثاني|second/i.test(unit) ? 1 : /ساع|hour/i.test(unit) ? 3600 : 60;
+      const seconds = amount * factor;
+      if (!Number.isSafeInteger(seconds) || seconds < 1 || seconds > 86400) {
+        await sayResult('مدة المؤقت يجب أن تكون بين ثانية واحدة و24 ساعة.');
+        return true;
+      }
+      await run(() => EzraWakeWord!.createTimer(seconds, 'EZRA'), 'تمام، فتحت إعداد المؤقت على هاتفك لتأكيده.', 'لم أتمكن من فتح تطبيق المؤقت.');
+      return true;
+    }
+
+    const alarmMatch = normalized.match(/(?:منبه|منبّه|alarm)\\s*(?:على|الساعة|at)?\\s*(\\d{1,2})(?::(\\d{1,2}))?\\s*(صباحا|مساء|am|pm)?/i);
+    if (alarmMatch) {
+      let hour = Number(alarmMatch[1]);
+      const minute = Number(alarmMatch[2] || 0);
+      const period = (alarmMatch[3] || '').toLowerCase();
+      if (period && /مساء|pm/.test(period) && hour < 12) hour += 12;
+      if (period && /صباحا|am/.test(period) && hour === 12) hour = 0;
+      if (hour > 23 || minute > 59 || hour < 0) {
+        await sayResult('وقت المنبه غير صحيح. قولي مثلاً: اضبط منبه الساعة 7:30 صباحاً.');
+        return true;
+      }
+      await run(() => EzraWakeWord!.createAlarm(hour, minute, 'EZRA'), `فتحت المنبه على ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} لتأكيد الحفظ.`, 'لم أتمكن من فتح تطبيق المنبه.');
+      return true;
+    }
+
+    const volumeUp = /(?:ارفع|زود|علي|زيد).{0,12}(?:الصوت|الصوتية)|(?:رفع|زيادة) الصوت|volume up|increase volume/.test(normalized);
+    const volumeDown = /(?:اخفض|وطي|قلل|نقص).{0,12}(?:الصوت)|(?:خفض|تقليل) الصوت|volume down|decrease volume/.test(normalized);
+    const mute = /(?:اكتم|اسكت).{0,8}(?:الصوت)?|كتم الصوت|mute volume/.test(normalized);
+    const unmute = /(?:الغاء كتم|افتح الصوت)|unmute volume/.test(normalized);
+    if (volumeUp || volumeDown || mute || unmute) {
+      const direction = volumeUp ? 'up' : volumeDown ? 'down' : mute ? 'mute' : 'unmute';
+      await run(() => EzraWakeWord!.adjustVolume(direction), 'تم تعديل مستوى صوت الوسائط.', 'لم أتمكن من تعديل الصوت.');
+      return true;
+    }
+
+    const settingsMatch = normalized.match(/(?:افتح|اذهب الى|روح على|show|open)\\s*(?:اعدادات|الاعدادات|settings)?\\s*(الواي فاي|wifi|wi-fi|الانترنت|internet|البلوتوث|bluetooth|الصوت|الصوتيات|sound|volume|الشاشة|display|الموقع|location|البطارية|battery|التطبيقات|apps|الاشعارات|notifications|امكانية الوصول|accessibility)/i);
+    if (settingsMatch) {
+      const value = settingsMatch[1];
+      const target = /wifi|واي فاي/.test(value) ? 'wifi'
+        : /internet|انترنت/.test(value) ? 'internet'
+        : /bluetooth|بلوتوث/.test(value) ? 'bluetooth'
+        : /صوت|sound|volume/.test(value) ? 'sound'
+        : /شاشة|display/.test(value) ? 'display'
+        : /موقع|location/.test(value) ? 'location'
+        : /بطارية|battery/.test(value) ? 'battery'
+        : /تطبيقات|apps/.test(value) ? 'apps'
+        : /اشعارات|notifications/.test(value) ? 'notifications' : 'accessibility';
+      await run(() => EzraWakeWord!.openSystemSettings(target), 'فتحت لك إعدادات الهاتف المطلوبة.', 'لم أتمكن من فتح هذه الإعدادات.');
+      return true;
+    }
+
+    const appMatch = normalized.match(/(?:افتح|شغل|ابدأ|open|launch)\\s+(?:تطبيق\\s+)?([\\p{L}0-9 ._-]{2,40})$/iu);
+    if (appMatch) {
+      const appName = appMatch[1].trim();
+      if (!/^(الفلاش|الكشاف|الكاميرا|الاعدادات|المنبه|المؤقت)$/.test(appName)) {
+        await run(() => EzraWakeWord!.launchApp(appName), `فتحت ${appName}.`, `لم أجد تطبيقاً مثبتاً باسم ${appName} أو لم أتمكن من فتحه.`);
+        return true;
+      }
+    }
+
+    const smsMatch = normalized.match(/(?:ارسل|ابعث|اكتب)\\s+(?:رسالة|sms)\\s+(?:الى|ل)\\s+(.+?)\\s+(?:تقول|محتواها|نصها)\\s+(.+)$/i);
+    if (smsMatch) {
+      const contactName = smsMatch[1].trim();
+      const smsBody = smsMatch[2].trim();
+      setSending(true);
+      try {
+        const permission = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_CONTACTS);
+        if (permission !== PermissionsAndroid.RESULTS.GRANTED) {
+          await sayResult('أحتاج إذن جهات الاتصال للعثور على الرقم.');
+        } else {
+          const phone = await EzraWakeWord.findContactPhone(contactName);
+          if (!phone) await sayResult(`لم أجد جهة اتصال باسم ${contactName}.`);
+          else {
+            const opened = await EzraWakeWord.composeSms(phone, smsBody);
+            await sayResult(opened ? 'فتحت تطبيق الرسائل والرسالة جاهزة. راجعيها واضغطي إرسال بنفسك.' : 'لم أتمكن من فتح تطبيق الرسائل.');
+          }
+        }
+      } catch (error) {
+        console.warn('EZRA SMS compose failed:', error);
+        await sayResult('تعذّر تجهيز الرسالة. تحققي من صلاحية جهات الاتصال وتطبيق الرسائل.');
+      } finally {
+        setSending(false);
+      }
+      return true;
+    }
+
+    return false;
+  };
+
   const sendMessage = async (voiceReply = false, voiceText?: string) => {
     const text = (voiceText ?? message).trim();
     if ((!text && !attachment) || !session || !conversationId || sending) return;
     if (voiceText !== undefined) voiceRequestStartedRef.current = true;
     if (await handleMemorySaveCommand(text, voiceReply)) return;
     if (await handleFlashCommand(text, voiceReply)) return;
+    if (await handleSystemCommand(text, voiceReply)) return;
     if (await handleCallCommand(text, voiceReply)) return;
 
     setSending(true);
