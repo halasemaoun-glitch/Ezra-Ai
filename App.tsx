@@ -879,9 +879,7 @@ export default function App() {
             onStopped: () => { EzraWakeWord.start().catch(error => console.warn('Could not resume wake service:', error)); },
             onError: () => { EzraWakeWord.start().catch(error => console.warn('Could not resume wake service:', error)); },
           });
-          return;
-        }
-        if (command) {
+        } else if (command) {
           setPendingWakeCommand(command);
           await EzraWakeWord.start();
         }
