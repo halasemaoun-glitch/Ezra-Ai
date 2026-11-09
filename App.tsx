@@ -559,6 +559,16 @@ export default function App() {
   });
 
   useEffect(() => {
+    if (voiceHome) return;
+    if (isListening) ExpoSpeechRecognitionModule.stop();
+    if (speakingMessageId) {
+      Speech.stop();
+      setSpeakingMessageId(null);
+    }
+    setVoiceLevel(0);
+  }, [voiceHome, isListening, speakingMessageId]);
+
+  useEffect(() => {
     if (!session || !voiceHome || !autoListen || isListening || sending || speakingMessageId || chatLoading) return;
     const timer = setTimeout(() => beginListening(), voiceRetrying ? 900 : 500);
     return () => clearTimeout(timer);
