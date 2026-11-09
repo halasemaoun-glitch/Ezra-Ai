@@ -5,6 +5,8 @@ const PERMISSIONS = [
   "android.permission.FOREGROUND_SERVICE_MICROPHONE",
   "android.permission.RECORD_AUDIO",
   "android.permission.CAMERA",
+  "android.permission.READ_CONTACTS",
+  "android.permission.CALL_PHONE",
   "android.permission.POST_NOTIFICATIONS"
 ];
 
