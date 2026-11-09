@@ -16,6 +16,9 @@ function OrbScene({ status, level = 0 }: OrbStatus) {
   const violetLight = useRef<THREE.PointLight>(null);
   const pulseRing = useRef<THREE.Mesh>(null);
   const rimRing = useRef<THREE.Mesh>(null);
+  const smoothedLevel = useRef(0);
+  const smoothedActivity = useRef(0.28);
+  const smoothedSpeed = useRef(0.12);
   const listening = status.includes('يستمع');
   const thinking = status.includes('أفكر');
   const speaking = status.includes('يتحدث');
@@ -34,38 +37,51 @@ function OrbScene({ status, level = 0 }: OrbStatus) {
 
   useEffect(() => () => particleGeometry.dispose(), [particleGeometry]);
 
-  useFrame(({ clock }) => {
+  useFrame(({ clock }, delta) => {
     const t = clock.getElapsedTime();
+    smoothedLevel.current = THREE.MathUtils.damp(smoothedLevel.current, level, 9, delta);
+    const targetActivity = listening ? 0.42 + smoothedLevel.current * 0.72 : speaking ? 1 : thinking ? 0.48 : 0.28;
+    smoothedActivity.current = THREE.MathUtils.damp(smoothedActivity.current, targetActivity, 4.5, delta);
+    smoothedSpeed.current = THREE.MathUtils.damp(smoothedSpeed.current, speed, 3.5, delta);
+    const activity = smoothedActivity.current;
+    const motionLevel = smoothedLevel.current;
+    const motionSpeed = smoothedSpeed.current;
     if (core.current) {
-      core.current.rotation.y = t * speed;
+      core.current.rotation.y = t * motionSpeed;
       core.current.rotation.x = Math.sin(t * 0.22) * 0.12;
-      const breath = 1 + Math.sin(t * (speaking ? 3.8 : listening ? 2.4 : 1.15)) * (speaking ? 0.045 : 0.022);
+      const breath = 1 + Math.sin(t * (0.9 + activity * 2.8)) * (0.018 + activity * 0.027);
       core.current.scale.setScalar(breath);
     }
     if (halo.current) {
-      halo.current.rotation.y = -t * speed * 0.42;
+      halo.current.rotation.y = -t * motionSpeed * 0.42;
     }
-    if (orbitA.current) orbitA.current.rotation.z = t * speed * 0.72;
-    if (orbitB.current) orbitB.current.rotation.x = 0.9 + t * speed * 0.5;
-    if (rimRing.current) rimRing.current.rotation.set(1.05 + Math.sin(t * 0.16) * 0.08, t * speed * 0.32, -0.35);
+    if (orbitA.current) orbitA.current.rotation.z = t * motionSpeed * 0.72;
+    if (orbitB.current) orbitB.current.rotation.x = 0.9 + t * motionSpeed * 0.5;
+    if (rimRing.current) rimRing.current.rotation.set(1.05 + Math.sin(t * 0.16) * 0.08, t * motionSpeed * 0.32, -0.35);
     if (pulseRing.current) {
       const wave = (Math.sin(t * (speaking ? 3.2 : listening ? 2.1 : 0.9)) + 1) * 0.5;
-      pulseRing.current.scale.setScalar(1.02 + wave * (speaking ? 0.22 : listening ? 0.13 : 0.055));
+      pulseRing.current.scale.setScalar(1.02 + wave * (0.045 + activity * 0.17));
       const material = pulseRing.current.material as THREE.MeshBasicMaterial;
-      material.opacity = 0.12 + (1 - wave) * (speaking ? 0.34 : listening ? 0.23 : 0.12);
+      material.opacity = 0.1 + (1 - wave) * (0.1 + activity * 0.24);
     }
     if (particles.current) {
-      particles.current.rotation.y = -t * (speaking ? 0.12 : listening ? 0.075 : 0.035);
+      particles.current.rotation.y = -t * (0.025 + activity * 0.095);
       particles.current.rotation.x = Math.sin(t * 0.18) * 0.08;
     }
-    const activity = listening ? 0.42 + level * 0.72 : speaking ? 1 : thinking ? 0.48 : 0.28;
     if (coreMaterial.current) {
       const glow = speaking ? 1.12 : listening ? 0.92 : thinking ? 0.82 : 0.68;
-      coreMaterial.current.emissiveIntensity = glow + Math.sin(t * (speaking ? 4.2 : listening ? 2.5 : 1.1)) * (speaking ? 0.22 : listening ? 0.12 : 0.045) + (listening ? level * 0.42 : 0);
+      const targetGlow = glow + Math.sin(t * (0.9 + activity * 3.1)) * (0.04 + activity * 0.18) + (listening ? motionLevel * 0.42 : 0);
+      coreMaterial.current.emissiveIntensity = THREE.MathUtils.damp(coreMaterial.current.emissiveIntensity, targetGlow, 5, delta);
     }
     const pulse = 0.88 + (Math.sin(t * (speaking ? 4.8 : listening ? 2.8 : 1.35)) + 1) * 0.09;
-    if (pinkLight.current) pinkLight.current.intensity = ((speaking ? 4.1 : listening ? 3.1 + level * 1.25 : thinking ? 2.9 : 2.3)) * pulse;
-    if (violetLight.current) violetLight.current.intensity = (thinking ? 3.5 : 2.5) * (0.92 + Math.sin(t * 0.8 + 1.4) * 0.08);
+    if (pinkLight.current) {
+      const targetPink = speaking ? 4.1 : listening ? 3.1 + motionLevel * 1.25 : thinking ? 2.9 : 2.3;
+      pinkLight.current.intensity = THREE.MathUtils.damp(pinkLight.current.intensity, targetPink, 5, delta) * pulse;
+    }
+    if (violetLight.current) {
+      const targetViolet = thinking ? 3.5 : 2.5;
+      violetLight.current.intensity = THREE.MathUtils.damp(violetLight.current.intensity, targetViolet, 3.5, delta) * (0.92 + Math.sin(t * 0.8 + 1.4) * 0.08);
+    }
     if (halo.current) halo.current.scale.setScalar(1.1 + activity * 0.035 + Math.sin(t * 1.15) * 0.018);
   });
 
