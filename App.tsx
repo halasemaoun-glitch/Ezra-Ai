@@ -70,6 +70,7 @@ const createConversationId = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replac
 function EzraOrb({ status }: { status: string }) {
   const pulse = useRef(new Animated.Value(0)).current;
   const rotation = useRef(new Animated.Value(0)).current;
+  const waveform = useRef(Array.from({ length: 9 }, () => new Animated.Value(0.18))).current;
   const listening = status.includes('يستمع');
   const thinking = status.includes('أفكر');
   const speaking = status.includes('يتحدث');
@@ -89,8 +90,19 @@ function EzraOrb({ status }: { status: string }) {
     );
     breathing.start();
     orbit.start();
-    return () => { breathing.stop(); orbit.stop(); };
-  }, [pulse, rotation, status]);
+    const waveLoops = waveform.map((bar, index) => {
+      bar.setValue(0.18);
+      const duration = thinking ? 1050 : speaking ? 360 : 560;
+      const loop = Animated.loop(Animated.sequence([
+        Animated.delay(index * (thinking ? 110 : 65)),
+        Animated.timing(bar, { toValue: 0.95, duration, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(bar, { toValue: 0.18, duration, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]));
+      if (listening || thinking || speaking) loop.start();
+      return loop;
+    });
+    return () => { breathing.stop(); orbit.stop(); waveLoops.forEach(loop => loop.stop()); };
+  }, [pulse, rotation, waveform, status]);
   const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.965, listening || speaking ? 1.055 : 1.025] });
   const glow = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.3, listening || speaking ? 0.95 : 0.72] });
   const rippleScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1.16] });
@@ -124,6 +136,11 @@ function EzraOrb({ status }: { status: string }) {
         <View style={[styles.orbStatusDot, active && styles.orbStatusDotActive]} />
         <Text style={styles.orbStatus}>{status}</Text>
       </View>
+      <View style={styles.orbWaveform} accessibilityLabel={listening ? 'موجات الاستماع' : speaking ? 'موجات التحدث' : 'موجات حالة إزرا'}>
+        {waveform.map((bar, index) => (
+          <Animated.View key={index} style={[styles.orbWaveBar, { opacity: active ? 0.9 : 0.18, transform: [{ scaleY: active ? bar : 0.18 }] }]} />
+        ))}
+      </View>
       <Text style={styles.orbCaption}>{caption}</Text>
     </View>
   );
@@ -135,6 +152,7 @@ export default function App() {
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [autoSpeak, setAutoSpeak] = useState(true);
   const [speechRate, setSpeechRate] = useState(0.92);
+  const [speechPitch, setSpeechPitch] = useState(0.9);
   const [recognitionLanguage, setRecognitionLanguage] = useState<'ar' | 'en'>('ar');
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -177,13 +195,15 @@ export default function App() {
   );
 
   useEffect(() => {
-    AsyncStorage.multiGet(['ezra:autoSpeak', 'ezra:speechRate', 'ezra:recognitionLanguage', 'ezra:autoListen', 'ezra:ttsVoice']).then(values => {
+    AsyncStorage.multiGet(['ezra:autoSpeak', 'ezra:speechRate', 'ezra:recognitionLanguage', 'ezra:autoListen', 'ezra:ttsVoice', 'ezra:speechPitch']).then(values => {
       const savedAutoSpeak = values[0]?.[1];
       const savedRate = values[1]?.[1];
       const savedLanguage = values[2]?.[1];
       const savedAutoListen = values[3]?.[1];
       const savedTtsVoice = values[4]?.[1];
       if (savedTtsVoice) setSelectedTtsVoice(savedTtsVoice);
+      const savedPitch = Number(values[5]?.[1]);
+      if (Number.isFinite(savedPitch) && savedPitch >= 0.75 && savedPitch <= 1.1) setSpeechPitch(savedPitch);
       if (savedLanguage === 'ar' || savedLanguage === 'en') setRecognitionLanguage(savedLanguage);
       if (savedAutoListen !== null) {
         const enabled = savedAutoListen === 'true';
@@ -819,7 +839,7 @@ export default function App() {
       language: speechLanguage,
       ...(preferredVoice ? { voice: preferredVoice.identifier } : {}),
       rate: speechRate,
-      pitch: 1.0,
+      pitch: speechPitch,
       volume: 1.0,
       onDone: () => setSpeakingMessageId(current => current === messageId ? null : current),
       onStopped: () => setSpeakingMessageId(current => current === messageId ? null : current),
@@ -949,6 +969,13 @@ export default function App() {
                   </View>
                 </View>
                 <View style={styles.settingRow}>
+                  <View style={styles.settingCopy}><Text style={styles.settingTitle}>عمق الصوت</Text><Text style={styles.settingHint}>{speechPitch.toFixed(2)} · نبرة أعمق</Text></View>
+                  <View style={styles.rateControls}>
+                    <TouchableOpacity style={styles.rateButton} onPress={() => { const value = Math.max(0.75, Number((speechPitch - 0.05).toFixed(2))); setSpeechPitch(value); AsyncStorage.setItem('ezra:speechPitch', String(value)).catch(() => {}); }}><Text style={styles.rateButtonText}>−</Text></TouchableOpacity>
+                    <TouchableOpacity style={styles.rateButton} onPress={() => { const value = Math.min(1.1, Number((speechPitch + 0.05).toFixed(2))); setSpeechPitch(value); AsyncStorage.setItem('ezra:speechPitch', String(value)).catch(() => {}); }}><Text style={styles.rateButtonText}>＋</Text></TouchableOpacity>
+                  </View>
+                </View>
+                <View style={styles.settingRow}>
                   <View style={styles.settingCopy}>
                     <Text style={styles.settingTitle}>الصوت العربي</Text>
                     <Text style={styles.settingHint}>{ttsVoices.find(voice => voice.identifier === selectedTtsVoice)?.name || 'تلقائي · أفضل صوت محسّن متاح'}</Text>
@@ -959,9 +986,16 @@ export default function App() {
                       const arabicVoices = ttsVoices.filter(voice => voice.language.toLowerCase().startsWith('ar'));
                       Alert.alert('اختيار الصوت العربي', 'اختر صوتًا متاحًا على هاتفك. يمكنك تجربة الأصوات لاختيار الأنسب لك.', [
                         { text: 'تلقائي · الأفضل', onPress: () => { setSelectedTtsVoice(null); AsyncStorage.removeItem('ezra:ttsVoice').catch(() => {}); } },
-                        ...arabicVoices.slice(0, 6).map(voice => ({
-                          text: `${voice.name}${voice.quality === 'Enhanced' ? ' · محسّن' : ''}`,
-                          onPress: () => { setSelectedTtsVoice(voice.identifier); AsyncStorage.setItem('ezra:ttsVoice', voice.identifier).catch(() => {}); },
+                        ...arabicVoices.slice(0, 8).map(voice => ({
+                          text: `${voice.name}${voice.quality === 'Enhanced' ? ' · محسّن' : ''} · تجربة`,
+                          onPress: () => {
+                            setSelectedTtsVoice(voice.identifier);
+                            AsyncStorage.setItem('ezra:ttsVoice', voice.identifier).catch(() => {});
+                            Speech.stop();
+                            Speech.speak('مرحباً، أنا إزرا. سعيد بالحديث معك، كيف أستطيع مساعدتك؟', {
+                              language: 'ar', voice: voice.identifier, rate: speechRate, pitch: speechPitch, volume: 1,
+                            });
+                          },
                         })),
                         { text: 'إغلاق', style: 'cancel' as const },
                       ]);
@@ -1358,6 +1392,8 @@ const styles = StyleSheet.create({
   orbStatusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#9EBD9D' },
   orbStatusDotActive: { backgroundColor: '#E7A6D2' },
   orbStatus: { color: '#E7B9D8', fontSize: 11, fontWeight: '600' },
+  orbWaveform: { height: 26, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 12 },
+  orbWaveBar: { width: 3, height: 22, borderRadius: 2, backgroundColor: '#D88BC1', shadowColor: '#D84AAE', shadowOpacity: 0.7, shadowRadius: 6 },
   orbCaption: { color: '#77717E', fontSize: 9, marginTop: 6 },
   voiceSafe: { flex: 1, backgroundColor: '#08070D' },
   voiceTopActions: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
