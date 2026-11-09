@@ -6,6 +6,9 @@ on:
       - ezra/habibi-android-spike
     paths:
       - "modules/ezra-habibi-tts/**"
+      - "App.tsx"
+      - "package.json"
+      - "app.json"
       - "docs/HABIBI_ANDROID_INTEGRATION.md"
       - ".github/workflows/habibi-android-audiocpp.yml"
   workflow_dispatch:
