@@ -21,7 +21,7 @@ Evaluate an on-device Habibi-TTS speech engine for EZRA without changing or remo
 - Current TTS is the fallback until a replacement has passed real-device tests.
 
 ## Device-only feasibility constraints
-The OPPO A76 (Android 13, 6 GB RAM) cannot run the upstream Python CLI simply by adding the Python package to the Expo app. The ONNX export makes an Android-native port technically more plausible because ONNX Runtime has an Android package, but it still requires implementing the full multi-graph F5 inference loop, text tokenization/phonemization, reference-audio preprocessing, audio output, and model file management in native Android code.
+The OPPO A76 (Android 13, 6 GB RAM) cannot run the upstream Python CLI simply by adding the Python package to the Expo app. The ONNX export makes an Android-native port technically more plausible because ONNX Runtime has an Android package, but it still requires implementing the full multi-graph F5 inference loop, text tokenization/phonemization, reference-audio preprocessing, audio output, and model file management in native Android code. The published ALG and Unified folders are each about 1.45 GB, including a 1.32 GB transformer graph plus preprocessing and decoder graphs. This is a large model for a 6 GB RAM phone; storage space is not a substitute for available runtime memory.
 
 Storage capacity alone does not solve runtime memory, CPU/accelerator compatibility, model conversion, or latency. ONNX Runtime's Android docs require the ONNX graphs to fit device disk and memory and recommend device-specific benchmarking. No claim of unlimited/offline operation is made until a complete model is packaged and measured on the target phone. A hosted inference endpoint would introduce external compute and potentially quotas/costs, so it does not satisfy the requested phone-only/offline goal.
 
@@ -36,6 +36,6 @@ Storage capacity alone does not solve runtime memory, CPU/accelerator compatibil
 
 ## Current status
 - Feasibility spike branch created.
-- ONNX exports for Habibi ALG, Unified and SAU were located in the OpenVoiceOS model collection; the Android Runtime package exists, but no Android-native Habibi implementation has been verified.
+- ONNX exports for Habibi ALG, Unified and SAU were located in the OpenVoiceOS model collection; ALG and Unified each occupy about 1.45 GB. ONNX Runtime has an Android package, but no Android-native Habibi implementation has been verified.
 - No app runtime code changed yet.
 - Next technical gate: inspect/download the exact ONNX artifacts, implement a minimal Android inference spike, and benchmark it on the target phone before integrating it into EZRA.
