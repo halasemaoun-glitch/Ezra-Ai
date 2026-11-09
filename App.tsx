@@ -305,8 +305,8 @@ export default function App() {
       const vocabPath = \`\${directory}vocab.txt\`;
       const existing = await FileSystem.getInfoAsync(modelPath);
       if (existing.exists && existing.size && existing.size > 1_000_000_000) {
-        setHabibiModelPath(modelPath);
-        await AsyncStorage.setItem('ezra:habibiModelPath', modelPath);
+        setHabibiModelPath(directory);
+        await AsyncStorage.setItem('ezra:habibiModelPath', directory);
       } else {
         if (existing.exists) await FileSystem.deleteAsync(modelPath, { idempotent: true });
         const task = FileSystem.createDownloadResumable(
@@ -327,8 +327,8 @@ export default function App() {
         if (!info.exists || !info.size || info.size < 1_000_000_000) {
           throw new Error('ملف النموذج الذي تم تنزيله غير مكتمل.');
         }
-        setHabibiModelPath(modelPath);
-        await AsyncStorage.setItem('ezra:habibiModelPath', modelPath);
+        setHabibiModelPath(directory);
+        await AsyncStorage.setItem('ezra:habibiModelPath', directory);
       }
       const vocabInfo = await FileSystem.getInfoAsync(vocabPath);
       if (!vocabInfo.exists || !vocabInfo.size || vocabInfo.size < 1000) {
@@ -359,7 +359,7 @@ export default function App() {
       if (result.canceled || !result.assets[0]) return;
       const selected = result.assets[0];
       if (!selected.name.toLowerCase().endsWith('.wav')) {
-        Alert.alert('صيغة غير مدعومة', 'اختر تسجيلًا بصيغة WAV فقط. يجب أن تكون العينة صوتًا رجاليًا واضحًا ومدتها من 5 إلى 10 ثوانٍ.');
+        Alert.alert('صيغة غير مدعومة', 'اختر تسجيلًا بصيغة WAV فقط. يجب أن تكون العينة صوتًا رجاليًا واضحًا ومدتها من 3 إلى 5 ثوانٍ.');
         return;
       }
       const target = \`\${FileSystem.documentDirectory}habibi-reference.wav\`;
@@ -1866,7 +1866,7 @@ export default function App() {
                     placeholderTextColor="#777680"
                     multiline
                   />
-                  <Text style={styles.settingHint}>العينة يجب أن تكون صوت رجل واضحًا، WAV، من 5 إلى 10 ثوانٍ، مع نص مطابق تمامًا. تسجيلك السابق يبقى احتياطيًا ولن نستخدمه هنا.</Text>
+                  <Text style={styles.settingHint}>العينة يجب أن تكون صوت رجل واضحًا، WAV، من 3 إلى 5 ثوانٍ، مع نص مطابق تمامًا. تسجيلك السابق يبقى احتياطيًا ولن نستخدمه هنا.</Text>
                   <View style={{ flexDirection: 'row', gap: 8 }}>
                     {[
                       { code: 'ALG', label: 'جزائري' },
