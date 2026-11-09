@@ -41,49 +41,81 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Resolve the caller from the verified Supabase access token. Never trust a user ID from the request body.
-    const authorization = req.headers.get("Authorization");
+    // Require a real Supabase user access token for every chat request.
+    // A publishable/anon key by itself is not an authenticated user session.
+    const authorization = req.headers.get("Authorization") ?? "";
+    const bearerToken = authorization.match(/^Bearer\\s+(.+)$/i)?.[1];
+    if (!bearerToken) {
+      return new Response(JSON.stringify({ error: "Sign in to use EZRA." }), {
+        status: 401, headers: jsonHeaders,
+      });
+    }
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
-    let approvedMemories: string[] = [];
+    const supabasePublicKey =
+      Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
+    if (!supabaseUrl || !supabasePublicKey) {
+      return new Response(JSON.stringify({ error: "Authentication service is not configured." }), {
+        status: 503, headers: jsonHeaders,
+      });
+    }
 
-    if (authorization && supabaseUrl && supabaseAnonKey) {
-      try {
-        const userResponse = await fetch(`${supabaseUrl}/auth/v1/user`, {
-          headers: { "apikey": supabaseAnonKey, "Authorization": authorization },
+    let userId: string;
+    try {
+      const userResponse = await fetch(`${supabaseUrl}/auth/v1/user`, {
+        headers: { "apikey": supabasePublicKey, "Authorization": authorization },
+      });
+      if (userResponse.status === 401 || userResponse.status === 403) {
+        return new Response(JSON.stringify({ error: "Your session is invalid or expired. Please sign in again." }), {
+          status: 401, headers: jsonHeaders,
         });
-        if (userResponse.ok) {
-          const user = await userResponse.json();
-          if (typeof user?.id === "string") {
-            const memoryUrl = new URL(`${supabaseUrl}/rest/v1/memories`);
-            memoryUrl.searchParams.set("select", "content");
-            memoryUrl.searchParams.set("owner_id", `eq.${user.id}`);
-            memoryUrl.searchParams.set("approval_status", "eq.approved");
-            memoryUrl.searchParams.set("order", "created_at.desc");
-            memoryUrl.searchParams.set("limit", "12");
-
-            const memoryResponse = await fetch(memoryUrl, {
-              headers: { "apikey": supabaseAnonKey, "Authorization": authorization },
-            });
-            if (memoryResponse.ok) {
-              const rows = await memoryResponse.json();
-              approvedMemories = Array.isArray(rows)
-                ? rows
-                    .filter((row: any) => typeof row?.content === "string")
-                    .map((row: any) => row.content.trim().slice(0, 700))
-                    .filter((content: string) => !!content)
-                : [];
-            } else {
-              console.error("Could not load approved memories:", memoryResponse.status);
-            }
-          }
-        } else {
-          console.error("Could not resolve authenticated EZRA user:", userResponse.status);
-        }
-      } catch (memoryError) {
-        // Memory lookup is optional: a temporary database issue must not block chat.
-        console.error("EZRA memory lookup failed:", memoryError);
       }
+      if (!userResponse.ok) {
+        console.error("Supabase user verification failed:", userResponse.status);
+        return new Response(JSON.stringify({ error: "Could not verify your session. Please try again." }), {
+          status: 503, headers: jsonHeaders,
+        });
+      }
+      const user = await userResponse.json();
+      if (typeof user?.id !== "string") {
+        return new Response(JSON.stringify({ error: "A valid signed-in account is required." }), {
+          status: 401, headers: jsonHeaders,
+        });
+      }
+      userId = user.id;
+    } catch (authError) {
+      console.error("Supabase user verification failed:", authError);
+      return new Response(JSON.stringify({ error: "Could not verify your session. Please try again." }), {
+        status: 503, headers: jsonHeaders,
+      });
+    }
+
+    let approvedMemories: string[] = [];
+    try {
+      const memoryUrl = new URL(`${supabaseUrl}/rest/v1/memories`);
+      memoryUrl.searchParams.set("select", "content");
+      memoryUrl.searchParams.set("owner_id", `eq.${userId}`);
+      memoryUrl.searchParams.set("approval_status", "eq.approved");
+      memoryUrl.searchParams.set("order", "created_at.desc");
+      memoryUrl.searchParams.set("limit", "12");
+
+      const memoryResponse = await fetch(memoryUrl, {
+        headers: { "apikey": supabasePublicKey, "Authorization": authorization },
+      });
+      if (memoryResponse.ok) {
+        const rows = await memoryResponse.json();
+        approvedMemories = Array.isArray(rows)
+          ? rows
+              .filter((row: any) => typeof row?.content === "string")
+              .map((row: any) => row.content.trim().slice(0, 700))
+              .filter((content: string) => !!content)
+          : [];
+      } else {
+        console.error("Could not load approved memories:", memoryResponse.status);
+      }
+    } catch (memoryError) {
+      // Memory lookup is optional: a temporary database issue must not block chat.
+      console.error("EZRA memory lookup failed:", memoryError);
     }
 
     const systemPrompt = [
