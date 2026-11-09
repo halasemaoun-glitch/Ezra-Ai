@@ -1,15 +1,6 @@
 name: Habibi Android native-module compile
 
 on:
-  pull_request:
-    branches:
-      - ezra/full-system-control
-    paths:
-      - "modules/ezra-habibi-tts/**"
-      - "app.json"
-      - "App.tsx"
-      - "package.json"
-      - ".github/workflows/habibi-android-module.yml"
   workflow_dispatch:
 
 jobs:
