@@ -26,11 +26,14 @@ Important language and licensing limits:
 
 ## Android integration status
 
-- The local Expo module exists at `modules/ezra-habibi-tts`.
-- The module currently reports Android runtime/device capacity and inspects model files. It does not yet invoke F5/Habibi synthesis.
-- A new GitHub Actions workflow, `.github/workflows/habibi-android-audiocpp.yml`, attempts to cross-compile the upstream C ABI for Android `arm64-v8a` with the F5-TTS family selected. It is a build feasibility gate, not proof of a working Android JNI bridge.
-- The upstream project documents Linux, Windows, and macOS build procedures; Android is not listed as an officially packaged audio.cpp platform. Its ggml dependency does contain Android-specific CPU backend variants. The NDK cross-build therefore must pass before the app-side JNI integration is considered viable.
-- No model is downloaded or loaded automatically at this stage. The model package is large and peak inference memory has not been measured on the OPPO A76.
+- The local Expo module at `modules/ezra-habibi-tts` now exposes native initialization, synthesis-to-WAV, Android MediaPlayer playback, stop, and playback events.
+- The JNI bridge calls the pinned audio.cpp v0.9.4 C ABI. It reads a short PCM WAV reference, supplies the exact transcript and dialect token, runs offline CPU inference, and writes the generated PCM as WAV.
+- The app now has controls to download the Unified GGUF package and vocabulary from the upstream Hugging Face repository, select an approved WAV reference, enter its exact transcript, choose ALG/SAU/MSA/UNK, and activate Habibi. Once activated, it restores the local engine on later app starts.
+- Arabic replies use Habibi when initialization succeeds. English and any safe fallback remain on Android system TTS. Existing Groq, Supabase, memory, recognition, wake-word, and Android control flows are unchanged.
+- The Android workflow cross-compiles the upstream C ABI and EZRA JNI bridge for arm64, then assembles a debug APK with those native libraries included.
+- The first upstream C ABI Android arm64 cross-compile passed, including the C ABI symbol checks. The newer combined JNI + full APK build still needs to pass before the module is considered build-validated.
+- CPU inference is deliberately constrained to two threads and a 960-frame budget. The reference clip is limited to approximately 5 seconds on this CPU path; longer samples are truncated by the model.
+- No model is bundled in the APK. The user downloads it to app-private storage on first setup. Peak runtime memory and sustained performance still require testing on the OPPO A76.
 
 ## Device and voice constraints
 
