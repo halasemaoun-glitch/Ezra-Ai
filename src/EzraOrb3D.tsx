@@ -111,7 +111,7 @@ export default function EzraOrb3D({ status }: OrbStatus) {
 }
 
 const styles = StyleSheet.create({
-  stage: { width: '100%', height: 330, alignItems: 'center', justifyContent: 'center' },
+  stage: { width: '100%', height: 292, alignItems: 'center', justifyContent: 'center' },
   canvas: { backgroundColor: 'transparent' },
   emojiLayer: { ...StyleSheet.absoluteFillObject },
   emoji: { position: 'absolute', color: '#f4b7e2', fontSize: 22, opacity: 0.66, textShadowColor: '#d51a93', textShadowRadius: 13 },
