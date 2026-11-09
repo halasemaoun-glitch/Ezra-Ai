@@ -506,7 +506,8 @@ export default function App() {
     }
   });
   useSpeechRecognitionEvent('result', event => {
-    const transcript = event.results[0]?.transcript;
+    const latestResult = event.results[event.results.length - 1];
+    const transcript = latestResult?.transcript;
     if (transcript) {
       voiceTranscriptRef.current = transcript;
       setMessage(transcript);
@@ -597,6 +598,7 @@ export default function App() {
           supabase.functions.invoke('smart-service', {
             body: {
               input: conversationInput,
+              voiceMode: voiceReply,
               ...(attachment?.kind === 'image' && attachment.base64
                 ? { imageDataUrl: `data:${attachment.mimeType || 'image/jpeg'};base64,${attachment.base64}` }
                 : {}),
