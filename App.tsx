@@ -520,7 +520,6 @@ export default function App() {
   }, [session?.user.id, conversationId]);
 
   useSpeechRecognitionEvent('start', () => {
-    voiceRetryCountRef.current = 0;
     setVoiceRetrying(false);
     setIsListening(true);
   });
@@ -538,6 +537,7 @@ export default function App() {
     const latestResult = event.results[event.results.length - 1];
     const transcript = latestResult?.transcript;
     if (transcript) {
+      voiceRetryCountRef.current = 0;
       voiceTranscriptRef.current = transcript;
       setMessage(transcript);
     }
