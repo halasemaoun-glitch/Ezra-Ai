@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Alert,
   Animated,
+  AppState,
   Easing,
   KeyboardAvoidingView,
   Modal,
@@ -118,6 +119,7 @@ function EzraOrb({ status, voiceLevel = 0 }: { status: string; voiceLevel?: numb
 export default function App() {
   const [message, setMessage] = useState('');
   const [voiceHome, setVoiceHome] = useState(true);
+  const [appIsActive, setAppIsActive] = useState(AppState.currentState === 'active');
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [autoSpeak, setAutoSpeak] = useState(true);
   const [speechRate, setSpeechRate] = useState(0.92);
@@ -159,6 +161,22 @@ export default function App() {
   const [memoryFilter, setMemoryFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   const [historySearch, setHistorySearch] = useState('');
   const micPulse = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', nextState => {
+      const active = nextState === 'active';
+      setAppIsActive(active);
+      if (!active) {
+        // Keep microphone capture foreground-only; resume automatically when the app returns.
+        ExpoSpeechRecognitionModule.stop();
+        Speech.stop();
+        setIsListening(false);
+        setSpeakingMessageId(null);
+        setVoiceLevel(0);
+      }
+    });
+    return () => subscription.remove();
+  }, []);
 
   const visibleMemories = memories.filter(item => {
     const matchesSearch = item.content.toLocaleLowerCase().includes(memorySearch.trim().toLocaleLowerCase());
@@ -588,18 +606,18 @@ export default function App() {
   }, [voiceHome, isListening, speakingMessageId]);
 
   useEffect(() => {
-    if (!session || !voiceHome || !autoListen || isListening || sending || speakingMessageId || chatLoading) return;
+    if (!appIsActive || !session || !voiceHome || !autoListen || isListening || sending || speakingMessageId || chatLoading) return;
     const timer = setTimeout(() => beginListening(), voiceRetrying ? 900 : 500);
     return () => clearTimeout(timer);
-  }, [session?.user.id, voiceHome, autoListen, recognitionLanguage, isListening, sending, speakingMessageId, chatLoading, voiceRetrying]);
+  }, [appIsActive, session?.user.id, voiceHome, autoListen, recognitionLanguage, isListening, sending, speakingMessageId, chatLoading, voiceRetrying]);
 
   useEffect(() => {
-    if (!voiceHome || !autoListen || !voiceTurnInProgressRef.current || !voiceRequestStartedRef.current || sending || speakingMessageId || isListening) return;
+    if (!appIsActive || !voiceHome || !autoListen || !voiceTurnInProgressRef.current || !voiceRequestStartedRef.current || sending || speakingMessageId || isListening) return;
     voiceTurnInProgressRef.current = false;
     voiceRequestStartedRef.current = false;
     const timer = setTimeout(() => beginListening(), 700);
     return () => clearTimeout(timer);
-  }, [sending, speakingMessageId, isListening, voiceHome, autoListen]);
+  }, [appIsActive, sending, speakingMessageId, isListening, voiceHome, autoListen]);
 
   const sendMessage = async (voiceReply = false, voiceText?: string) => {
     const text = (voiceText ?? message).trim();
@@ -762,7 +780,7 @@ export default function App() {
   };
 
   const beginListening = async (interruptSpeech = false) => {
-    if (!autoListenRef.current || isListening || sending || (speakingMessageId && !interruptSpeech)) return;
+    if (!appIsActive || !autoListenRef.current || isListening || sending || (speakingMessageId && !interruptSpeech)) return;
     try {
       const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
       if (!permission.granted) {
