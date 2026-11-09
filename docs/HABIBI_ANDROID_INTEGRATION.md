@@ -30,9 +30,9 @@ Storage capacity alone does not solve runtime memory, CPU/accelerator compatibil
 2. Use the community ONNX exports as the candidate artifact; inspect actual graph sizes, inputs/outputs, quantization, and license metadata before bundling.
 3. Build a minimal Kotlin/Android ONNX Runtime proof of concept for ALG first. The Python `phoonnx` F5 adapter is a useful reference for the three-graph ODE pipeline, but it cannot be imported into the React Native app as-is.
 4. Test Saudi using the SAU export only with its non-commercial/share-alike license respected. Treat Levantine as unsupported by the documented Habibi training data; do not label the untrained LEV token as supported. Test English as a separate F5-TTS base model, not as Habibi.
-4. Add a React Native native-module adapter only after the Android proof of concept succeeds. Route speech output through that adapter when available, otherwise fall back to `expo-speech`.
-5. Preserve all existing text, memory, recognition, wake-word and system-control flows. Do not alter Groq or Supabase secrets/functions for TTS.
-6. Test on the actual OPPO A76: cold start, repeated utterances, memory pressure, thermal throttling, interruption/cancel, app background/foreground, and offline behavior.
+5. Add a React Native native-module adapter only after the Android proof of concept succeeds. Route speech output through that adapter when available, otherwise fall back to `expo-speech`.
+6. Preserve all existing text, memory, recognition, wake-word and system-control flows. Do not alter Groq or Supabase secrets/functions for TTS.
+7. Test on the actual OPPO A76: cold start, repeated utterances, memory pressure, thermal throttling, interruption/cancel, app background/foreground, and offline behavior.
 
 ## Current status
 - Feasibility spike branch created.
