@@ -59,6 +59,8 @@ jobs:
             -DENGINE_ENABLE_OPENMP=OFF \
             -DGGML_OPENMP=OFF \
             -DENGINE_ENABLE_NATIVE_CPU=OFF \
+            -DGGML_NATIVE=OFF \
+            -DGGML_LLAMAFILE=OFF \
             -DENGINE_ENABLE_LLAMAFILE=OFF \
             -DENGINE_ENABLE_CUDA=OFF \
             -DENGINE_ENABLE_HIP=OFF \
