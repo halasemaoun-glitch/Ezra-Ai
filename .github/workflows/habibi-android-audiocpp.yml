@@ -6,6 +6,7 @@ on:
       - ezra/habibi-android-spike
     paths:
       - "modules/ezra-habibi-tts/**"
+      - "docs/HABIBI_ANDROID_INTEGRATION.md"
       - ".github/workflows/habibi-android-audiocpp.yml"
   workflow_dispatch:
   pull_request:
@@ -80,10 +81,23 @@ jobs:
           file build-habibi-android/bin/libaudiocpp.so
           "$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" -h build-habibi-android/bin/libaudiocpp.so | grep -E "Class:|Machine:"
 
+      - name: Verify C ABI exports and package integration inputs
+        run: |
+          LIB="build-habibi-android/bin/libaudiocpp.so"
+          NDK="$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          "$NDK/llvm-nm" -D --defined-only "$LIB" | grep -q 'audiocpp_registry_create'
+          "$NDK/llvm-nm" -D --defined-only "$LIB" | grep -q 'audiocpp_session_run'
+          mkdir -p habibi-android-runtime/include habibi-android-runtime/libs
+          cp "$LIB" habibi-android-runtime/libs/
+          cp audio-cpp/include/audiocpp.h habibi-android-runtime/include/
+          cp audio-cpp/LICENSE habibi-android-runtime/
+          "$NDK/llvm-readelf" -d "$LIB" > habibi-android-runtime/dependencies.txt
+          "$NDK/llvm-nm" -D --defined-only "$LIB" | grep 'audiocpp_' > habibi-android-runtime/exports.txt
+
       - name: Upload Android native runtime
         uses: actions/upload-artifact@v4
         with:
           name: ezra-habibi-audiocpp-android-arm64
-          path: build-habibi-android/bin/libaudiocpp.so
+          path: habibi-android-runtime/
           if-no-files-found: error
           retention-days: 7
