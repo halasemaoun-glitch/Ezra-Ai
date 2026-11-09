@@ -635,6 +635,8 @@ export default function App() {
               .join('\\n\\n')
           : 'Supabase returned no saved message row.';
         Alert.alert('لم تُحفظ الرسالة', diagnostic);
+        voiceTurnInProgressRef.current = false;
+        voiceRequestStartedRef.current = false;
         setSending(false);
         return;
       }
@@ -687,8 +689,12 @@ export default function App() {
           Alert.alert(
             'انتهت مهلة انتظار الرد',
             'تم حفظ رسالتك، لكن إزرا لم يرد خلال 30 ثانية. يمكنك المحاولة مرة أخرى بعد قليل.'
-          );          setSending(false);
-          return;        }
+          );
+          voiceTurnInProgressRef.current = false;
+          voiceRequestStartedRef.current = false;
+          setSending(false);
+          return;
+        }
 
         const { data: aiData, error: aiError } = aiRequest.result;
         if (aiError || typeof aiData?.reply !== 'string' || !aiData.reply.trim()) {
@@ -709,6 +715,8 @@ export default function App() {
             'تعذّر على إزرا الرد',
             details || 'تم حفظ رسالتك، لكن الخدمة لم تُرجع ردًا. حاول مرة أخرى بعد قليل.'
           );
+          voiceTurnInProgressRef.current = false;
+          voiceRequestStartedRef.current = false;
           setSending(false);
           return;
         }
@@ -746,6 +754,8 @@ export default function App() {
     } catch (error) {
       console.error('Message sending failed:', error);
       Alert.alert('حدث خطأ', 'حاول إرسال رسالتك مرة أخرى.');
+      voiceTurnInProgressRef.current = false;
+      voiceRequestStartedRef.current = false;
     }
 
     setSending(false);
