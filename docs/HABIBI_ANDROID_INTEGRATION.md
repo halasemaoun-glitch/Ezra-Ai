@@ -15,7 +15,7 @@ Evaluate an on-device Habibi-TTS speech engine for EZRA without changing or remo
 
 ## Current EZRA integration
 - EZRA is Expo SDK 54 / React Native 0.81.5.
-- Added an isolated local Expo module at `modules/ezra-habibi-tts` with the Android ONNX Runtime 1.22.0 dependency. Its current methods only initialize the runtime and inspect a model file; it does not synthesize speech yet.
+- Added an isolated local Expo module at `modules/ezra-habibi-tts` with the Android ONNX Runtime 1.22.0 dependency. It initializes the runtime, inspects a model file, and reports available/total RAM, Android runtime heap, low-memory state, and app-private free storage. It does not synthesize speech yet.
 - Current TTS is `expo-speech`, called from `App.tsx`.
 - Text generation is served by the existing Supabase `smart-service` function using Groq. This must remain unchanged.
 - Existing speech recognition and Android wake-word modules must remain unchanged.
@@ -40,5 +40,6 @@ Storage capacity alone does not solve runtime memory, CPU/accelerator compatibil
 - Feasibility spike branch created.
 - ONNX exports for Habibi ALG, Unified and SAU were located in the OpenVoiceOS model collection; ALG and Unified each occupy about 1.45 GB. ONNX Runtime has an Android package, but no Android-native Habibi implementation has been verified.
 - The Android ONNX Runtime module scaffold is committed; no speech generation or UI wiring has been added.
-- Draft PR #4 is open for CI/build validation and has not been merged.
-- Next technical gate: confirm the native module builds, then prototype the complete three-graph F5 pipeline and benchmark it on the OPPO A76 before connecting it to EZRA.
+- Draft PR #4 is open and has not been merged. GitHub Actions run `42682886488` completed successfully: Expo configuration validation, Android project generation, and Kotlin native-module compilation all passed. No artifact was produced.
+- Added a device-capacity diagnostic so the app can measure actual free RAM and app-private storage before attempting any large model download or load. This does not itself verify capacity on the OPPO A76 until the app is installed and run there.
+- Next technical gate: add a small in-app diagnostics screen/test call, read the OPPO A76's real available RAM/storage, then decide whether the ~1.45 GB ALG model is safe to download and whether its transformer can fit the runtime memory budget. Do not download or load the model until that measurement is available. After that, prototype the complete three-graph F5 pipeline.
