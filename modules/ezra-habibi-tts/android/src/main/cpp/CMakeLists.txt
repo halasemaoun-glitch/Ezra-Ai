@@ -3,8 +3,8 @@ project(ezra_habibi_jni LANGUAGES C CXX)
 
 add_library(audiocpp SHARED IMPORTED)
 set_target_properties(audiocpp PROPERTIES
-  IMPORTED_LOCATION "\${CMAKE_CURRENT_SOURCE_DIR}/../jniLibs/arm64-v8a/libaudiocpp.so"
-  INTERFACE_INCLUDE_DIRECTORIES "\${CMAKE_CURRENT_SOURCE_DIR}/include"
+  IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/../jniLibs/arm64-v8a/libaudiocpp.so"
+  INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
 add_library(ezra_habibi_jni SHARED ezra_habibi_jni.cpp)
