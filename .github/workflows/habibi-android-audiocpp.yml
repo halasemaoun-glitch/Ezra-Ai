@@ -1,6 +1,12 @@
 name: Habibi Android native engine cross-compile
 
 on:
+  push:
+    branches:
+      - ezra/habibi-android-spike
+    paths:
+      - "modules/ezra-habibi-tts/**"
+      - ".github/workflows/habibi-android-audiocpp.yml"
   workflow_dispatch:
   pull_request:
     branches:
