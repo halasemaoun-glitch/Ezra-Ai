@@ -1605,15 +1605,35 @@ export default function App() {
     ]);
   };
 
-  const speak = (text: string, messageId: string) => {
+  const speak = async (text: string, messageId: string) => {
     if (speakingMessageId === messageId) {
       Speech.stop();
+      EzraHabibiTts?.stopAudio().catch(() => {});
+      activeHabibiSpeechRef.current = null;
       setSpeakingMessageId(null);
       return;
     }
     Speech.stop();
+    await EzraHabibiTts?.stopAudio().catch(() => {});
     setSpeakingMessageId(messageId);
     const speechLanguage = detectEzraSpeechLanguage(text);
+
+    if (speechLanguage === 'ar' && habibiEngineReady && EzraHabibiTts && Platform.OS === 'android') {
+      try {
+        activeHabibiSpeechRef.current = { text, messageId };
+        const outputDirectory = FileSystem.cacheDirectory || FileSystem.documentDirectory || '';
+        const outputPath = \`\${outputDirectory}ezra-habibi-\${Date.now()}.wav\`;
+        const generated = await EzraHabibiTts.synthesize(text, outputPath);
+        await EzraHabibiTts.playAudio(generated.path);
+        return;
+      } catch (error) {
+        activeHabibiSpeechRef.current = null;
+        setHabibiEngineError(error instanceof Error ? error.message : 'تعذّر توليد الصوت عبر Habibi.');
+        console.warn('Habibi synthesis failed; using Android TTS fallback:', error);
+        setHabibiEngineReady(false);
+      }
+    }
+
     const matchingVoice = ttsVoices
       .filter(voice => voice.language.toLowerCase().startsWith(speechLanguage))
       .sort((a, b) => Number(b.quality === 'Enhanced') - Number(a.quality === 'Enhanced'))[0];
@@ -1638,6 +1658,48 @@ export default function App() {
       },
     });
   };
+
+  useEffect(() => {
+    if (!EzraHabibiTts) return;
+    const finished = EzraHabibiTts.addListener('onPlaybackFinished', () => {
+      activeHabibiSpeechRef.current = null;
+      setSpeakingMessageId(null);
+      resumeBackgroundWake();
+    });
+    const failed = EzraHabibiTts.addListener('onPlaybackError', () => {
+      const pending = activeHabibiSpeechRef.current;
+      activeHabibiSpeechRef.current = null;
+      if (pending) {
+        Speech.speak(pending.text, {
+          language: 'ar',
+          rate: speechRate,
+          pitch: speechPitch,
+          volume: 1,
+          onDone: () => {
+            setSpeakingMessageId(current => current === pending.messageId ? null : current);
+            resumeBackgroundWake();
+          },
+          onStopped: () => {
+            setSpeakingMessageId(current => current === pending.messageId ? null : current);
+            resumeBackgroundWake();
+          },
+          onError: () => {
+            setSpeakingMessageId(current => current === pending.messageId ? null : current);
+            resumeBackgroundWake();
+          },
+        });
+      } else {
+        setSpeakingMessageId(null);
+        resumeBackgroundWake();
+      }
+    });
+    return () => {
+      finished.remove();
+      failed.remove();
+    };
+  }, [speechRate, speechPitch]);
+
+
 
   if (authLoading) {
     return (
