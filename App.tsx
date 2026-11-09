@@ -132,6 +132,7 @@ export default function App() {
   const autoListenRef = useRef(true);
   const voiceTranscriptRef = useRef('');
   const voiceTurnInProgressRef = useRef(false);
+  const voiceRequestStartedRef = useRef(false);
   const [ttsVoices, setTtsVoices] = useState<{ identifier: string; language: string; quality?: string }[]>([]);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const [chatLoading, setChatLoading] = useState(false);
@@ -508,8 +509,9 @@ export default function App() {
   }, [session?.user.id, voiceHome, autoListen, recognitionLanguage]);
 
   useEffect(() => {
-    if (!voiceHome || !autoListen || !voiceTurnInProgressRef.current || sending || speakingMessageId || isListening) return;
+    if (!voiceHome || !autoListen || !voiceTurnInProgressRef.current || !voiceRequestStartedRef.current || sending || speakingMessageId || isListening) return;
     voiceTurnInProgressRef.current = false;
+    voiceRequestStartedRef.current = false;
     const timer = setTimeout(() => beginListening(), 700);
     return () => clearTimeout(timer);
   }, [sending, speakingMessageId, isListening, voiceHome, autoListen]);
@@ -517,6 +519,7 @@ export default function App() {
   const sendMessage = async (voiceReply = false, voiceText?: string) => {
     const text = (voiceText ?? message).trim();
     if ((!text && !attachment) || !session || !conversationId || sending) return;
+    if (voiceText !== undefined) voiceRequestStartedRef.current = true;
 
     setSending(true);
 
