@@ -4,12 +4,14 @@ import android.app.ActivityManager
 import android.content.Context
 import android.os.Build
 import android.os.StatFs
+import android.media.MediaPlayer
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.File
 
 class EzraHabibiTtsModule : Module() {
   @Volatile private var nativeLoaded = false
+  private var mediaPlayer: MediaPlayer? = null
 
   private fun ensureNativeLoaded() {
     if (nativeLoaded) return
@@ -34,6 +36,7 @@ class EzraHabibiTtsModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("EzraHabibiTts")
+    Events("onPlaybackFinished", "onPlaybackError")
 
     AsyncFunction("getRuntimeInfo") {
       val loaded = try {
@@ -103,7 +106,43 @@ class EzraHabibiTtsModule : Module() {
       mapOf("path" to output.absolutePath, "bytes" to output.length())
     }
 
+    AsyncFunction("playAudio") { path: String ->
+      val audioFile = File(path)
+      require(audioFile.isFile && audioFile.canRead() && audioFile.length() > 44L) {
+        "Generated Habibi WAV file is missing or invalid."
+      }
+      mediaPlayer?.release()
+      val player = MediaPlayer()
+      mediaPlayer = player
+      player.setOnCompletionListener {
+        it.release()
+        if (mediaPlayer === it) mediaPlayer = null
+        sendEvent("onPlaybackFinished", mapOf("path" to path))
+      }
+      player.setOnErrorListener { failedPlayer, what, extra ->
+        failedPlayer.release()
+        if (mediaPlayer === failedPlayer) mediaPlayer = null
+        sendEvent("onPlaybackError", mapOf("what" to what, "extra" to extra))
+        true
+      }
+      player.setDataSource(audioFile.absolutePath)
+      player.prepare()
+      player.start()
+      mapOf("playing" to true)
+    }.runOnQueue(.main)
+
+    AsyncFunction("stopAudio") {
+      mediaPlayer?.let { player ->
+        try { if (player.isPlaying) player.stop() } catch (_: IllegalStateException) {}
+        player.release()
+      }
+      mediaPlayer = null
+      mapOf("stopped" to true)
+    }.runOnQueue(.main)
+
     AsyncFunction("shutdown") {
+      mediaPlayer?.release()
+      mediaPlayer = null
       if (nativeLoaded) nativeShutdown()
       mapOf("ready" to false)
     }
