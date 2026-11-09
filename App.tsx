@@ -52,6 +52,28 @@ const EzraWakeWord = Platform.OS === 'android'
   ? requireNativeModule<EzraWakeWordNative>('EzraWakeWord')
   : null;
 
+type HabibiDeviceCapacity = {
+  totalRamBytes: number;
+  availableRamBytes: number;
+  lowMemory: boolean;
+  runtimeMaxHeapBytes: number;
+  runtimeFreeHeapBytes: number;
+  availableAppStorageBytes: number;
+  androidApi: number;
+};
+
+const EzraHabibiTts = Platform.OS === 'android'
+  ? requireNativeModule<{
+      getDeviceCapacity: () => Promise<HabibiDeviceCapacity>;
+    }>('EzraHabibiTts')
+  : null;
+
+const formatBytes = (bytes: number) => {
+  if (!Number.isFinite(bytes) || bytes < 0) return 'غير متاح';
+  const gb = bytes / (1024 ** 3);
+  return gb >= 1 ? `${gb.toFixed(2)} GB` : `${(bytes / (1024 ** 2)).toFixed(0)} MB`;
+};
+
 type Attachment = {
   uri: string;
   name: string;
@@ -146,6 +168,9 @@ export default function App() {
   const [appIsActive, setAppIsActive] = useState(AppState.currentState === 'active');
   const appIsActiveRef = useRef(AppState.currentState === 'active');
   const [settingsVisible, setSettingsVisible] = useState(false);
+  const [habibiCapacity, setHabibiCapacity] = useState<HabibiDeviceCapacity | null>(null);
+  const [habibiCapacityLoading, setHabibiCapacityLoading] = useState(false);
+  const [habibiCapacityError, setHabibiCapacityError] = useState('');
   const [autoSpeak, setAutoSpeak] = useState(true);
   const [speechRate, setSpeechRate] = useState(0.92);
   const [speechPitch, setSpeechPitch] = useState(0.9);
@@ -214,6 +239,21 @@ export default function App() {
     });
     return () => subscription.remove();
   }, []);
+
+  const checkHabibiDeviceCapacity = async () => {
+    if (!EzraHabibiTts || habibiCapacityLoading) return;
+    setHabibiCapacityLoading(true);
+    setHabibiCapacityError('');
+    try {
+      const result = await EzraHabibiTts.getDeviceCapacity();
+      setHabibiCapacity(result);
+    } catch (error) {
+      console.error('Habibi device diagnostics failed:', error);
+      setHabibiCapacityError('تعذّر قراءة معلومات الجهاز. تأكد من تثبيت نسخة Android المحدّثة.');
+    } finally {
+      setHabibiCapacityLoading(false);
+    }
+  };
 
   const visibleMemories = memories.filter(item => {
     const matchesSearch = item.content.toLocaleLowerCase().includes(memorySearch.trim().toLocaleLowerCase());
@@ -1605,6 +1645,30 @@ export default function App() {
                     <TouchableOpacity style={[styles.rateButton, recognitionLanguage === 'ar' && styles.languageButtonActive]} onPress={() => { setRecognitionLanguage('ar'); AsyncStorage.setItem('ezra:recognitionLanguage', 'ar').catch(() => {}); }}><Text style={styles.rateButtonText}>ع</Text></TouchableOpacity>
                     <TouchableOpacity style={[styles.rateButton, recognitionLanguage === 'en' && styles.languageButtonActive]} onPress={() => { setRecognitionLanguage('en'); AsyncStorage.setItem('ezra:recognitionLanguage', 'en').catch(() => {}); }}><Text style={styles.rateButtonText}>EN</Text></TouchableOpacity>
                   </View>
+                </View>
+                <View style={[styles.settingRow, { flexDirection: 'column', alignItems: 'stretch', gap: 10 }]}>
+                  <View style={styles.settingCopy}>
+                    <Text style={styles.settingTitle}>فحص جاهزية Habibi على هذا الهاتف</Text>
+                    <Text style={styles.settingHint}>يقيس الذاكرة والمساحة المتاحة فقط، ولا يحمّل أي نموذج.</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.memorySaveButton, { marginTop: 0, opacity: habibiCapacityLoading ? 0.6 : 1 }]}
+                    onPress={checkHabibiDeviceCapacity}
+                    disabled={habibiCapacityLoading || Platform.OS !== 'android'}
+                  >
+                    <Text style={styles.memorySaveText}>{habibiCapacityLoading ? 'جارٍ الفحص…' : 'فحص موارد الهاتف'}</Text>
+                  </TouchableOpacity>
+                  {habibiCapacityError ? <Text style={styles.authError}>{habibiCapacityError}</Text> : null}
+                  {habibiCapacity ? (
+                    <View style={{ gap: 6 }}>
+                      <Text style={styles.settingHint}>RAM الكلية: {formatBytes(habibiCapacity.totalRamBytes)}</Text>
+                      <Text style={styles.settingHint}>RAM المتاحة الآن: {formatBytes(habibiCapacity.availableRamBytes)}</Text>
+                      <Text style={styles.settingHint}>ذاكرة التطبيق المتاحة: {formatBytes(habibiCapacity.runtimeFreeHeapBytes)} من {formatBytes(habibiCapacity.runtimeMaxHeapBytes)}</Text>
+                      <Text style={styles.settingHint}>التخزين المتاح للتطبيق: {formatBytes(habibiCapacity.availableAppStorageBytes)}</Text>
+                      <Text style={styles.settingHint}>حالة ضغط الذاكرة: {habibiCapacity.lowMemory ? 'نعم، الجهاز تحت ضغط ذاكرة' : 'لا'}</Text>
+                      <Text style={styles.settingHint}>Android API: {habibiCapacity.androidApi}</Text>
+                    </View>
+                  ) : null}
                 </View>
                 <Text style={styles.settingsFootnote}>نختار أفضل صوت عربي محسّن متاح على هاتفك تلقائيًا. جودة الصوت تعتمد أيضًا على محرّك تحويل النص إلى كلام والأصوات المثبتة في الجهاز. عند تفعيل «يا EZRA» تعمل خدمة استماع أمامية بإشعار دائم ويمكنها إيقاظ التطبيق عند التقاط كلمة التنبيه. قد يقيّد النظام الخدمة أو يوقفها بسبب توفير البطارية؛ أوقف الميزة من هنا متى شئت.</Text>
               </View>
