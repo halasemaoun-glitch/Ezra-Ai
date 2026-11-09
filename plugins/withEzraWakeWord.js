@@ -7,6 +7,7 @@ const PERMISSIONS = [
   "android.permission.CAMERA",
   "android.permission.READ_CONTACTS",
   "android.permission.CALL_PHONE",
+  "android.permission.WAKE_LOCK",
   "android.permission.POST_NOTIFICATIONS"
 ];
 
