@@ -60,9 +60,7 @@ jobs:
           ABI_DIR="modules/ezra-habibi-tts/android/src/main/jniLibs/arm64-v8a"
           mkdir -p "$ABI_DIR"
           cp habibi-runtime/libs/libaudiocpp.so "$ABI_DIR/"
-          cp habibi-runtime/libs/libc++_shared.so "$ABI_DIR/"
           test -s "$ABI_DIR/libaudiocpp.so"
-          test -s "$ABI_DIR/libc++_shared.so"
 
       - name: Install JavaScript dependencies
         run: npm install --no-audit --no-fund
