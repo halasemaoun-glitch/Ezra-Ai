@@ -88,7 +88,7 @@ class EzraHabibiTtsModule : Module() {
       ensureNativeLoaded()
       val model = File(modelPath)
       val reference = File(referenceWavPath)
-      require(model.isFile && model.canRead()) { "Habibi GGUF model file is missing or unreadable." }
+      require(model.exists() && model.canRead()) { "Habibi model directory or file is missing or unreadable." }
       require(reference.isFile && reference.canRead()) { "Approved male reference WAV is missing or unreadable." }
       require(transcript.isNotBlank()) { "The exact transcript of the reference recording is required." }
       val error = nativeInitialize(model.absolutePath, reference.absolutePath, transcript, dialect, threads)
