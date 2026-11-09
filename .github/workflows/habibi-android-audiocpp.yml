@@ -97,12 +97,11 @@ jobs:
             -DANDROID_STL=c++_shared \
             -DCMAKE_BUILD_TYPE=Release
           cmake --build build-ezra-habibi-jni --parallel 4 --target ezra_habibi_jni
-          cp build-ezra-habibi-jni/libezra_habibi_jni.so "$ABI_DIR/"
 
       - name: Verify native library
         run: |
           test -s build-habibi-android/bin/libaudiocpp.so
-          test -s modules/ezra-habibi-tts/android/src/main/jniLibs/arm64-v8a/libezra_habibi_jni.so
+          test -s build-ezra-habibi-jni/libezra_habibi_jni.so
           file build-habibi-android/bin/libaudiocpp.so
           "$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" -h build-habibi-android/bin/libaudiocpp.so | grep -E "Class:|Machine:"
 
@@ -112,10 +111,9 @@ jobs:
           NDK="$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin"
           "$NDK/llvm-nm" -D --defined-only "$LIB" | grep -q 'audiocpp_registry_create'
           "$NDK/llvm-nm" -D --defined-only "$LIB" | grep -q 'audiocpp_session_run'
-          "$NDK/llvm-nm" -D --defined-only modules/ezra-habibi-tts/android/src/main/jniLibs/arm64-v8a/libezra_habibi_jni.so | grep -q 'Java_expo_modules_ezrahabibitts_EzraHabibiTtsModule_nativeInitialize'
+          "$NDK/llvm-nm" -D --defined-only build-ezra-habibi-jni/libezra_habibi_jni.so | grep -q 'Java_expo_modules_ezrahabibitts_EzraHabibiTtsModule_nativeInitialize'
           mkdir -p habibi-android-runtime/include habibi-android-runtime/libs
           cp "$LIB" habibi-android-runtime/libs/
-          cp modules/ezra-habibi-tts/android/src/main/jniLibs/arm64-v8a/libezra_habibi_jni.so habibi-android-runtime/libs/
           cp audio-cpp/include/audiocpp.h habibi-android-runtime/include/
           cp audio-cpp/LICENSE habibi-android-runtime/
           cp modules/ezra-habibi-tts/android/src/main/jniLibs/arm64-v8a/libc++_shared.so habibi-android-runtime/libs/
@@ -172,7 +170,6 @@ jobs:
           mkdir -p "$ABI_DIR"
           cp habibi-runtime/libs/*.so "$ABI_DIR/"
           test -s "$ABI_DIR/libaudiocpp.so"
-          test -s "$ABI_DIR/libezra_habibi_jni.so"
           test -s "$ABI_DIR/libc++_shared.so"
 
       - name: Install JavaScript dependencies
