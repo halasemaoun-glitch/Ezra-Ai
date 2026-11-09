@@ -942,12 +942,15 @@ export default function App() {
             </TouchableOpacity>
           </View>
           <Text style={styles.voiceMicHint}>{speakingMessageId ? 'اضغط للمقاطعة والتحدث' : isListening ? 'أنا أسمعك الآن…' : sending ? 'أجهّز لك الرد…' : 'اضغط وتحدث معي بحرية'}</Text>
-          {!!message.trim() && !isListening && (
-            <View style={styles.voiceTranscriptCard}>
+          {!!message.trim() && (
+            <View style={styles.voiceTranscriptCard} accessibilityLiveRegion="polite">
+              <Text style={styles.voiceTranscriptLabel}>{isListening ? 'ألتقط كلماتك الآن' : sending ? 'وصلني كلامك، أجهّز الرد' : 'النص الذي التقطته'}</Text>
               <Text style={styles.voiceTranscript} numberOfLines={3}>{message}</Text>
-              <TouchableOpacity style={styles.voiceSendButton} onPress={() => sendMessage(true)} disabled={sending}>
-                <Text style={styles.voiceSendLabel}>إرسال إلى إزرا  ↑</Text>
-              </TouchableOpacity>
+              {!isListening && !sending && (
+                <TouchableOpacity style={styles.voiceSendButton} onPress={() => sendMessage(true)} disabled={sending}>
+                  <Text style={styles.voiceSendLabel}>إرسال إلى إزرا  ↑</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
           <TouchableOpacity style={styles.voiceTextLink} onPress={() => setVoiceHome(false)}>
@@ -1434,6 +1437,7 @@ const styles = StyleSheet.create({
   voiceMicIcon: { color: '#F7D8ED', fontSize: 30, fontWeight: '600' },
   voiceMicHint: { color: '#8F7B91', fontSize: 11, letterSpacing: 0.25, marginTop: -8, marginBottom: 2 },
   voiceTranscriptCard: { width: '100%', maxWidth: 360, padding: 14, borderRadius: 18, backgroundColor: '#19131F', borderWidth: 1, borderColor: '#57364F', marginBottom: 12 },
+  voiceTranscriptLabel: { color: '#C58BB7', textAlign: 'right', fontSize: 10, marginBottom: 6, letterSpacing: 0.3 },
   voiceTranscript: { color: '#F5EAF3', textAlign: 'right', fontSize: 13, lineHeight: 21 },
   voiceSendButton: { alignSelf: 'flex-end', marginTop: 10, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 14, backgroundColor: '#A94F91' },
   voiceSendLabel: { color: '#FFF5FC', fontSize: 12, fontWeight: '700' },
