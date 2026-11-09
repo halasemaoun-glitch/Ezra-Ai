@@ -435,6 +435,7 @@ export default function App() {
       setHabibiEngineError(message);
       setHabibiEngineReady(false);
       await AsyncStorage.removeItem('ezra:habibiEnabled');
+      if (silent) habibiAutoInitStartedRef.current = false;
       if (!silent) Alert.alert('تعذّر تفعيل Habibi', message);
     } finally {
       setHabibiEngineBusy(false);
