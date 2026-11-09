@@ -74,7 +74,7 @@ class EzraWakeWordService : Service(), RecognitionListener {
     val notification = builder
       .setSmallIcon(android.R.drawable.ic_btn_speak_now)
       .setContentTitle("EZRA يستمع لكلمة التنبيه")
-      .setContentText("قل: يا EZRA · اضغط لإيقاف الخدمة من إعدادات الصوت")
+      .setContentText("قل: يا EZRA · اضغط للعودة إلى التطبيق")
       .setOngoing(true)
       .setCategory(Notification.CATEGORY_SERVICE)
       .apply { if (pendingIntent != null) setContentIntent(pendingIntent) }
@@ -182,7 +182,7 @@ class EzraWakeWordService : Service(), RecognitionListener {
     if (!wakeTriggered) scheduleRetry(350)
   }
   override fun onPartialResults(partialResults: android.os.Bundle?) {
-    inspectResults(partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION))
+    // Wait for final recognition so the command after the wake phrase is not cut off.
   }
   override fun onEvent(eventType: Int, params: android.os.Bundle?) {}
 }
