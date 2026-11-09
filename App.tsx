@@ -77,7 +77,7 @@ const EzraHabibiTts = Platform.OS === 'android'
   : null;
 
 const splitHabibiText = (text: string, maxLength = 48) => {
-  const words = text.trim().split(/\\s+/).filter(Boolean);
+  const words = text.trim().split(/\s+/).filter(Boolean);
   const chunks: string[] = [];
   let current = '';
   for (const word of words) {
