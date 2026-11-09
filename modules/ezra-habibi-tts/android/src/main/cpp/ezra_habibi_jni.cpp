@@ -210,7 +210,8 @@ Java_expo_modules_ezrahabibitts_EzraHabibiTtsModule_nativeSynthesize(
 
   audiocpp_request* request = audiocpp_request_create();
   if (!request) return env->NewStringUTF("Could not allocate a Habibi request.");
-  audiocpp_status status = audiocpp_request_set_text(request, text.c_str(), "ar");
+  audiocpp_status status = audiocpp_request_set_text(request, text.c_str(), nullptr);
+  if (status == AUDIOCPP_OK) status = audiocpp_request_set_text_language(request, "ar");
   if (status == AUDIOCPP_OK) status = audiocpp_request_set_voice_audio(
       request, g_reference.data(), g_reference.size(), g_reference_rate, 1);
   if (status == AUDIOCPP_OK) status = audiocpp_request_set_option(
