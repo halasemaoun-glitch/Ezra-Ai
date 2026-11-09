@@ -511,8 +511,11 @@ export default function App() {
     setIsListening(true);
   });
   useSpeechRecognitionEvent('volumechange', event => {
-    const normalized = Math.max(0, Math.min(1, (event.value + 2) / 12));
-    setVoiceLevel(normalized);
+    const normalized = event.value <= 0 ? 0 : Math.min(1, event.value / 10);
+    setVoiceLevel(previous => previous * 0.58 + normalized * 0.42);
+  });
+  useSpeechRecognitionEvent('soundend', () => {
+    setVoiceLevel(0);
   });
   useSpeechRecognitionEvent('end', () => {
     setIsListening(false);
@@ -534,11 +537,17 @@ export default function App() {
       setMessage(transcript);
     }
   });
-  useSpeechRecognitionEvent('error', () => {
+  useSpeechRecognitionEvent('error', event => {
     setIsListening(false);
     setVoiceLevel(0);
     voiceTranscriptRef.current = '';
-    if (autoListenRef.current && voiceHome && voiceRetryCountRef.current < 2) {
+    const blocked = event.error === 'not-allowed' || event.error === 'service-not-allowed';
+    if (blocked) {
+      autoListenRef.current = false;
+      setAutoListen(false);
+      setVoiceRetrying(false);
+      Alert.alert('إذن الميكروفون أو خدمة الصوت', 'تحقق من إذن الميكروفون ومن تفعيل خدمة التعرّف على الكلام في إعدادات الهاتف.');
+    } else if (autoListenRef.current && voiceHome && voiceRetryCountRef.current < 2) {
       voiceRetryCountRef.current += 1;
       setVoiceRetrying(true);
     } else if (voiceRetryCountRef.current >= 2) {
