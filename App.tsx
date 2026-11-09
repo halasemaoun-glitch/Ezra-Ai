@@ -161,6 +161,7 @@ export default function App() {
   const [sending, setSending] = useState(false);
   const [session, setSession] = useState<import('@supabase/supabase-js').Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [assistantConnection, setAssistantConnection] = useState<'unknown' | 'online' | 'offline'>('unknown');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
@@ -730,6 +731,7 @@ export default function App() {
         if (timeoutId) clearTimeout(timeoutId);
 
         if (aiRequest.kind === 'timeout') {
+          setAssistantConnection('offline');
           console.error('EZRA AI request timed out after 30 seconds.');
           Alert.alert(
             'انتهت مهلة انتظار الرد',
@@ -743,6 +745,7 @@ export default function App() {
 
         const { data: aiData, error: aiError } = aiRequest.result;
         if (aiError || typeof aiData?.reply !== 'string' || !aiData.reply.trim()) {
+          setAssistantConnection('offline');
           const context = (aiError as any)?.context;
           const details = [
             aiError?.message,
@@ -766,6 +769,7 @@ export default function App() {
           return;
         }
 
+        setAssistantConnection('online');
         const reply = aiData.reply.trim();
         // Start spoken playback as soon as the model reply arrives; saving history must not delay EZRA's voice.
         const playbackMessageId = `reply-${Date.now()}`;
@@ -797,6 +801,7 @@ export default function App() {
         }
       }
     } catch (error) {
+      setAssistantConnection('offline');
       console.error('Message sending failed:', error);
       Alert.alert('حدث خطأ', 'حاول إرسال رسالتك مرة أخرى.');
       voiceTurnInProgressRef.current = false;
@@ -1127,12 +1132,15 @@ export default function App() {
         <StatusBar style="light" />
         <View style={styles.voiceHome}>
           <View style={styles.voiceTopActions}>
-            <TouchableOpacity onPress={() => setSettingsVisible(true)} style={styles.voiceTopButton} accessibilityLabel="الإعدادات"><Text style={styles.voiceTopButtonText}>⚙</Text></TouchableOpacity>
+            <View style={styles.voiceIdentityMark} accessibilityLabel="هوية EZRA"><Text style={styles.voiceIdentityMarkText}>✦</Text></View>
             <View style={styles.voiceBrand}>
               <Text style={styles.voiceBrandName}>EZRA</Text>
-              <View style={styles.voiceBrandStatus}><View style={styles.voiceBrandDot} /><Text style={styles.voiceBrandStatusText}>PERSONAL AI</Text></View>
+              <View style={styles.voiceBrandStatus}>
+                <View style={[styles.voiceBrandDot, assistantConnection === 'online' ? styles.voiceBrandDotOnline : assistantConnection === 'offline' ? styles.voiceBrandDotOffline : null]} />
+                <Text style={styles.voiceBrandStatusText}>{assistantConnection === 'online' ? 'متصل' : assistantConnection === 'offline' ? 'غير متصل' : 'EZRA AI'}</Text>
+              </View>
             </View>
-            <TouchableOpacity onPress={openConversationHistory} style={styles.voiceTopButton} accessibilityLabel="سجل المحادثات"><Text style={styles.voiceTopButtonText}>◷</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => setSettingsVisible(true)} style={styles.voiceTopButton} accessibilityLabel="الإعدادات"><Text style={styles.voiceTopButtonText}>⚙</Text></TouchableOpacity>
           </View>
           <View style={styles.voiceOrbWrap}>
             <EzraOrb status={voiceStatus} voiceLevel={voiceLevel} />
@@ -1152,24 +1160,7 @@ export default function App() {
               <Text style={styles.voiceMicIcon}>{speakingMessageId ? 'Ⅱ' : isListening ? '■' : '⌁'}</Text>
             </TouchableOpacity>
           </View>
-          <Text style={styles.voiceMicHint} accessibilityLiveRegion="polite">{voiceRetrying ? (voiceRetryMessage || 'أعيد الاتصال بخدمة الاستماع…') : speakingMessageId ? 'اضغط للمقاطعة والتحدث' : isListening ? 'أنا أسمعك الآن…' : sending ? 'أجهّز لك الرد…' : 'اضغط وتحدث معي بحرية'}</Text>
-          {!!message.trim() && (
-            <View style={styles.voiceTranscriptCard} accessibilityLiveRegion="polite">
-              <Text style={styles.voiceTranscriptLabel}>{isListening ? 'ألتقط كلماتك الآن' : sending ? 'وصلني كلامك، أجهّز الرد' : 'النص الذي التقطته'}</Text>
-              <Text style={styles.voiceTranscript} numberOfLines={3}>{message}</Text>
-              {!isListening && !sending && (
-                <TouchableOpacity style={styles.voiceSendButton} onPress={() => sendMessage(true)} disabled={sending}>
-                  <Text style={styles.voiceSendLabel}>إرسال إلى إزرا  ↑</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
-          <TouchableOpacity style={styles.voiceTextLink} onPress={() => setVoiceHome(false)}>
-            <Text style={styles.voiceTextLinkLabel}>المحادثة النصية  ·  السجل والملفات</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.voiceMemoryLink} onPress={openMemoryCenter}>
-            <Text style={styles.voiceMemoryLabel}>الذاكرة</Text>
-          </TouchableOpacity>
+          {/* Keep the voice home focused on the orb and the single manual microphone control. */}
           <Modal visible={settingsVisible} transparent animationType="slide" onRequestClose={() => setSettingsVisible(false)}>
             <View style={styles.settingsBackdrop}>
               <View style={styles.settingsPanel}>
@@ -1591,7 +1582,7 @@ export default function App() {
 
 const styles = StyleSheet.create({
   orbSection: { alignItems: 'center', paddingTop: 0, paddingBottom: 10 },
-  orbStage: { width: 292, height: 292, alignItems: 'center', justifyContent: 'center' },
+  orbStage: { width: 344, height: 344, maxWidth: '100%', alignItems: 'center', justifyContent: 'center' },
   orbRipple: { position: 'absolute', width: 252, height: 252, borderRadius: 126, borderWidth: 1, borderColor: 'rgba(239,133,203,0.46)' },
   orbHalo: { position: 'absolute', width: 224, height: 224, borderRadius: 112, backgroundColor: '#8E3B78', shadowColor: '#E34BB5', shadowOpacity: 0.9, shadowRadius: 32, shadowOffset: { width: 0, height: 0 }, elevation: 18 },
   orbAura: { position: 'absolute', width: 278, height: 278, borderRadius: 139, borderWidth: 1, borderColor: 'rgba(191,92,164,0.22)' },
@@ -1623,10 +1614,14 @@ const styles = StyleSheet.create({
   orbCaption: { color: '#77717E', fontSize: 9, marginTop: 6 },
   voiceSafe: { flex: 1, backgroundColor: '#08070D' },
   voiceTopActions: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  voiceIdentityMark: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(117,29,73,0.18)', borderWidth: 1, borderColor: 'rgba(164,65,108,0.52)' },
+  voiceIdentityMarkText: { color: '#C66A91', fontSize: 17, fontWeight: '600' },
   voiceBrand: { alignItems: 'center', justifyContent: 'center', gap: 3 },
-  voiceBrandName: { color: '#E8C5DF', fontSize: 17, fontWeight: '700', letterSpacing: 5 },
+  voiceBrandName: { color: '#A83B68', fontSize: 20, fontWeight: '800', letterSpacing: 5 },
   voiceBrandStatus: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  voiceBrandDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#9EBD9D' },
+  voiceBrandDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#9C8B9A' },
+  voiceBrandDotOnline: { backgroundColor: '#79C99A' },
+  voiceBrandDotOffline: { backgroundColor: '#D66B78' },
   voiceBrandStatusText: { color: '#817583', fontSize: 7, letterSpacing: 1.7 },
   voiceTopButton: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14, backgroundColor: 'rgba(36,24,38,0.72)', borderWidth: 1, borderColor: '#493044' },
   voiceTopButtonText: { color: '#BFA4BA', fontSize: 11 },
