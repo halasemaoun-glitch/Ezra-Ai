@@ -894,7 +894,7 @@ export default function App() {
       }
     };
 
-    const timerMatch = normalized.match(/(?:اضبط\\s+)?(?:مؤقت|تايمر|timer)\\s*(?:لمدة)?\\s*(\\d+)\\s*(ثاني(?:ة|تين)?|دقيق(?:ة|تين)|ساع(?:ة|تين)|second(?:s)?|minute(?:s)?|hour(?:s)?)/i);
+    const timerMatch = normalized.match(/(?:اضبط\s+)?(?:مؤقت|تايمر|timer)\s*(?:لمدة)?\s*(\d+)\s*(ثاني(?:ة|تين)?|دقيق(?:ة|تين)|ساع(?:ة|تين)|second(?:s)?|minute(?:s)?|hour(?:s)?)/i);
     if (timerMatch) {
       const amount = Number(timerMatch[1]);
       const unit = timerMatch[2];
@@ -908,7 +908,7 @@ export default function App() {
       return true;
     }
 
-    const alarmMatch = normalized.match(/(?:اضبط\\s+)?(?:منبه|منبّه|alarm)\\s*(?:على|الساعة|at)?\\s*(\\d{1,2})(?::(\\d{1,2}))?\\s*(صباحا|مساء|am|pm)?/i);
+    const alarmMatch = normalized.match(/(?:اضبط\s+)?(?:منبه|منبّه|alarm)\s*(?:على|الساعة|at)?\s*(\d{1,2})(?::(\d{1,2}))?\s*(صباحا|مساء|am|pm)?/i);
     if (alarmMatch) {
       let hour = Number(alarmMatch[1]);
       const minute = Number(alarmMatch[2] || 0);
@@ -933,18 +933,18 @@ export default function App() {
       return true;
     }
 
-    const mediaMatch = normalized.match(/(?:شغل|ابدأ|اكمل|استأنف|وقف|اوقف|ايقاف|التالي|المقطع التالي|السابق|المقطع السابق|play|pause|resume|stop|next|previous).{0,18}(?:الموسيقى|الاغنية|الصوت|media|music|song)?/i);
-    if (mediaMatch) {
-      const phrase = mediaMatch[0];
-      const action = /التالي|next/i.test(phrase) ? 'next'
-        : /السابق|previous/i.test(phrase) ? 'previous'
-        : /وقف|اوقف|ايقاف|pause|stop/i.test(phrase) ? 'pause'
+    const mediaRequested = /(?:الموسيقى|الاغنية|المقطع|الوسائط|media|music|song)/i.test(normalized)
+      || /^(?:التالي|السابق|pause|resume|stop|play|next|previous)$/i.test(normalized);
+    if (mediaRequested) {
+      const action = /التالي|next/i.test(normalized) ? 'next'
+        : /السابق|previous/i.test(normalized) ? 'previous'
+        : /وقف|اوقف|ايقاف|pause|stop/i.test(normalized) ? 'pause'
         : 'play';
       await run(() => EzraWakeWord!.mediaControl(action), 'نفذت أمر التحكم بالوسائط. قد يعتمد التأثير على التطبيق الذي يشغّل الصوت.', 'لم يستجب مشغل الوسائط لأمر التحكم.');
       return true;
     }
 
-    const settingsMatch = normalized.match(/(?:افتح|اذهب الى|روح على|show|open)\\s*(?:اعدادات|الاعدادات|settings)?\\s*(الواي فاي|wifi|wi-fi|الانترنت|internet|البلوتوث|bluetooth|الصوت|الصوتيات|sound|volume|الشاشة|display|الموقع|location|البطارية|battery|التطبيقات|apps|الاشعارات|notifications|امكانية الوصول|accessibility)/i);
+    const settingsMatch = normalized.match(/(?:افتح|اذهب الى|روح على|show|open)\s*(?:اعدادات|الاعدادات|settings)?\s*(الواي فاي|wifi|wi-fi|الانترنت|internet|البلوتوث|bluetooth|الصوت|الصوتيات|sound|volume|الشاشة|display|الموقع|location|البطارية|battery|التطبيقات|apps|الاشعارات|notifications|امكانية الوصول|accessibility)/i);
     if (settingsMatch) {
       const value = settingsMatch[1];
       const target = /wifi|واي فاي/.test(value) ? 'wifi'
@@ -960,7 +960,7 @@ export default function App() {
       return true;
     }
 
-    const appMatch = normalized.match(/(?:افتح|شغل|ابدأ|open|launch)\\s+(?:تطبيق\\s+)?([\\p{L}0-9 ._-]{2,40})$/iu);
+    const appMatch = normalized.match(/(?:افتح|شغل|ابدأ|open|launch)\s+(?:تطبيق\s+)?([\p{L}0-9 ._-]{2,40})$/iu);
     if (appMatch) {
       const requestedApp = appMatch[1].trim();
       const aliases: Record<string, string> = {
@@ -977,7 +977,7 @@ export default function App() {
       }
     }
 
-    const smsMatch = normalized.match(/(?:ارسل|ابعث|اكتب)\\s+(?:رسالة|sms)\\s+(?:الى|ل)\\s+(.+?)\\s+(?:تقول|محتواها|نصها)\\s+(.+)$/i);
+    const smsMatch = normalized.match(/(?:ارسل|ابعث|اكتب)\s+(?:رسالة|sms)\s+(?:الى|ل)\s+(.+?)\s+(?:تقول|محتواها|نصها)\s+(.+)$/i);
     if (smsMatch) {
       const contactName = smsMatch[1].trim();
       const smsBody = smsMatch[2].trim();
