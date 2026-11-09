@@ -19,5 +19,5 @@ export type EzraSpeechLanguage = 'ar' | 'en';
 
 /** Detect the output language from the assistant's actual reply text. */
 export function detectEzraSpeechLanguage(text: string): EzraSpeechLanguage {
-  return /[\\u0600-\\u06FF]/.test(text) ? 'ar' : 'en';
+  return /[\u0600-\u06FF]/.test(text) ? 'ar' : 'en';
 }
