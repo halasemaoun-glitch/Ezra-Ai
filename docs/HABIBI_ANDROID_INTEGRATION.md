@@ -15,6 +15,7 @@ Evaluate an on-device Habibi-TTS speech engine for EZRA without changing or remo
 
 ## Current EZRA integration
 - EZRA is Expo SDK 54 / React Native 0.81.5.
+- Added an isolated local Expo module at `modules/ezra-habibi-tts` with the Android ONNX Runtime 1.22.0 dependency. Its current methods only initialize the runtime and inspect a model file; it does not synthesize speech yet.
 - Current TTS is `expo-speech`, called from `App.tsx`.
 - Text generation is served by the existing Supabase `smart-service` function using Groq. This must remain unchanged.
 - Existing speech recognition and Android wake-word modules must remain unchanged.
@@ -27,15 +28,17 @@ Storage capacity alone does not solve runtime memory, CPU/accelerator compatibil
 
 ## Safe implementation plan
 1. Keep this work isolated on `ezra/habibi-android-spike`; do not merge into the active branch yet.
-2. Use the community ONNX exports as the candidate artifact; inspect actual graph sizes, inputs/outputs, quantization, and license metadata before bundling.
-3. Build a minimal Kotlin/Android ONNX Runtime proof of concept for ALG first. The Python `phoonnx` F5 adapter is a useful reference for the three-graph ODE pipeline, but it cannot be imported into the React Native app as-is.
-4. Test Saudi using the SAU export only with its non-commercial/share-alike license respected. Treat Levantine as unsupported by the documented Habibi training data; do not label the untrained LEV token as supported. Test English as a separate F5-TTS base model, not as Habibi.
-5. Add a React Native native-module adapter only after the Android proof of concept succeeds. Route speech output through that adapter when available, otherwise fall back to `expo-speech`.
-6. Preserve all existing text, memory, recognition, wake-word and system-control flows. Do not alter Groq or Supabase secrets/functions for TTS.
-7. Test on the actual OPPO A76: cold start, repeated utterances, memory pressure, thermal throttling, interruption/cancel, app background/foreground, and offline behavior.
+2. Build the draft PR and confirm Expo autolinking + ONNX Runtime Android compile before attempting any model download.
+3. Use the community ONNX exports as the candidate artifact; inspect actual graph sizes, inputs/outputs, quantization, and license metadata before bundling.
+4. Build a minimal Kotlin/Android ONNX Runtime proof of concept for ALG first. The Python `phoonnx` F5 adapter is a useful reference for the three-graph ODE pipeline, but it cannot be imported into the React Native app as-is.
+5. Test Saudi using the SAU export only with its non-commercial/share-alike license respected. Treat Levantine as unsupported by the documented Habibi training data; do not label the untrained LEV token as supported. Test English as a separate F5-TTS base model, not as Habibi.
+6. Add a React Native native-module adapter only after the Android proof of concept succeeds. Route speech output through that adapter when available, otherwise fall back to `expo-speech`.
+7. Preserve all existing text, memory, recognition, wake-word and system-control flows. Do not alter Groq or Supabase secrets/functions for TTS.
+8. Test on the actual OPPO A76: cold start, repeated utterances, memory pressure, thermal throttling, interruption/cancel, app background/foreground, and offline behavior.
 
 ## Current status
 - Feasibility spike branch created.
 - ONNX exports for Habibi ALG, Unified and SAU were located in the OpenVoiceOS model collection; ALG and Unified each occupy about 1.45 GB. ONNX Runtime has an Android package, but no Android-native Habibi implementation has been verified.
-- No app runtime code changed yet.
-- Next technical gate: inspect/download the exact ONNX artifacts, implement a minimal Android inference spike, and benchmark it on the target phone before integrating it into EZRA.
+- The Android ONNX Runtime module scaffold is committed; no speech generation or UI wiring has been added.
+- Draft PR #4 is open for CI/build validation and has not been merged.
+- Next technical gate: confirm the native module builds, then prototype the complete three-graph F5 pipeline and benchmark it on the OPPO A76 before connecting it to EZRA.
