@@ -21,7 +21,6 @@ audiocpp_model* g_model = nullptr;
 audiocpp_session* g_session = nullptr;
 std::vector<float> g_reference;
 int g_reference_rate = 0;
-int g_reference_channels = 0;
 std::string g_reference_text;
 std::string g_dialect = "UNK";
 
@@ -177,8 +176,22 @@ Java_expo_modules_ezrahabibitts_EzraHabibiTtsModule_nativeInitialize(
     std::string error = lastError("Habibi model load", status); releaseEngine();
     return env->NewStringUTF(error.c_str());
   }
-  audiocpp_backend_config backend = {"cpu", 0, std::max(1, std::min(4, static_cast<int>(threads)))};
-  status = audiocpp_session_create(g_model, "tts", "offline", &backend, nullptr, &g_session);
+  if (!audiocpp_model_supports(g_model, "tts", "offline") ||
+      !audiocpp_model_supports_speaker_reference(g_model)) {
+    releaseEngine();
+    return env->NewStringUTF("The selected model does not expose offline reference-conditioned TTS.");
+  }
+  audiocpp_backend_config backend = {"cpu", 0, std::max(1, std::min(2, static_cast<int>(threads)))};
+  audiocpp_options* sessionOptions = audiocpp_options_create();
+  if (!sessionOptions) {
+    releaseEngine();
+    return env->NewStringUTF("Could not allocate Habibi session options.");
+  }
+  status = audiocpp_options_set(sessionOptions, "frame_budget", "960");
+  if (status == AUDIOCPP_OK) {
+    status = audiocpp_session_create(g_model, "tts", "offline", &backend, sessionOptions, &g_session);
+  }
+  audiocpp_options_free(sessionOptions);
   if (status != AUDIOCPP_OK) {
     std::string error = lastError("Habibi session creation", status); releaseEngine();
     return env->NewStringUTF(error.c_str());
