@@ -703,11 +703,15 @@ export default function App() {
       reply = 'حاولت أتحكم بالفلاش، لكن الهاتف لم يسمح لي. تأكدي أن الكاميرا أو الفلاش غير مستخدم من تطبيق آخر.';
     }
 
-    const { error } = await supabase.from('chat_messages').insert([
-      { owner_id: session!.user.id, conversation_id: conversationId!, role: 'user', content: commandText },
-      { owner_id: session!.user.id, conversation_id: conversationId!, role: 'assistant', content: reply },
-    ]);
-    if (error) console.warn('Could not save local device command to history:', error);
+    try {
+      const { error } = await supabase.from('chat_messages').insert([
+        { owner_id: session!.user.id, conversation_id: conversationId!, role: 'user', content: commandText },
+        { owner_id: session!.user.id, conversation_id: conversationId!, role: 'assistant', content: reply },
+      ]);
+      if (error) console.warn('Could not save local device command to history:', error);
+    } catch (error) {
+      console.warn('Could not save local device command to history:', error);
+    }
     setMessages(previous => [
       ...previous,
       { id: userId, sender: 'user', text: commandText },
