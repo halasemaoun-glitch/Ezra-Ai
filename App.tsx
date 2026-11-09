@@ -129,6 +129,7 @@ export default function App() {
   const [isListening, setIsListening] = useState(false);
   const [voiceLevel, setVoiceLevel] = useState(0);
   const [voiceRetrying, setVoiceRetrying] = useState(false);
+  const [voiceRetryMessage, setVoiceRetryMessage] = useState('');
   const [autoListen, setAutoListen] = useState(true);
   const autoListenRef = useRef(true);
   const voiceTranscriptRef = useRef('');
@@ -507,6 +508,7 @@ export default function App() {
 
   useSpeechRecognitionEvent('start', () => {
     setVoiceRetrying(false);
+    setVoiceRetryMessage('');
     setVoiceLevel(0);
     setIsListening(true);
   });
@@ -546,12 +548,29 @@ export default function App() {
       autoListenRef.current = false;
       setAutoListen(false);
       setVoiceRetrying(false);
+      setVoiceRetryMessage('');
       Alert.alert('إذن الميكروفون أو خدمة الصوت', 'تحقق من إذن الميكروفون ومن تفعيل خدمة التعرّف على الكلام في إعدادات الهاتف.');
+    } else if (event.error === 'no-speech') {
+      // Silence is normal on a voice-first screen; retry without treating it as a service failure.
+      voiceRetryCountRef.current = 0;
+      setVoiceRetryMessage('لم أسمع كلامًا، سأحاول مجددًا…');
+      setVoiceRetrying(true);
+    } else if (event.error === 'aborted') {
+      setVoiceRetrying(false);
+      setVoiceRetryMessage('');
+    } else if (event.error === 'audio-capture') {
+      autoListenRef.current = false;
+      setAutoListen(false);
+      setVoiceRetrying(false);
+      setVoiceRetryMessage('');
+      Alert.alert('الميكروفون غير متاح', 'لم يتمكن الهاتف من الوصول إلى الميكروفون. أغلق أي تطبيق يستخدمه ثم حاول مجددًا.');
     } else if (autoListenRef.current && voiceHome && voiceRetryCountRef.current < 2) {
       voiceRetryCountRef.current += 1;
+      setVoiceRetryMessage('انقطع الاتصال بخدمة الصوت، أعيد المحاولة…');
       setVoiceRetrying(true);
     } else if (voiceRetryCountRef.current >= 2) {
       setVoiceRetrying(false);
+      setVoiceRetryMessage('');
       autoListenRef.current = false;
       setAutoListen(false);
       Alert.alert('تعذّر استمرار الاستماع', 'توقّف التعرّف الصوتي بعد محاولتين. تحقق من اتصال الإنترنت وإذن الميكروفون، ثم اضغط الميكروفون للمحاولة مجددًا.');
@@ -942,7 +961,7 @@ export default function App() {
     const voiceStatus = isListening
       ? 'إزرا يستمع'
       : voiceRetrying
-        ? 'أعيد الاتصال بالصوت…'
+        ? (voiceRetryMessage || 'أعيد الاتصال بالصوت…')
       : speakingMessageId
         ? 'إزرا يتحدث'
         : (sending || chatLoading)
@@ -978,7 +997,7 @@ export default function App() {
               <Text style={styles.voiceMicIcon}>{speakingMessageId ? 'Ⅱ' : isListening ? '■' : '⌁'}</Text>
             </TouchableOpacity>
           </View>
-          <Text style={styles.voiceMicHint}>{voiceRetrying ? 'أعيد الاتصال بخدمة الاستماع…' : speakingMessageId ? 'اضغط للمقاطعة والتحدث' : isListening ? 'أنا أسمعك الآن…' : sending ? 'أجهّز لك الرد…' : 'اضغط وتحدث معي بحرية'}</Text>
+          <Text style={styles.voiceMicHint}>{voiceRetrying ? (voiceRetryMessage || 'أعيد الاتصال بخدمة الاستماع…') : speakingMessageId ? 'اضغط للمقاطعة والتحدث' : isListening ? 'أنا أسمعك الآن…' : sending ? 'أجهّز لك الرد…' : 'اضغط وتحدث معي بحرية'}</Text>
           {!!message.trim() && (
             <View style={styles.voiceTranscriptCard} accessibilityLiveRegion="polite">
               <Text style={styles.voiceTranscriptLabel}>{isListening ? 'ألتقط كلماتك الآن' : sending ? 'وصلني كلامك، أجهّز الرد' : 'النص الذي التقطته'}</Text>
@@ -1003,7 +1022,7 @@ export default function App() {
                   <Text style={styles.historyTitle}>إعدادات الصوت</Text>                  <TouchableOpacity style={styles.historyClose} onPress={() => setSettingsVisible(false)}><Text style={styles.historyCloseText}>×</Text></TouchableOpacity>
                 </View>                <View style={styles.settingRow}>
                   <View style={styles.settingCopy}><Text style={styles.settingTitle}>الاستماع التلقائي</Text><Text style={styles.settingHint}>يستمع بعد فتح الشاشة وبعد كل رد</Text></View>
-                  <Switch value={autoListen} onValueChange={value => { autoListenRef.current = value; setAutoListen(value); AsyncStorage.setItem('ezra:autoListen', String(value)).catch(() => {}); if (!value && isListening) ExpoSpeechRecognitionModule.stop(); }} trackColor={{ false: '#39323D', true: '#875477' }} thumbColor={autoListen ? '#F2C8E5' : '#AAA'} />
+                  <Switch value={autoListen} onValueChange={value => { autoListenRef.current = value; setAutoListen(value); if (!value) { setVoiceRetrying(false); setVoiceRetryMessage(''); } AsyncStorage.setItem('ezra:autoListen', String(value)).catch(() => {}); if (!value && isListening) ExpoSpeechRecognitionModule.stop(); }} trackColor={{ false: '#39323D', true: '#875477' }} thumbColor={autoListen ? '#F2C8E5' : '#AAA'} />
                 </View>
                 <View style={styles.settingRow}>
                   <View style={styles.settingCopy}><Text style={styles.settingTitle}>قراءة ردود EZRA تلقائيًا</Text><Text style={styles.settingHint}>ينطق الرد بعد وصوله</Text></View>
