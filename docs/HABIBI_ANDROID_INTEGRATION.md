@@ -1,45 +1,55 @@
-# Habibi-TTS Android feasibility spike
+# EZRA — Habibi-TTS Android integration
 
-## Goal
-Evaluate an on-device Habibi-TTS speech engine for EZRA without changing or removing Groq, Supabase memory, speech recognition, wake-word handling, or the existing Android TTS fallback.
+## Target architecture
 
-## Verified upstream facts
-- Upstream installation is a Python package: `pip install habibi-tts`.
-- Its declared runtime dependencies are `f5-tts>=1.1.5` and `torch>=2.4.0,<2.9.0`.
-- The upstream inference examples use the Python CLI / Gradio interface and PyTorch checkpoints; the repository itself does not provide a ready-to-use Android SDK, Kotlin library, or React Native module.
-- A separate community project, `OpenVoiceOS/phoonnx-f5tts`, publishes ONNX exports (transformer + preprocess + decode graphs) for Habibi checkpoints. Its `phoonnx` adapter is Python, so this is a model-export lead, not a ready Android integration.
-- Important correction: the Unified vocabulary contains a LEV token, but its documentation says LEV had no training data. Do not claim working Levantine synthesis from that token. The meaningful trained dialect list is UNK/MSA/SAU/UAE/ALG/IRQ/EGY/MAR.
-- Specialized ALG is available as an ONNX export; Specialized SAU is also available but has a non-commercial/share-alike license. Unified is likewise non-commercial/share-alike.
-- Upstream states Unified, SAU and UAE model weights are CC-BY-NC-SA-4.0; ALG and the other listed specialized weights are Apache-2.0. The code is MIT.
-- English is not among the Habibi dialect/model IDs. The separate F5-TTS base export is multilingual (including English) but has its own non-commercial license and would be a separate model path.
+- Text generation remains on the existing Supabase `smart-service` function using Groq.
+- Habibi speech synthesis is intended to run locally on Android, with no hosted TTS endpoint or recurring API quota.
+- The selected inference implementation is the community F5-TTS/Habibi port in `0xShug0/audio.cpp`, using its C ABI from an Android JNI bridge.
+- The current `expo-speech` implementation remains a temporary fallback until the native engine, model loading, voice reference, and real-device playback have all passed tests.
+- Do not change Supabase, Groq, conversation memory, speech recognition, wake-word, or Android system-control flows as part of this TTS work.
 
-## Current EZRA integration
-- EZRA is Expo SDK 54 / React Native 0.81.5.
-- Added an isolated local Expo module at `modules/ezra-habibi-tts` with the Android ONNX Runtime 1.22.0 dependency. It initializes the runtime, inspects a model file, and reports available/total RAM, Android runtime heap, low-memory state, and app-private free storage. It does not synthesize speech yet.
-- Current TTS is `expo-speech`, called from `App.tsx`.
-- Text generation is served by the existing Supabase `smart-service` function using Groq. This must remain unchanged.
-- Existing speech recognition and Android wake-word modules must remain unchanged.
-- Current TTS is the fallback until a replacement has passed real-device tests.
+## Verified upstream inference path
 
-## Device-only feasibility constraints
-The OPPO A76 (Android 13, 6 GB RAM) cannot run the upstream Python CLI simply by adding the Python package to the Expo app. The ONNX export makes an Android-native port technically more plausible because ONNX Runtime has an Android package, but it still requires implementing the full multi-graph F5 inference loop, text tokenization/phonemization, reference-audio preprocessing, audio output, and model file management in native Android code. The published ALG and Unified folders are each about 1.45 GB, including a 1.32 GB transformer graph plus preprocessing and decoder graphs. This is a large model for a 6 GB RAM phone; storage space is not a substitute for available runtime memory.
+The upstream `audio.cpp` F5-TTS community model documents end-to-end inference for Habibi, with the aliases `habibi` and `habibi_tts`. It exposes a C ABI suitable for embedding in a native application. The model request requires:
+- generated text;
+- a short reference voice recording;
+- the exact transcript of that reference recording;
+- a Habibi dialect token (for example `ALG`, `SAU`, `MSA`, or `UNK`).
 
-Storage capacity alone does not solve runtime memory, CPU/accelerator compatibility, model conversion, or latency. ONNX Runtime's Android docs require the ONNX graphs to fit device disk and memory and recommend device-specific benchmarking. No claim of unlimited/offline operation is made until a complete model is packaged and measured on the target phone. A hosted inference endpoint would introduce external compute and potentially quotas/costs, so it does not satisfy the requested phone-only/offline goal.
+The GGUF package combines the DiT transformer and Vocos vocoder, plus a vocabulary file. The upstream quickstart uses `reference_text`, `dialect`, and the reference audio. Reference clips longer than about 10.9 seconds are truncated by the model path.
 
-## Safe implementation plan
-1. Keep this work isolated on `ezra/habibi-android-spike`; do not merge into the active branch yet.
-2. Build the draft PR and confirm Expo autolinking + ONNX Runtime Android compile before attempting any model download.
-3. Use the community ONNX exports as the candidate artifact; inspect actual graph sizes, inputs/outputs, quantization, and license metadata before bundling.
-4. Build a minimal Kotlin/Android ONNX Runtime proof of concept for ALG first. The Python `phoonnx` F5 adapter is a useful reference for the three-graph ODE pipeline, but it cannot be imported into the React Native app as-is.
-5. Test Saudi using the SAU export only with its non-commercial/share-alike license respected. Treat Levantine as unsupported by the documented Habibi training data; do not label the untrained LEV token as supported. Test English as a separate F5-TTS base model, not as Habibi.
-6. Add a React Native native-module adapter only after the Android proof of concept succeeds. Route speech output through that adapter when available, otherwise fall back to `expo-speech`.
-7. Preserve all existing text, memory, recognition, wake-word and system-control flows. Do not alter Groq or Supabase secrets/functions for TTS.
-8. Test on the actual OPPO A76: cold start, repeated utterances, memory pressure, thermal throttling, interruption/cancel, app background/foreground, and offline behavior.
+Important language and licensing limits:
+- Habibi is an Arabic model; it is not the English speech engine. English must retain a separate fallback/engine path.
+- The `LEV` token exists in the dialect vocabulary, but the earlier model documentation states it had no training data. Do not advertise reliable Levantine synthesis until a real voice test confirms it.
+- The Unified weights are CC-BY-NC-SA-4.0. Check the exact license for each specialized checkpoint before redistribution or commercial use. The F5-TTS/Habibi weights are not a blanket commercial-use license.
+- F5-TTS is reference-conditioned voice cloning, not a built-in male voice selector. A reference recording and matching transcript are mandatory; do not silently use the user's previously uploaded recording as the primary voice because it was designated backup only.
 
-## Current status
-- Feasibility spike branch created.
-- ONNX exports for Habibi ALG, Unified and SAU were located in the OpenVoiceOS model collection; ALG and Unified each occupy about 1.45 GB. ONNX Runtime has an Android package, but no Android-native Habibi implementation has been verified.
-- The Android ONNX Runtime module scaffold is committed; no speech generation or UI wiring has been added.
-- Draft PR #4 is open and has not been merged. GitHub Actions run `42682886488` completed successfully: Expo configuration validation, Android project generation, and Kotlin native-module compilation all passed. No artifact was produced.
-- Added a device-capacity diagnostic so the app can measure actual free RAM and app-private storage before attempting any large model download or load. This does not itself verify capacity on the OPPO A76 until the app is installed and run there.
-- Next technical gate: add a small in-app diagnostics screen/test call, read the OPPO A76's real available RAM/storage, then decide whether the ~1.45 GB ALG model is safe to download and whether its transformer can fit the runtime memory budget. Do not download or load the model until that measurement is available. After that, prototype the complete three-graph F5 pipeline.
+## Android integration status
+
+- The local Expo module exists at `modules/ezra-habibi-tts`.
+- The module currently reports Android runtime/device capacity and inspects model files. It does not yet invoke F5/Habibi synthesis.
+- A new GitHub Actions workflow, `.github/workflows/habibi-android-audiocpp.yml`, attempts to cross-compile the upstream C ABI for Android `arm64-v8a` with the F5-TTS family selected. It is a build feasibility gate, not proof of a working Android JNI bridge.
+- The upstream project documents Linux, Windows, and macOS build procedures; Android is not listed as an officially packaged audio.cpp platform. Its ggml dependency does contain Android-specific CPU backend variants. The NDK cross-build therefore must pass before the app-side JNI integration is considered viable.
+- No model is downloaded or loaded automatically at this stage. The model package is large and peak inference memory has not been measured on the OPPO A76.
+
+## Device and voice constraints
+
+- Target device: OPPO A76, Android 13, 6 GB physical RAM.
+- Free storage previously reported by the user was about 26.4 GB; that is enough to investigate a model package but does not guarantee sufficient runtime RAM.
+- The Android app must check available RAM and storage before offering model installation or loading. Do not infer inference feasibility from disk space or virtual RAM.
+- The user's previous recording remains backup only. The app must request/select a separate suitable reference voice before enabling Habibi as the default spoken voice.
+- If the required voice reference or model is missing, keep the current device TTS fallback and explain the missing prerequisite instead of silently claiming Habibi is active.
+
+## Implementation sequence
+
+1. Cross-compile the upstream F5/Habibi C ABI for Android arm64 and inspect its actual shared-library dependencies.
+2. Add the JNI bridge and expose a small asynchronous Expo API for model readiness, synthesis-to-WAV, cancellation, and native errors.
+3. Add resumable model package download and integrity verification; store model files in app-private storage and never bundle a multi-gigabyte model in the APK.
+4. Add reference-audio selection/recording with a matching transcript, keeping the earlier user recording out of the primary voice path unless the user explicitly changes that decision.
+5. Route Arabic speech through Habibi only when the model and voice reference are ready; preserve `expo-speech` for English and safe fallback/error cases.
+6. Test cold load, repeated synthesis, audio interruption, background/foreground, offline operation, memory pressure, thermal throttling, and recovery on the actual OPPO A76.
+7. Only after those checks pass, mark Habibi as the default primary engine in the app UI. Keep all changes on `ezra/habibi-android-spike` until explicitly approved; do not merge to `main`.
+
+## Honest current state
+
+The upstream model has a real inference implementation and an embeddable C ABI. EZRA has not yet compiled that runtime for Android, created the JNI bridge, loaded the model on the phone, or generated audio through Habibi. The new CI workflow is the first Android-native build gate. The primary-engine preference is recorded in the app's voice profile, but runtime speech still uses the temporary `expo-speech` fallback until the integration sequence above is complete.
