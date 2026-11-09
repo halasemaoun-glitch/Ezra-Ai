@@ -8,6 +8,7 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
+  PermissionsAndroid,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -821,6 +822,13 @@ export default function App() {
         if (!permission.granted) {
           Alert.alert('إذن الميكروفون مطلوب', 'اسمح لـ EZRA باستخدام الميكروفون أولًا لتفعيل كلمة التنبيه.');
           return;
+        }
+        if (Number(Platform.Version) >= 33) {
+          const notificationPermission = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+          if (notificationPermission !== PermissionsAndroid.RESULTS.GRANTED) {
+            Alert.alert('إذن الإشعارات مطلوب', 'اسمح بإشعارات EZRA حتى يظهر الإشعار الدائم أثناء الاستماع في الخلفية.');
+            return;
+          }
         }
         const available = await EzraWakeWord.isAvailable();
         if (!available) {
