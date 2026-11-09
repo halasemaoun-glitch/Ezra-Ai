@@ -395,6 +395,9 @@ export default function App() {
       await FileSystem.copyAsync({ from: selected.uri, to: target });
       setHabibiReferencePath(target);
       await AsyncStorage.setItem('ezra:habibiReferencePath', target);
+      // A newly selected recording must never inherit the previous recording's transcript.
+      setHabibiReferenceTranscript('');
+      await AsyncStorage.removeItem('ezra:habibiReferenceTranscript');
       setHabibiEngineReady(false);
       await AsyncStorage.removeItem('ezra:habibiEnabled');
       await EzraHabibiTts?.shutdown().catch(() => {});
@@ -414,6 +417,23 @@ export default function App() {
     setHabibiEngineBusy(true);
     setHabibiEngineError('');
     try {
+      // Validate the complete local model package and selected reference before allocating native memory.
+      const modelSlash = habibiModelPath.lastIndexOf('/');
+      const vocabPath = modelSlash >= 0 ? `${habibiModelPath.slice(0, modelSlash)}/vocab.txt` : 'vocab.txt';
+      const [modelInfo, vocabInfo, referenceInfo] = await Promise.all([
+        FileSystem.getInfoAsync(habibiModelPath),
+        FileSystem.getInfoAsync(vocabPath),
+        FileSystem.getInfoAsync(habibiReferencePath),
+      ]);
+      if (!modelInfo.exists || !modelInfo.size || modelInfo.size < 1_000_000_000) {
+        throw new Error('ملف نموذج Habibi غير موجود أو غير مكتمل. أعد تنزيل النموذج.');
+      }
+      if (!vocabInfo.exists || !vocabInfo.size || vocabInfo.size < 1_000) {
+        throw new Error('ملف مفردات Habibi غير موجود أو غير مكتمل. أعد تنزيل النموذج.');
+      }
+      if (!referenceInfo.exists || !referenceInfo.size || referenceInfo.size <= 44) {
+        throw new Error('ملف العينة الصوتية غير موجود أو فارغ. اختر تسجيل WAV صالحًا من جديد.');
+      }
       const capacity = await EzraHabibiTts.getDeviceCapacity();
       if (capacity.lowMemory || capacity.availableRamBytes < 1_500_000_000) {
         throw new Error('الذاكرة المتاحة حاليًا منخفضة لتشغيل نموذج الصوت بأمان. أغلق التطبيقات الأخرى ثم أعد المحاولة.');
