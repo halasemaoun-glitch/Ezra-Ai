@@ -11,6 +11,8 @@ function OrbScene({ status }: OrbStatus) {
   const orbitA = useRef<THREE.Mesh>(null);
   const orbitB = useRef<THREE.Mesh>(null);
   const particles = useRef<THREE.Points>(null);
+  const pinkLight = useRef<THREE.PointLight>(null);
+  const violetLight = useRef<THREE.PointLight>(null);
   const listening = status.includes('يستمع');
   const thinking = status.includes('أفكر');
   const speaking = status.includes('يتحدث');
@@ -39,7 +41,6 @@ function OrbScene({ status }: OrbStatus) {
     }
     if (halo.current) {
       halo.current.rotation.y = -t * speed * 0.42;
-      halo.current.scale.setScalar(1.12 + Math.sin(t * 1.1) * (listening || speaking ? 0.055 : 0.025));
     }
     if (orbitA.current) orbitA.current.rotation.z = t * speed * 0.72;
     if (orbitB.current) orbitB.current.rotation.x = 0.9 + t * speed * 0.5;
@@ -47,13 +48,18 @@ function OrbScene({ status }: OrbStatus) {
       particles.current.rotation.y = -t * (speaking ? 0.12 : listening ? 0.075 : 0.035);
       particles.current.rotation.x = Math.sin(t * 0.18) * 0.08;
     }
+    const activity = speaking ? 1 : listening ? 0.78 : thinking ? 0.48 : 0.28;
+    const pulse = 0.88 + (Math.sin(t * (speaking ? 4.8 : listening ? 2.8 : 1.35)) + 1) * 0.09;
+    if (pinkLight.current) pinkLight.current.intensity = (speaking ? 4.1 : listening ? 3.5 : thinking ? 2.9 : 2.3) * pulse;
+    if (violetLight.current) violetLight.current.intensity = (thinking ? 3.5 : 2.5) * (0.92 + Math.sin(t * 0.8 + 1.4) * 0.08);
+    if (halo.current) halo.current.scale.setScalar(1.1 + activity * 0.035 + Math.sin(t * 1.15) * 0.018);
   });
 
   return (
     <>
       <ambientLight intensity={0.62} />
-      <pointLight position={[2.5, 2.2, 3]} color="#ff70c8" intensity={3.2} distance={8} />
-      <pointLight position={[-2.8, -1.2, 2]} color="#7928ff" intensity={2.7} distance={7} />
+      <pointLight ref={pinkLight} position={[2.5, 2.2, 3]} color="#ff70c8" intensity={3.2} distance={8} />
+      <pointLight ref={violetLight} position={[-2.8, -1.2, 2]} color="#7928ff" intensity={2.7} distance={7} />
       <pointLight position={[0, 0, -3]} color="#e51b83" intensity={2.2} distance={6} />
       <group>
         <mesh ref={halo}>
@@ -105,11 +111,11 @@ export default function EzraOrb3D({ status }: OrbStatus) {
       >
         <OrbScene status={status} />
       </Canvas>
-      <View pointerEvents="none" style={styles.emojiLayer}>
-        <Text style={[styles.emoji, styles.emojiTop, (listening || speaking) && styles.emojiActive]}>✦</Text>
-        <Text style={[styles.emoji, styles.emojiRight]}>💜</Text>
-        <Text style={[styles.emoji, styles.emojiLeft]}>✨</Text>
-        <Text style={[styles.emoji, styles.emojiBottom, thinking && styles.emojiActive]}>♡</Text>
+      <View pointerEvents="none" style={styles.ornamentLayer}>
+        <View style={[styles.orbitSpark, styles.sparkTop, (listening || speaking) && styles.sparkActive]} />
+        <View style={[styles.orbitSpark, styles.sparkRight]} />
+        <View style={[styles.orbitSpark, styles.sparkLeft, thinking && styles.sparkActive]} />
+        <View style={[styles.orbitSpark, styles.sparkBottom]} />
       </View>
     </View>
   );
@@ -118,11 +124,11 @@ export default function EzraOrb3D({ status }: OrbStatus) {
 const styles = StyleSheet.create({
   stage: { width: '100%', height: 292, alignItems: 'center', justifyContent: 'center' },
   canvas: { backgroundColor: 'transparent' },
-  emojiLayer: { ...StyleSheet.absoluteFillObject },
-  emoji: { position: 'absolute', color: '#f4b7e2', fontSize: 22, opacity: 0.66, textShadowColor: '#d51a93', textShadowRadius: 13 },
-  emojiTop: { top: 12, left: '48%' },
-  emojiRight: { right: '8%', top: '43%', fontSize: 17 },
-  emojiLeft: { left: '8%', top: '35%', fontSize: 19 },
-  emojiBottom: { bottom: 18, right: '24%', fontSize: 25 },
-  emojiActive: { opacity: 1, textShadowRadius: 20 },
+  ornamentLayer: { ...StyleSheet.absoluteFillObject },
+  orbitSpark: { position: 'absolute', width: 5, height: 5, borderRadius: 3, backgroundColor: '#E9A6D5', opacity: 0.58, shadowColor: '#E83CA8', shadowOpacity: 0.9, shadowRadius: 9, elevation: 4 },
+  sparkTop: { top: 18, left: '49%' },
+  sparkRight: { right: '9%', top: '43%', width: 3, height: 3, backgroundColor: '#B69AFF' },
+  sparkLeft: { left: '9%', top: '35%', width: 4, height: 4, backgroundColor: '#D86AB7' },
+  sparkBottom: { bottom: 22, right: '25%', width: 3, height: 3, backgroundColor: '#B69AFF' },
+  sparkActive: { opacity: 1, transform: [{ scale: 1.45 }] },
 });
