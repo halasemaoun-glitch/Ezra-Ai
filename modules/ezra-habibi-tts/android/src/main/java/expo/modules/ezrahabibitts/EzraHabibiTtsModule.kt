@@ -115,6 +115,7 @@ class EzraHabibiTtsModule : Module() {
       mediaPlayer?.release()
       val player = MediaPlayer()
       mediaPlayer = player
+      player.setOnPreparedListener { preparedPlayer -> preparedPlayer.start() }
       player.setOnCompletionListener {
         it.release()
         if (mediaPlayer === it) mediaPlayer = null
@@ -127,8 +128,7 @@ class EzraHabibiTtsModule : Module() {
         true
       }
       player.setDataSource(audioFile.absolutePath)
-      player.prepare()
-      player.start()
+      player.prepareAsync()
       mapOf("playing" to true)
     }.runOnQueue(Queues.MAIN)
 
