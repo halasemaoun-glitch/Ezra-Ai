@@ -1753,6 +1753,64 @@ export default function App() {
                     <Text style={styles.settingHint}>اللهجات المطلوبة: الشامية · الجزائرية · السعودية · الإنجليزية</Text>
                   </View>
                 </View>
+                <View style={[styles.settingRow, { flexDirection: 'column', alignItems: 'stretch', gap: 10 }]}>
+                  <View style={styles.settingCopy}>
+                    <Text style={styles.settingTitle}>محرك الصوت المحلي Habibi-TTS</Text>
+                    <Text style={styles.settingHint}>{habibiEngineReady ? 'جاهز · العربية عبر Habibi' : habibiModelPath ? 'النموذج محفوظ · يحتاج عينة صوت وتفعيل' : 'نزّل النموذج مرة واحدة (حوالي 1.45 GB) ليعمل محليًا دون API صوت مدفوع.'}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.memorySaveButton, { marginTop: 0, opacity: habibiModelDownloading ? 0.6 : 1 }]}
+                    onPress={downloadHabibiModel}
+                    disabled={habibiModelDownloading || Platform.OS !== 'android'}
+                  >
+                    <Text style={styles.memorySaveText}>{habibiModelDownloading ? \`تنزيل Habibi… \${Math.round(habibiDownloadProgress * 100)}%\` : habibiModelPath ? 'التحقق من النموذج / تنزيله' : 'تنزيل نموذج Habibi'}</Text>
+                  </TouchableOpacity>
+                  <View style={{ height: 5, borderRadius: 5, backgroundColor: '#302631', overflow: 'hidden' }}>
+                    <View style={{ height: 5, width: \`\${Math.round(habibiDownloadProgress * 100)}%\`, backgroundColor: '#C47AA8' }} />
+                  </View>
+                  <TouchableOpacity style={[styles.memorySaveButton, { marginTop: 0 }]} onPress={pickHabibiReference} disabled={Platform.OS !== 'android'}>
+                    <Text style={styles.memorySaveText}>{habibiReferencePath ? 'تغيير عينة الصوت الرجالي' : 'اختيار عينة صوت رجالي WAV'}</Text>
+                  </TouchableOpacity>
+                  <TextInput
+                    style={[styles.authInput, { minHeight: 48, textAlign: 'right', writingDirection: 'rtl' }]}
+                    value={habibiReferenceTranscript}
+                    onChangeText={value => setHabibiReferenceTranscript(value)}
+                    onBlur={() => AsyncStorage.setItem('ezra:habibiReferenceTranscript', habibiReferenceTranscript.trim()).catch(() => {})}
+                    placeholder="اكتب حرفيًا ما يقوله التسجيل الصوتي"
+                    placeholderTextColor="#777680"
+                    multiline
+                  />
+                  <Text style={styles.settingHint}>العينة يجب أن تكون صوت رجل واضحًا، WAV، من 5 إلى 10 ثوانٍ، مع نص مطابق تمامًا. تسجيلك السابق يبقى احتياطيًا ولن نستخدمه هنا.</Text>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {[
+                      { code: 'ALG', label: 'جزائري' },
+                      { code: 'SAU', label: 'سعودي' },
+                      { code: 'MSA', label: 'فصحى' },
+                      { code: 'UNK', label: 'تلقائي' },
+                    ].map(option => (
+                      <TouchableOpacity
+                        key={option.code}
+                        style={[styles.rateButton, { flex: 1, minWidth: 0 }, habibiDialect === option.code && styles.languageButtonActive]}
+                        onPress={() => {
+                          setHabibiDialect(option.code);
+                          AsyncStorage.setItem('ezra:habibiDialect', option.code).catch(() => {});
+                          setHabibiEngineReady(false);
+                        }}
+                      >
+                        <Text style={styles.rateButtonText}>{option.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <Text style={styles.settingHint}>اللهجة الشامية LEV موجودة كرمز، لكن بيانات تدريبها غير كافية؛ لذلك لم أفعّلها كخيار مضمون.</Text>
+                  <TouchableOpacity
+                    style={[styles.memorySaveButton, { marginTop: 0, opacity: habibiEngineBusy ? 0.6 : 1 }]}
+                    onPress={initializeHabibiEngine}
+                    disabled={habibiEngineBusy || Platform.OS !== 'android'}
+                  >
+                    <Text style={styles.memorySaveText}>{habibiEngineBusy ? 'جارٍ تحميل المحرك…' : habibiEngineReady ? 'إعادة تهيئة Habibi' : 'تفعيل Habibi كمحرك الصوت العربي'}</Text>
+                  </TouchableOpacity>
+                  {habibiEngineError ? <Text style={styles.authError}>{habibiEngineError}</Text> : null}
+                </View>
                 <View style={styles.settingRow}>
                   <View style={styles.settingCopy}><Text style={styles.settingTitle}>كلمة التنبيه «يا EZRA»</Text><Text style={styles.settingHint}>استماع بالخلفية وعند قفل الشاشة · قد يزيد استهلاك البطارية</Text></View>
                   <Switch value={backgroundWakeEnabled} onValueChange={toggleBackgroundWake} trackColor={{ false: '#39323D', true: '#875477' }} thumbColor={backgroundWakeEnabled ? '#F2C8E5' : '#AAA'} />
