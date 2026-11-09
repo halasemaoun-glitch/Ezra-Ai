@@ -189,6 +189,7 @@ export default function App() {
   const [habibiEngineBusy, setHabibiEngineBusy] = useState(false);
   const [habibiEngineError, setHabibiEngineError] = useState('');
   const activeHabibiSpeechRef = useRef<{ text: string; messageId: string } | null>(null);
+  const habibiAutoInitStartedRef = useRef(false);
   const [autoSpeak, setAutoSpeak] = useState(true);
   const [speechRate, setSpeechRate] = useState(DEFAULT_EZRA_VOICE.rate);
   const [speechPitch, setSpeechPitch] = useState(DEFAULT_EZRA_VOICE.pitch);
@@ -366,6 +367,8 @@ export default function App() {
       setHabibiReferencePath(target);
       await AsyncStorage.setItem('ezra:habibiReferencePath', target);
       setHabibiEngineReady(false);
+      await AsyncStorage.removeItem('ezra:habibiEnabled');
+      await EzraHabibiTts?.shutdown().catch(() => {});
       Alert.alert('تم اختيار العينة', 'أدخل النص المنطوق في التسجيل حرفيًا، ثم فعّل المحرك.');
     } catch (error) {
       console.warn('Could not select Habibi reference audio:', error);
@@ -373,7 +376,7 @@ export default function App() {
     }
   };
 
-  const initializeHabibiEngine = async () => {
+  const initializeHabibiEngine = async (silent = false) => {
     if (!EzraHabibiTts || habibiEngineBusy) return;
     if (!habibiModelPath || !habibiReferencePath || !habibiReferenceTranscript.trim()) {
       Alert.alert('إعداد الصوت غير مكتمل', 'نزّل النموذج، واختر عينة صوت رجالي WAV، واكتب النص المطابق للتسجيل.');
@@ -399,16 +402,34 @@ export default function App() {
       );
       setHabibiEngineReady(result.ready);
       if (!result.ready) throw new Error('لم يتمكن محرك Habibi من التهيئة.');
-      Alert.alert('Habibi جاهز', 'تم تحميل المحرك محليًا. ستُستخدم هذه العينة للصوت العربي، والإنجليزية ستبقى على محرك النظام.');
+      await AsyncStorage.setItem('ezra:habibiEnabled', 'true');
+      if (!silent) Alert.alert('Habibi جاهز', 'تم تحميل المحرك محليًا. ستُستخدم هذه العينة للصوت العربي، والإنجليزية ستبقى على محرك النظام.');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'تعذّر تشغيل محرك Habibi.';
       setHabibiEngineError(message);
       setHabibiEngineReady(false);
-      Alert.alert('تعذّر تفعيل Habibi', message);
+      await AsyncStorage.removeItem('ezra:habibiEnabled');
+      if (!silent) Alert.alert('تعذّر تفعيل Habibi', message);
     } finally {
       setHabibiEngineBusy(false);
     }
   };
+
+  useEffect(() => {
+    if (!voicePrefsLoaded || !session?.user.id || !habibiModelPath || !habibiReferencePath ||
+        !habibiReferenceTranscript.trim() || habibiAutoInitStartedRef.current) return;
+    let cancelled = false;
+    AsyncStorage.getItem('ezra:habibiEnabled').then(enabled => {
+      if (enabled === 'true' && !cancelled) {
+        habibiAutoInitStartedRef.current = true;
+        initializeHabibiEngine(true).catch(error => {
+          habibiAutoInitStartedRef.current = false;
+          console.warn('Automatic Habibi startup failed:', error);
+        });
+      }
+    }).catch(error => console.warn('Could not restore Habibi activation:', error));
+    return () => { cancelled = true; };
+  }, [voicePrefsLoaded, session?.user.id, habibiModelPath, habibiReferencePath, habibiReferenceTranscript, habibiDialect]);
 
   const visibleMemories = memories.filter(item => {
     const matchesSearch = item.content.toLocaleLowerCase().includes(memorySearch.trim().toLocaleLowerCase());
@@ -1839,7 +1860,7 @@ export default function App() {
                   <TextInput
                     style={[styles.authInput, { minHeight: 48, textAlign: 'right', writingDirection: 'rtl' }]}
                     value={habibiReferenceTranscript}
-                    onChangeText={value => setHabibiReferenceTranscript(value)}
+                    onChangeText={value => { setHabibiReferenceTranscript(value); setHabibiEngineReady(false); AsyncStorage.removeItem('ezra:habibiEnabled').catch(() => {}); }}
                     onBlur={() => AsyncStorage.setItem('ezra:habibiReferenceTranscript', habibiReferenceTranscript.trim()).catch(() => {})}
                     placeholder="اكتب حرفيًا ما يقوله التسجيل الصوتي"
                     placeholderTextColor="#777680"
@@ -1860,6 +1881,8 @@ export default function App() {
                           setHabibiDialect(option.code);
                           AsyncStorage.setItem('ezra:habibiDialect', option.code).catch(() => {});
                           setHabibiEngineReady(false);
+                          EzraHabibiTts?.shutdown().catch(() => {});
+                          AsyncStorage.removeItem('ezra:habibiEnabled').catch(() => {});
                         }}
                       >
                         <Text style={styles.rateButtonText}>{option.label}</Text>
