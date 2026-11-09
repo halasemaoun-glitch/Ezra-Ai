@@ -6,7 +6,6 @@ import android.os.Build
 import android.net.Uri
 import android.os.StatFs
 import android.media.MediaPlayer
-import android.net.Uri
 import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -21,11 +20,6 @@ class EzraHabibiTtsModule : Module() {
   }
   private var mediaPlayer: MediaPlayer? = null
   private var mediaPlayerFile: File? = null
-
-  private fun resolveFile(path: String): File {
-    val uri = Uri.parse(path)
-    return if (uri.scheme == "file") File(uri.path ?: path) else File(path)
-  }
 
   private fun ensureNativeLoaded() {
     if (nativeLoaded) return
