@@ -157,7 +157,7 @@ class EzraWakeWordModule : Module() {
       val action = when (target.lowercase(Locale.ROOT)) {
         "wifi" -> if (Build.VERSION.SDK_INT >= 29) Settings.Panel.ACTION_WIFI else Settings.ACTION_WIFI_SETTINGS
         "internet" -> if (Build.VERSION.SDK_INT >= 29) Settings.Panel.ACTION_INTERNET_CONNECTIVITY else Settings.ACTION_WIRELESS_SETTINGS
-        "bluetooth" -> if (Build.VERSION.SDK_INT >= 29) Settings.Panel.ACTION_BLUETOOTH else Settings.ACTION_BLUETOOTH_SETTINGS
+        "bluetooth" -> Settings.ACTION_BLUETOOTH_SETTINGS
         "volume", "sound" -> if (Build.VERSION.SDK_INT >= 29) Settings.Panel.ACTION_VOLUME else Settings.ACTION_SOUND_SETTINGS
         "display" -> Settings.ACTION_DISPLAY_SETTINGS
         "location" -> Settings.ACTION_LOCATION_SOURCE_SETTINGS
