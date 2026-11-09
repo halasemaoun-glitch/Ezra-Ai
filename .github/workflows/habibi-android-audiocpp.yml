@@ -126,3 +126,66 @@ jobs:
           path: habibi-android-runtime/
           if-no-files-found: error
           retention-days: 7
+
+  android-app-build:
+    needs: android-arm64-engine
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout EZRA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.4"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android NDK and CMake
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "ndk;27.2.12479018 cmake;3.22.1"
+
+      - name: Download Habibi Android runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: ezra-habibi-audiocpp-android-arm64
+          path: habibi-runtime
+
+      - name: Install native libraries into the Expo module
+        run: |
+          ABI_DIR="modules/ezra-habibi-tts/android/src/main/jniLibs/arm64-v8a"
+          mkdir -p "$ABI_DIR"
+          cp habibi-runtime/libs/*.so "$ABI_DIR/"
+          test -s "$ABI_DIR/libaudiocpp.so"
+          test -s "$ABI_DIR/libezra_habibi_jni.so"
+          test -s "$ABI_DIR/libc++_shared.so"
+
+      - name: Install JavaScript dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Generate Android project
+        run: npx expo prebuild --platform android --no-install --non-interactive
+
+      - name: Assemble Android debug APK with Habibi native runtime
+        working-directory: android
+        run: ./gradlew :app:assembleDebug --no-daemon
+
+      - name: Upload EZRA Android APK with Habibi runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: ezra-habibi-android-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
