@@ -27,6 +27,18 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import EzraOrb3D from './src/EzraOrb3D';
 import { supabase } from './src/lib/supabase';
+import { requireNativeModule } from 'expo-modules-core';
+
+type EzraWakeWordNative = {
+  start: () => Promise<boolean>;
+  stop: () => Promise<boolean>;
+  consumePendingCommand: () => Promise<string>;
+  isAvailable: () => Promise<boolean>;
+};
+
+const EzraWakeWord = Platform.OS === 'android'
+  ? requireNativeModule<EzraWakeWordNative>('EzraWakeWord')
+  : null;
 
 type Attachment = {
   uri: string;
@@ -134,6 +146,8 @@ export default function App() {
   const [voiceRetrying, setVoiceRetrying] = useState(false);
   const [voiceRetryMessage, setVoiceRetryMessage] = useState('');
   const [autoListen, setAutoListen] = useState(true);
+  const [backgroundWakeEnabled, setBackgroundWakeEnabled] = useState(false);
+  const [pendingWakeCommand, setPendingWakeCommand] = useState('');
   const autoListenRef = useRef(true);
   const voiceTranscriptRef = useRef('');
   const voiceTurnInProgressRef = useRef(false);
@@ -168,6 +182,11 @@ export default function App() {
       const active = nextState === 'active';
       appIsActiveRef.current = active;
       setAppIsActive(active);
+      if (active && Platform.OS === 'android' && EzraWakeWord) {
+        EzraWakeWord.consumePendingCommand()
+          .then(command => { if (command) setPendingWakeCommand(command); })
+          .catch(error => console.warn('Could not retrieve EZRA wake command:', error));
+      }
       if (!active) {
         // Discard partial speech so background transitions can never submit an unfinished phrase.
         const hadPartialTranscript = !!voiceTranscriptRef.current;
@@ -195,7 +214,7 @@ export default function App() {
   );
 
   useEffect(() => {
-    AsyncStorage.multiGet(['ezra:autoSpeak', 'ezra:speechRate', 'ezra:recognitionLanguage', 'ezra:autoListen', 'ezra:ttsVoice', 'ezra:speechPitch']).then(values => {
+    AsyncStorage.multiGet(['ezra:autoSpeak', 'ezra:speechRate', 'ezra:recognitionLanguage', 'ezra:autoListen', 'ezra:ttsVoice', 'ezra:speechPitch', 'ezra:backgroundWake']).then(values => {
       const savedAutoSpeak = values[0]?.[1];
       const savedRate = values[1]?.[1];
       const savedLanguage = values[2]?.[1];
@@ -203,6 +222,8 @@ export default function App() {
       const savedTtsVoice = values[4]?.[1];
       if (savedTtsVoice) setSelectedTtsVoice(savedTtsVoice);
       const savedPitch = Number(values[5]?.[1]);
+      const savedBackgroundWake = values[6]?.[1];
+      if (savedBackgroundWake !== null) setBackgroundWakeEnabled(savedBackgroundWake === 'true');
       if (Number.isFinite(savedPitch) && savedPitch >= 0.75 && savedPitch <= 1.1) setSpeechPitch(savedPitch);
       if (savedLanguage === 'ar' || savedLanguage === 'en') setRecognitionLanguage(savedLanguage);
       if (savedAutoListen !== null) {
@@ -789,6 +810,53 @@ export default function App() {
     setSending(false);
   };
 
+  const toggleBackgroundWake = async (enabled: boolean) => {
+    if (Platform.OS !== 'android' || !EzraWakeWord) {
+      Alert.alert('غير متاح', 'الاستماع بكلمة التنبيه متاح حاليًا على Android فقط.');
+      return;
+    }
+    if (enabled) {
+      try {
+        const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+        if (!permission.granted) {
+          Alert.alert('إذن الميكروفون مطلوب', 'اسمح لـ EZRA باستخدام الميكروفون أولًا لتفعيل كلمة التنبيه.');
+          return;
+        }
+        const available = await EzraWakeWord.isAvailable();
+        if (!available) {
+          Alert.alert('خدمة التعرف غير متاحة', 'فعّل خدمة التعرف على الكلام في هاتفك ثم حاول مجددًا.');
+          return;
+        }
+        await EzraWakeWord.start();
+        setBackgroundWakeEnabled(true);
+        await AsyncStorage.setItem('ezra:backgroundWake', 'true');
+        Alert.alert('تم تفعيل كلمة التنبيه', 'قل «يا EZRA» لإيقاظ المساعد. سيظهر إشعار دائم أثناء عمل الاستماع بالخلفية.');
+      } catch (error) {
+        console.error('Could not start EZRA background wake service:', error);
+        Alert.alert('تعذّر تشغيل الاستماع بالخلفية', 'تحقق من إذن الميكروفون ثم حاول مرة أخرى. يمكنك متابعة استخدام الشاشة الصوتية كالمعتاد.');
+      }
+      return;
+    }
+    try {
+      await EzraWakeWord.stop();
+    } catch (error) {
+      console.warn('Could not stop EZRA background wake service:', error);
+    }
+    setBackgroundWakeEnabled(false);
+    await AsyncStorage.setItem('ezra:backgroundWake', 'false');
+  };
+
+  useEffect(() => {
+    if (!pendingWakeCommand || !session || !conversationId || sending) return;
+    const command = pendingWakeCommand;
+    setMessage(command);
+    const timer = setTimeout(() => {
+      setPendingWakeCommand('');
+      sendMessage(true, command);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [pendingWakeCommand, session?.user.id, conversationId, sending]);
+
   const beginListening = async (interruptSpeech = false) => {
     if (!appIsActiveRef.current || !appIsActive || !autoListenRef.current || isListening || sending || (speakingMessageId && !interruptSpeech)) return;
     try {
@@ -1060,6 +1128,10 @@ export default function App() {
                 <View style={styles.historyHeader}>
                   <Text style={styles.historyTitle}>إعدادات الصوت</Text>                  <TouchableOpacity style={styles.historyClose} onPress={() => setSettingsVisible(false)}><Text style={styles.historyCloseText}>×</Text></TouchableOpacity>
                 </View>                <View style={styles.settingRow}>
+                  <View style={styles.settingCopy}><Text style={styles.settingTitle}>كلمة التنبيه «يا EZRA»</Text><Text style={styles.settingHint}>استمع في الخلفية وحتى عند قفل الشاشة</Text></View>
+                  <Switch value={backgroundWakeEnabled} onValueChange={toggleBackgroundWake} trackColor={{ false: '#39323D', true: '#875477' }} thumbColor={backgroundWakeEnabled ? '#F2C8E5' : '#AAA'} />
+                </View>
+                <View style={styles.settingRow}>
                   <View style={styles.settingCopy}><Text style={styles.settingTitle}>الاستماع التلقائي</Text><Text style={styles.settingHint}>يستمع بعد فتح الشاشة وبعد كل رد</Text></View>
                   <Switch value={autoListen} onValueChange={value => { autoListenRef.current = value; setAutoListen(value); if (!value) { setVoiceRetrying(false); setVoiceRetryMessage(''); } AsyncStorage.setItem('ezra:autoListen', String(value)).catch(() => {}); if (!value && isListening) ExpoSpeechRecognitionModule.stop(); }} trackColor={{ false: '#39323D', true: '#875477' }} thumbColor={autoListen ? '#F2C8E5' : '#AAA'} />
                 </View>
@@ -1117,7 +1189,7 @@ export default function App() {
                     <TouchableOpacity style={[styles.rateButton, recognitionLanguage === 'en' && styles.languageButtonActive]} onPress={() => { setRecognitionLanguage('en'); AsyncStorage.setItem('ezra:recognitionLanguage', 'en').catch(() => {}); }}><Text style={styles.rateButtonText}>EN</Text></TouchableOpacity>
                   </View>
                 </View>
-                <Text style={styles.settingsFootnote}>نختار أفضل صوت عربي محسّن متاح على هاتفك تلقائيًا. جودة الصوت تعتمد أيضًا على محرّك تحويل النص إلى كلام والأصوات المثبتة في الجهاز. ولخصوصيتك، يتوقف الميكروفون عند مغادرة EZRA أو قفل الشاشة، ويُستأنف فقط عند عودتك إذا كان الاستماع التلقائي مفعّلًا.</Text>
+                <Text style={styles.settingsFootnote}>نختار أفضل صوت عربي محسّن متاح على هاتفك تلقائيًا. جودة الصوت تعتمد أيضًا على محرّك تحويل النص إلى كلام والأصوات المثبتة في الجهاز. عند تفعيل «يا EZRA» تعمل خدمة استماع أمامية بإشعار دائم ويمكنها إيقاظ التطبيق عند التقاط كلمة التنبيه. قد يقيّد النظام الخدمة أو يوقفها بسبب توفير البطارية؛ أوقف الميزة من هنا متى شئت.</Text>
               </View>
             </View>
           </Modal>
