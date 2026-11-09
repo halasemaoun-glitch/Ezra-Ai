@@ -170,8 +170,9 @@ export default function App() {
       setAppIsActive(active);
       if (!active) {
         // Discard partial speech so background transitions can never submit an unfinished phrase.
+        const hadPartialTranscript = !!voiceTranscriptRef.current;
         voiceTranscriptRef.current = '';
-        setMessage('');
+        if (hadPartialTranscript) setMessage('');
         setVoiceRetrying(false);
         setVoiceRetryMessage('');
         // Keep microphone capture foreground-only; resume automatically when the app returns.
@@ -1116,7 +1117,7 @@ export default function App() {
                     <TouchableOpacity style={[styles.rateButton, recognitionLanguage === 'en' && styles.languageButtonActive]} onPress={() => { setRecognitionLanguage('en'); AsyncStorage.setItem('ezra:recognitionLanguage', 'en').catch(() => {}); }}><Text style={styles.rateButtonText}>EN</Text></TouchableOpacity>
                   </View>
                 </View>
-                <Text style={styles.settingsFootnote}>نختار أفضل صوت عربي محسّن متاح على هاتفك تلقائيًا. جودة الصوت تعتمد أيضًا على محرّك تحويل النص إلى كلام والأصوات المثبتة في الجهاز.</Text>
+                <Text style={styles.settingsFootnote}>نختار أفضل صوت عربي محسّن متاح على هاتفك تلقائيًا. جودة الصوت تعتمد أيضًا على محرّك تحويل النص إلى كلام والأصوات المثبتة في الجهاز. ولخصوصيتك، يتوقف الميكروفون عند مغادرة EZRA أو قفل الشاشة، ويُستأنف فقط عند عودتك إذا كان الاستماع التلقائي مفعّلًا.</Text>
               </View>
             </View>
           </Modal>
