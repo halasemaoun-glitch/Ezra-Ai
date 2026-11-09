@@ -120,6 +120,7 @@ export default function App() {
   const [message, setMessage] = useState('');
   const [voiceHome, setVoiceHome] = useState(true);
   const [appIsActive, setAppIsActive] = useState(AppState.currentState === 'active');
+  const appIsActiveRef = useRef(AppState.currentState === 'active');
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [autoSpeak, setAutoSpeak] = useState(true);
   const [speechRate, setSpeechRate] = useState(0.92);
@@ -165,8 +166,14 @@ export default function App() {
   useEffect(() => {
     const subscription = AppState.addEventListener('change', nextState => {
       const active = nextState === 'active';
+      appIsActiveRef.current = active;
       setAppIsActive(active);
       if (!active) {
+        // Discard partial speech so background transitions can never submit an unfinished phrase.
+        voiceTranscriptRef.current = '';
+        setMessage('');
+        setVoiceRetrying(false);
+        setVoiceRetryMessage('');
         // Keep microphone capture foreground-only; resume automatically when the app returns.
         ExpoSpeechRecognitionModule.stop();
         Speech.stop();
@@ -541,7 +548,8 @@ export default function App() {
     setIsListening(false);
     setVoiceLevel(0);
     const spokenText = voiceTranscriptRef.current.trim();
-    if (autoListenRef.current && voiceHome && spokenText) {
+    voiceTranscriptRef.current = '';
+    if (appIsActiveRef.current && autoListenRef.current && voiceHome && spokenText) {
       voiceTurnInProgressRef.current = true;
       voiceTranscriptRef.current = '';
       setMessage(spokenText);
@@ -549,6 +557,7 @@ export default function App() {
     }
   });
   useSpeechRecognitionEvent('result', event => {
+    if (!appIsActiveRef.current) return;
     const latestResult = event.results[event.results.length - 1];
     const transcript = latestResult?.transcript;
     if (transcript) {
@@ -780,9 +789,10 @@ export default function App() {
   };
 
   const beginListening = async (interruptSpeech = false) => {
-    if (!appIsActive || !autoListenRef.current || isListening || sending || (speakingMessageId && !interruptSpeech)) return;
+    if (!appIsActiveRef.current || !appIsActive || !autoListenRef.current || isListening || sending || (speakingMessageId && !interruptSpeech)) return;
     try {
       const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (!appIsActiveRef.current) return;
       if (!permission.granted) {
         autoListenRef.current = false;
         setAutoListen(false);
