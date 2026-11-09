@@ -1,0 +1,81 @@
+name: Habibi Android native engine cross-compile
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - ezra/full-system-control
+    paths:
+      - "modules/ezra-habibi-tts/**"
+      - ".github/workflows/habibi-android-audiocpp.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  android-arm64-engine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout EZRA
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android NDK and CMake
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "ndk;27.2.12479018 cmake;3.31.6"
+
+      - name: Checkout audio.cpp with submodules
+        run: |
+          git clone --depth 1 --branch v0.9.4 --recurse-submodules https://github.com/0xShug0/audio.cpp.git audio-cpp
+
+      - name: Configure Habibi runtime for Android arm64
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
+        run: |
+          cmake -S audio-cpp -B build-habibi-android \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-26 \
+            -DANDROID_STL=c++_shared \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DAUDIOCPP_VERSION=0.9.4 \
+            -DAUDIOCPP_MODEL_SET=custom \
+            -DAUDIOCPP_MODELS=f5_tts \
+            -DAUDIOCPP_BUILD_C_API=ON \
+            -DAUDIOCPP_DEPLOYMENT_BUILD=ON \
+            -DENGINE_ENABLE_OPENMP=OFF \
+            -DGGML_OPENMP=OFF \
+            -DENGINE_ENABLE_NATIVE_CPU=OFF \
+            -DENGINE_ENABLE_LLAMAFILE=OFF \
+            -DENGINE_ENABLE_CUDA=OFF \
+            -DENGINE_ENABLE_HIP=OFF \
+            -DENGINE_ENABLE_VULKAN=OFF \
+            -DENGINE_ENABLE_WEBGPU=OFF \
+            -DENGINE_ENABLE_METAL=OFF \
+            -DENGINE_BUILD_TESTS=OFF \
+            -DENGINE_BUILD_EXTENDED_TESTS=OFF \
+            -DENGINE_BUILD_MODEL_TESTS=OFF
+
+      - name: Compile Habibi C ABI for Android arm64
+        run: cmake --build build-habibi-android --parallel 4 --target audiocpp
+
+      - name: Verify native library
+        run: |
+          test -s build-habibi-android/bin/libaudiocpp.so
+          file build-habibi-android/bin/libaudiocpp.so
+          llvm-readelf -h build-habibi-android/bin/libaudiocpp.so | grep -E "Class:|Machine:"
+
+      - name: Upload Android native runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: ezra-habibi-audiocpp-android-arm64
+          path: build-habibi-android/bin/libaudiocpp.so
+          if-no-files-found: error
+          retention-days: 7
