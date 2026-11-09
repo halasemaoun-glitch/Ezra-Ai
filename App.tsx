@@ -183,11 +183,6 @@ export default function App() {
       const active = nextState === 'active';
       appIsActiveRef.current = active;
       setAppIsActive(active);
-      if (active && Platform.OS === 'android' && EzraWakeWord) {
-        EzraWakeWord.consumePendingCommand()
-          .then(command => { if (command) setPendingWakeCommand(command); })
-          .catch(error => console.warn('Could not retrieve EZRA wake command:', error));
-      }
       if (!active) {
         // Discard partial speech so background transitions can never submit an unfinished phrase.
         const hadPartialTranscript = !!voiceTranscriptRef.current;
@@ -638,18 +633,18 @@ export default function App() {
   }, [voiceHome, isListening, speakingMessageId]);
 
   useEffect(() => {
-    if (!appIsActive || !session || !voiceHome || !autoListen || isListening || sending || speakingMessageId || chatLoading) return;
+    if (!appIsActive || !session || !voiceHome || !autoListen || backgroundWakeEnabled || isListening || sending || speakingMessageId || chatLoading) return;
     const timer = setTimeout(() => beginListening(), voiceRetrying ? 900 : 500);
     return () => clearTimeout(timer);
-  }, [appIsActive, session?.user.id, voiceHome, autoListen, recognitionLanguage, isListening, sending, speakingMessageId, chatLoading, voiceRetrying]);
+  }, [appIsActive, session?.user.id, voiceHome, autoListen, backgroundWakeEnabled, recognitionLanguage, isListening, sending, speakingMessageId, chatLoading, voiceRetrying]);
 
   useEffect(() => {
-    if (!appIsActive || !voiceHome || !autoListen || !voiceTurnInProgressRef.current || !voiceRequestStartedRef.current || sending || speakingMessageId || isListening) return;
+    if (!appIsActive || !voiceHome || !autoListen || backgroundWakeEnabled || !voiceTurnInProgressRef.current || !voiceRequestStartedRef.current || sending || speakingMessageId || isListening) return;
     voiceTurnInProgressRef.current = false;
     voiceRequestStartedRef.current = false;
     const timer = setTimeout(() => beginListening(), 700);
     return () => clearTimeout(timer);
-  }, [appIsActive, sending, speakingMessageId, isListening, voiceHome, autoListen]);
+  }, [appIsActive, sending, speakingMessageId, isListening, voiceHome, autoListen, backgroundWakeEnabled]);
 
   const sendMessage = async (voiceReply = false, voiceText?: string) => {
     const text = (voiceText ?? message).trim();
@@ -865,6 +860,43 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [pendingWakeCommand, session?.user.id, conversationId, sending]);
 
+  useEffect(() => {
+    if (!backgroundWakeEnabled || !appIsActive || Platform.OS !== 'android' || !EzraWakeWord) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const pollForWakeCommand = async () => {
+      try {
+        const command = await EzraWakeWord.consumePendingCommand();
+        if (cancelled) return;
+        if (command === '__EZRA_WAKE_ONLY__') {
+          const greeting = 'نعم، أنا هنا. كيف أساعدك؟';
+          setMessage(greeting);
+          Speech.speak(greeting, {
+            language: 'ar',
+            rate: speechRate,
+            pitch: speechPitch,
+            onDone: () => { EzraWakeWord.start().catch(error => console.warn('Could not resume wake service:', error)); },
+            onStopped: () => { EzraWakeWord.start().catch(error => console.warn('Could not resume wake service:', error)); },
+            onError: () => { EzraWakeWord.start().catch(error => console.warn('Could not resume wake service:', error)); },
+          });
+          return;
+        }
+        if (command) {
+          setPendingWakeCommand(command);
+          await EzraWakeWord.start();
+        }
+      } catch (error) {
+        console.warn('Could not poll EZRA wake service:', error);
+      }
+      if (!cancelled) timer = setTimeout(pollForWakeCommand, 800);
+    };
+    pollForWakeCommand();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [backgroundWakeEnabled, appIsActive, speechRate, speechPitch]);
+
   const beginListening = async (interruptSpeech = false) => {
     if (!appIsActiveRef.current || !appIsActive || !autoListenRef.current || isListening || sending || (speakingMessageId && !interruptSpeech)) return;
     try {
@@ -890,6 +922,11 @@ export default function App() {
   };
 
   const startListening = async () => {
+    if (backgroundWakeEnabled && EzraWakeWord) {
+      await EzraWakeWord.stop().catch(error => console.warn('Could not pause wake service:', error));
+      setBackgroundWakeEnabled(false);
+      await AsyncStorage.setItem('ezra:backgroundWake', 'false');
+    }
     if (speakingMessageId) {
       Speech.stop();
       setSpeakingMessageId(null);
