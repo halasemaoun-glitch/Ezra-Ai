@@ -1998,7 +1998,7 @@ export default function App() {
                   <Text style={styles.settingHint}>اللهجة الشامية LEV موجودة كرمز، لكن بيانات تدريبها غير كافية؛ لذلك لم أفعّلها كخيار مضمون.</Text>
                   <TouchableOpacity
                     style={[styles.memorySaveButton, { marginTop: 0, opacity: habibiEngineBusy ? 0.6 : 1 }]}
-                    onPress={initializeHabibiEngine}
+                    onPress={() => { void initializeHabibiEngine(); }}
                     disabled={habibiEngineBusy || Platform.OS !== 'android'}
                   >
                     <Text style={styles.memorySaveText}>{habibiEngineBusy ? 'جارٍ تحميل المحرك…' : habibiEngineReady ? 'إعادة تهيئة Habibi' : 'تفعيل Habibi كمحرك الصوت العربي'}</Text>
