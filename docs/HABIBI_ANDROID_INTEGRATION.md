@@ -20,7 +20,7 @@ The GGUF package combines the DiT transformer and Vocos vocoder, plus a vocabula
 
 Important language and licensing limits:
 - Habibi is an Arabic model; it is not the English speech engine. English must retain a separate fallback/engine path.
-- The `LEV` token exists in the dialect vocabulary, but the earlier model documentation states it had no training data. Do not advertise reliable Levantine synthesis until a real voice test confirms it.
+- The Unified dialect vocabulary exposes `LEV`; however, dialect quality must be confirmed with real-device samples. Do not advertise reliable Levantine synthesis until a voice test confirms it.
 - The Unified weights are CC-BY-NC-SA-4.0. Check the exact license for each specialized checkpoint before redistribution or commercial use. The F5-TTS/Habibi weights are not a blanket commercial-use license.
 - F5-TTS is reference-conditioned voice cloning, not a built-in male voice selector. A reference recording and matching transcript are mandatory; do not silently use the user's previously uploaded recording as the primary voice because it was designated backup only.
 
@@ -28,10 +28,10 @@ Important language and licensing limits:
 
 - The local Expo module at `modules/ezra-habibi-tts` now exposes native initialization, synthesis-to-WAV, Android MediaPlayer playback, stop, and playback events.
 - The JNI bridge calls the pinned audio.cpp v0.9.4 C ABI. It reads a short PCM WAV reference, supplies the exact transcript and dialect token, runs offline CPU inference, and writes the generated PCM as WAV.
-- The app now has controls to download the Unified GGUF package and vocabulary from the upstream Hugging Face repository, select an approved WAV reference, enter its exact transcript, choose ALG/SAU/MSA/UNK, and activate Habibi. Once activated, it restores the local engine on later app starts.
+- The app now has controls to download the Unified GGUF package and vocabulary from the upstream Hugging Face repository, select an approved WAV reference, enter its exact transcript, choose LEV/ALG/SAU/MSA/UNK, and activate Habibi. Selecting a new reference clears any previous transcript, and initialization checks that the model, vocabulary, and reference files exist before allocating native memory. Once activated, it restores the local engine on later app starts.
 - Arabic replies use Habibi when initialization succeeds. English and any safe fallback remain on Android system TTS. Existing Groq, Supabase, memory, recognition, wake-word, and Android control flows are unchanged.
-- The Android workflow cross-compiles the upstream C ABI and EZRA JNI bridge for arm64, verifies exported symbols, packages the runtime, and assembles a debug APK. The first upstream C ABI-only Android arm64 build passed. The combined JNI + APK workflow is currently the active validation gate; do not treat it as passed until its run and APK artifact are successful.
-- CPU inference is deliberately constrained to two threads and a 960-frame budget. The reference clip is limited to approximately 5 seconds on this CPU path; longer samples are truncated by the model.
+- The Android workflow cross-compiles the upstream C ABI and EZRA JNI bridge for arm64, verifies exported symbols, packages the runtime, and assembles a debug APK. A combined JNI + APK workflow has passed CI and produced a debug artifact; this validates compilation and packaging only, not inference or playback on the target phone.
+- CPU inference is deliberately constrained to one thread and a 256-frame budget to reduce peak memory pressure on mobile devices. The reference clip is limited to approximately 5 seconds on this CPU path; longer samples are truncated by the model.
 - No model is bundled in the APK. The user downloads it to app-private storage on first setup. Peak runtime memory and sustained performance still require testing on the OPPO A76.
 
 ## Device and voice constraints
@@ -54,4 +54,4 @@ Important language and licensing limits:
 
 ## Honest current state
 
-The upstream audio.cpp C ABI has already compiled successfully for Android arm64. EZRA now contains a JNI bridge, a local Expo API for initialization and WAV synthesis/playback, model download/setup UI, and Arabic speech routing that selects Habibi only after the user has supplied a suitable male reference WAV and matching transcript and native initialization succeeds. The combined JNI + APK build is running as the next CI gate. No successful Habibi inference or playback has yet been verified on the OPPO A76; that requires a built APK, the separately approved male reference clip, and an on-device test. Until then, the app keeps its Android system TTS fallback. Do not merge to `main`.
+The upstream audio.cpp C ABI has already compiled successfully for Android arm64. EZRA now contains a JNI bridge, a local Expo API for initialization and WAV synthesis/playback, model download/setup UI, and Arabic speech routing that selects Habibi only after the user has supplied a suitable male reference WAV and matching transcript and native initialization succeeds. The combined JNI + APK build passed CI; real-device inference and playback remain pending. No successful Habibi inference or playback has yet been verified on the OPPO A76; that requires a built APK, the separately approved male reference clip, and an on-device test. Until then, the app keeps its Android system TTS fallback. Do not merge to `main`.
