@@ -941,6 +941,7 @@ export default function App() {
               <Text style={styles.voiceMicIcon}>{speakingMessageId ? 'Ⅱ' : isListening ? '■' : '⌁'}</Text>
             </TouchableOpacity>
           </View>
+          <Text style={styles.voiceMicHint}>{speakingMessageId ? 'اضغط للمقاطعة والتحدث' : isListening ? 'أنا أسمعك الآن…' : sending ? 'أجهّز لك الرد…' : 'اضغط وتحدث معي بحرية'}</Text>
           {!!message.trim() && !isListening && (
             <View style={styles.voiceTranscriptCard}>
               <Text style={styles.voiceTranscript} numberOfLines={3}>{message}</Text>
@@ -1431,6 +1432,7 @@ const styles = StyleSheet.create({
   voiceMicActive: { backgroundColor: '#7A285F', borderColor: '#F0B5DE' },
   voiceMicSpeaking: { backgroundColor: '#4A285D', borderColor: '#C5A5F5' },
   voiceMicIcon: { color: '#F7D8ED', fontSize: 30, fontWeight: '600' },
+  voiceMicHint: { color: '#8F7B91', fontSize: 11, letterSpacing: 0.25, marginTop: -8, marginBottom: 2 },
   voiceTranscriptCard: { width: '100%', maxWidth: 360, padding: 14, borderRadius: 18, backgroundColor: '#19131F', borderWidth: 1, borderColor: '#57364F', marginBottom: 12 },
   voiceTranscript: { color: '#F5EAF3', textAlign: 'right', fontSize: 13, lineHeight: 21 },
   voiceSendButton: { alignSelf: 'flex-end', marginTop: 10, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 14, backgroundColor: '#A94F91' },
