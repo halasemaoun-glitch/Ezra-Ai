@@ -145,7 +145,7 @@ class EzraHabibiTtsModule : Module() {
       }
       mediaPlayer = null
       mapOf("stopped" to true)
-    }.runOnQueue(.main)
+    }.runOnQueue(Queues.MAIN)
 
     AsyncFunction("shutdown") {
       mediaPlayer?.release()
