@@ -36,6 +36,8 @@ type EzraWakeWordNative = {
   consumePendingCommand: () => Promise<string>;
   isAvailable: () => Promise<boolean>;
   setTorch: (enabled: boolean) => Promise<boolean>;
+  findContactPhone: (name: string) => Promise<string>;
+  callNumber: (phone: string) => Promise<boolean>;
 };
 
 const EzraWakeWord = Platform.OS === 'android'
@@ -723,11 +725,86 @@ export default function App() {
     return true;
   };
 
+  const handleCallCommand = async (commandText: string, voiceReply: boolean) => {
+    if (Platform.OS !== 'android' || !EzraWakeWord) return false;
+    const normalized = commandText.toLowerCase().replace(/[إأآ]/g, 'ا');
+    const asksToCall = /(?:اتصل|كلم|دق|رن|call|phone)/i.test(normalized);
+    const asksForMother = /(?:امي|ماما|mom|mother|mum)/i.test(normalized);
+    if (!asksToCall || !asksForMother) return false;
+
+    setSending(true);
+    const userId = `call-user-${Date.now()}`;
+    const replyId = `call-reply-${Date.now()}`;
+    let reply = '';
+    let phone = '';
+    try {
+      const contactsPermission = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_CONTACTS);
+      if (contactsPermission !== PermissionsAndroid.RESULTS.GRANTED) {
+        reply = 'أحتاج إذن جهات الاتصال حتى أجد رقم أمك. اسمحي بالإذن ثم أعيدي الطلب.';
+      } else {
+        phone = await EzraWakeWord.findContactPhone('أمي');
+        if (!phone) {
+          reply = 'ما لقيت جهة اتصال محفوظة باسم أمي أو ماما. احفظي جهة الاتصال بهذا الاسم وجربي مرة ثانية.';
+        } else {
+          const callPermission = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CALL_PHONE);
+          if (callPermission !== PermissionsAndroid.RESULTS.GRANTED) {
+            reply = 'أحتاج إذن الاتصال حتى أقدر أبدأ المكالمة. اسمحي بالإذن من إعدادات الهاتف.';
+            phone = '';
+          } else {
+            reply = `وجدت رقم جهة اتصال أمك: ${phone}. هل تريدين أن أتصل الآن؟`;
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('EZRA contact lookup failed:', error);
+      reply = 'ما قدرت أوصل لجهات الاتصال. تأكدي من الأذونات وجربي مرة ثانية.';
+      phone = '';
+    }
+
+    try {
+      const { error } = await supabase.from('chat_messages').insert([
+        { owner_id: session!.user.id, conversation_id: conversationId!, role: 'user', content: commandText },
+        { owner_id: session!.user.id, conversation_id: conversationId!, role: 'assistant', content: reply },
+      ]);
+      if (error) console.warn('Could not save call command to history:', error);
+    } catch (error) {
+      console.warn('Could not save call command to history:', error);
+    }
+    setMessages(previous => [
+      ...previous,
+      { id: userId, sender: 'user', text: commandText },
+      { id: replyId, sender: 'ezra', text: reply },
+    ]);
+    setMessage('');
+    if (phone) {
+      const confirmedPhone = phone;
+      Alert.alert('تأكيد الاتصال', `هل تريدين الاتصال بهذا الرقم؟\n${confirmedPhone}`, [
+        { text: 'إلغاء', style: 'cancel' },
+        {
+          text: 'اتصال',
+          onPress: async () => {
+            try {
+              const started = await EzraWakeWord.callNumber(confirmedPhone);
+              if (started) Alert.alert('EZRA', 'بدأت الاتصال.');
+            } catch (error) {
+              console.warn('EZRA call could not start:', error);
+              Alert.alert('تعذّر الاتصال', 'لم أتمكن من بدء المكالمة. تحققي من إذن الاتصال.');
+            }
+          },
+        },
+      ]);
+    }
+    if (voiceReply || autoSpeak) speak(reply, replyId);
+    setSending(false);
+    return true;
+  };
+
   const sendMessage = async (voiceReply = false, voiceText?: string) => {
     const text = (voiceText ?? message).trim();
     if ((!text && !attachment) || !session || !conversationId || sending) return;
     if (voiceText !== undefined) voiceRequestStartedRef.current = true;
     if (await handleFlashCommand(text, voiceReply)) return;
+    if (await handleCallCommand(text, voiceReply)) return;
 
     setSending(true);
 
