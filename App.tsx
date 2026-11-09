@@ -250,6 +250,7 @@ export default function App() {
         // Keep microphone capture foreground-only; resume automatically when the app returns.
         ExpoSpeechRecognitionModule.stop();
         Speech.stop();
+        EzraHabibiTts?.stopAudio().catch(() => {});
         setIsListening(false);
         setSpeakingMessageId(null);
         setVoiceLevel(0);
@@ -738,6 +739,7 @@ export default function App() {
   const returnToVoiceHome = () => {
     if (isListening) ExpoSpeechRecognitionModule.stop();
     Speech.stop();
+    EzraHabibiTts?.stopAudio().catch(() => {});
     setIsListening(false);
     setSpeakingMessageId(null);
     setVoiceHome(true);
@@ -865,6 +867,7 @@ export default function App() {
     if (isListening) ExpoSpeechRecognitionModule.stop();
     if (speakingMessageId) {
       Speech.stop();
+      EzraHabibiTts?.stopAudio().catch(() => {});
       setSpeakingMessageId(null);
     }
     setVoiceLevel(0);
