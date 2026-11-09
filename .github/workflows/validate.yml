@@ -23,6 +23,8 @@ jobs:
         run: npm install
       - name: Check Expo configuration and dependencies
         run: npx expo-doctor
+      - name: Generate Android native project and verify config plugins
+        run: npx expo prebuild --platform android --no-install
       - name: Check TypeScript
         run: npm run typecheck
       - name: Bundle Android app
