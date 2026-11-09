@@ -273,6 +273,142 @@ export default function App() {
     }
   };
 
+  useEffect(() => {
+    AsyncStorage.multiGet([
+      'ezra:habibiModelPath',
+      'ezra:habibiReferencePath',
+      'ezra:habibiReferenceTranscript',
+      'ezra:habibiDialect',
+    ]).then(values => {
+      if (values[0]?.[1]) setHabibiModelPath(values[0][1]);
+      if (values[1]?.[1]) setHabibiReferencePath(values[1][1]);
+      if (values[2]?.[1]) setHabibiReferenceTranscript(values[2][1]);
+      if (values[3]?.[1]) setHabibiDialect(values[3][1]);
+    }).catch(error => console.warn('Could not restore Habibi setup:', error));
+  }, []);
+
+  const downloadHabibiModel = async () => {
+    if (Platform.OS !== 'android' || !FileSystem.documentDirectory || habibiModelDownloading) return;
+    setHabibiModelDownloading(true);
+    setHabibiDownloadProgress(0);
+    setHabibiEngineError('');
+    try {
+      const freeBytes = await FileSystem.getFreeDiskStorageAsync();
+      if (freeBytes < 2_000_000_000) {
+        throw new Error('المساحة الحرة أقل من 2 GB. أفرغ مساحة إضافية قبل تنزيل نموذج Habibi.');
+      }
+      const directory = \`\${FileSystem.documentDirectory}habibi-unified/\`;
+      await FileSystem.makeDirectoryAsync(directory, { intermediates: true }).catch(() => {});
+      const modelPath = \`\${directory}habibi-unified-orig.gguf\`;
+      const vocabPath = \`\${directory}vocab.txt\`;
+      const existing = await FileSystem.getInfoAsync(modelPath);
+      if (existing.exists && existing.size && existing.size > 1_000_000_000) {
+        setHabibiModelPath(modelPath);
+        await AsyncStorage.setItem('ezra:habibiModelPath', modelPath);
+      } else {
+        if (existing.exists) await FileSystem.deleteAsync(modelPath, { idempotent: true });
+        const task = FileSystem.createDownloadResumable(
+          'https://huggingface.co/trklou/audio.cpp/resolve/main/habibi-unified/habibi-unified-orig.gguf',
+          modelPath,
+          {},
+          progress => {
+            if (progress.totalBytesExpectedToWrite > 0) {
+              setHabibiDownloadProgress(progress.totalBytesWritten / progress.totalBytesExpectedToWrite);
+            }
+          }
+        );
+        const downloaded = await task.downloadAsync();
+        if (!downloaded || downloaded.status < 200 || downloaded.status >= 300) {
+          throw new Error('فشل تنزيل أوزان Habibi من مستودع النموذج.');
+        }
+        const info = await FileSystem.getInfoAsync(modelPath);
+        if (!info.exists || !info.size || info.size < 1_000_000_000) {
+          throw new Error('ملف النموذج الذي تم تنزيله غير مكتمل.');
+        }
+        setHabibiModelPath(modelPath);
+        await AsyncStorage.setItem('ezra:habibiModelPath', modelPath);
+      }
+      const vocabInfo = await FileSystem.getInfoAsync(vocabPath);
+      if (!vocabInfo.exists || !vocabInfo.size || vocabInfo.size < 1000) {
+        const vocab = await FileSystem.downloadAsync(
+          'https://huggingface.co/trklou/audio.cpp/resolve/main/habibi-unified/vocab.txt',
+          vocabPath
+        );
+        if (vocab.status < 200 || vocab.status >= 300) throw new Error('تعذّر تنزيل ملف مفردات Habibi.');
+      }
+      setHabibiDownloadProgress(1);
+      Alert.alert('اكتمل تنزيل Habibi', 'تم حفظ النموذج وملف المفردات داخل التطبيق.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'تعذّر تنزيل نموذج Habibi.';
+      setHabibiEngineError(message);
+      Alert.alert('تعذّر تنزيل المحرك', message);
+    } finally {
+      setHabibiModelDownloading(false);
+    }
+  };
+
+  const pickHabibiReference = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['audio/wav', 'audio/x-wav'],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+      if (result.canceled || !result.assets[0]) return;
+      const selected = result.assets[0];
+      if (!selected.name.toLowerCase().endsWith('.wav')) {
+        Alert.alert('صيغة غير مدعومة', 'اختر تسجيلًا بصيغة WAV فقط. يجب أن تكون العينة صوتًا رجاليًا واضحًا ومدتها من 5 إلى 10 ثوانٍ.');
+        return;
+      }
+      const target = \`\${FileSystem.documentDirectory}habibi-reference.wav\`;
+      await FileSystem.copyAsync({ from: selected.uri, to: target });
+      setHabibiReferencePath(target);
+      await AsyncStorage.setItem('ezra:habibiReferencePath', target);
+      setHabibiEngineReady(false);
+      Alert.alert('تم اختيار العينة', 'أدخل النص المنطوق في التسجيل حرفيًا، ثم فعّل المحرك.');
+    } catch (error) {
+      console.warn('Could not select Habibi reference audio:', error);
+      Alert.alert('تعذّر اختيار التسجيل', 'لم نتمكن من حفظ ملف الصوت. جرّب ملف WAV آخر.');
+    }
+  };
+
+  const initializeHabibiEngine = async () => {
+    if (!EzraHabibiTts || habibiEngineBusy) return;
+    if (!habibiModelPath || !habibiReferencePath || !habibiReferenceTranscript.trim()) {
+      Alert.alert('إعداد الصوت غير مكتمل', 'نزّل النموذج، واختر عينة صوت رجالي WAV، واكتب النص المطابق للتسجيل.');
+      return;
+    }
+    setHabibiEngineBusy(true);
+    setHabibiEngineError('');
+    try {
+      const capacity = await EzraHabibiTts.getDeviceCapacity();
+      if (capacity.lowMemory || capacity.availableRamBytes < 1_500_000_000) {
+        throw new Error('الذاكرة المتاحة حاليًا منخفضة لتشغيل نموذج الصوت بأمان. أغلق التطبيقات الأخرى ثم أعد المحاولة.');
+      }
+      await AsyncStorage.multiSet([
+        ['ezra:habibiReferenceTranscript', habibiReferenceTranscript.trim()],
+        ['ezra:habibiDialect', habibiDialect],
+      ]);
+      const result = await EzraHabibiTts.initialize(
+        habibiModelPath,
+        habibiReferencePath,
+        habibiReferenceTranscript.trim(),
+        habibiDialect,
+        2
+      );
+      setHabibiEngineReady(result.ready);
+      if (!result.ready) throw new Error('لم يتمكن محرك Habibi من التهيئة.');
+      Alert.alert('Habibi جاهز', 'تم تحميل المحرك محليًا. ستُستخدم هذه العينة للصوت العربي، والإنجليزية ستبقى على محرك النظام.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'تعذّر تشغيل محرك Habibi.';
+      setHabibiEngineError(message);
+      setHabibiEngineReady(false);
+      Alert.alert('تعذّر تفعيل Habibi', message);
+    } finally {
+      setHabibiEngineBusy(false);
+    }
+  };
+
   const visibleMemories = memories.filter(item => {
     const matchesSearch = item.content.toLocaleLowerCase().includes(memorySearch.trim().toLocaleLowerCase());
     return matchesSearch && (memoryFilter === 'all' || item.approval_status === memoryFilter);
