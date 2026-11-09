@@ -158,11 +158,13 @@ export default function App() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [attachment, setAttachment] = useState<Attachment | null>(null);
   const [isListening, setIsListening] = useState(false);
+  const [voiceRetrying, setVoiceRetrying] = useState(false);
   const [autoListen, setAutoListen] = useState(true);
   const autoListenRef = useRef(true);
   const voiceTranscriptRef = useRef('');
   const voiceTurnInProgressRef = useRef(false);
   const voiceRequestStartedRef = useRef(false);
+  const voiceRetryCountRef = useRef(0);
   const [ttsVoices, setTtsVoices] = useState<{ identifier: string; name: string; language: string; quality?: string }[]>([]);
   const [selectedTtsVoice, setSelectedTtsVoice] = useState<string | null>(null);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
@@ -517,7 +519,11 @@ export default function App() {
     };
   }, [session?.user.id, conversationId]);
 
-  useSpeechRecognitionEvent('start', () => setIsListening(true));
+  useSpeechRecognitionEvent('start', () => {
+    voiceRetryCountRef.current = 0;
+    setVoiceRetrying(false);
+    setIsListening(true);
+  });
   useSpeechRecognitionEvent('end', () => {
     setIsListening(false);
     const spokenText = voiceTranscriptRef.current.trim();
@@ -536,13 +542,25 @@ export default function App() {
       setMessage(transcript);
     }
   });
-  useSpeechRecognitionEvent('error', () => setIsListening(false));
+  useSpeechRecognitionEvent('error', () => {
+    setIsListening(false);
+    voiceTranscriptRef.current = '';
+    if (autoListenRef.current && voiceHome && voiceRetryCountRef.current < 2) {
+      voiceRetryCountRef.current += 1;
+      setVoiceRetrying(true);
+    } else if (voiceRetryCountRef.current >= 2) {
+      setVoiceRetrying(false);
+      autoListenRef.current = false;
+      setAutoListen(false);
+      Alert.alert('تعذّر استمرار الاستماع', 'توقّف التعرّف الصوتي بعد محاولتين. تحقق من اتصال الإنترنت وإذن الميكروفون، ثم اضغط الميكروفون للمحاولة مجددًا.');
+    }
+  });
 
   useEffect(() => {
     if (!session || !voiceHome || !autoListen || isListening || sending || speakingMessageId || chatLoading) return;
-    const timer = setTimeout(() => beginListening(), 500);
+    const timer = setTimeout(() => beginListening(), voiceRetrying ? 900 : 500);
     return () => clearTimeout(timer);
-  }, [session?.user.id, voiceHome, autoListen, recognitionLanguage]);
+  }, [session?.user.id, voiceHome, autoListen, recognitionLanguage, isListening, sending, speakingMessageId, chatLoading, voiceRetrying]);
 
   useEffect(() => {
     if (!voiceHome || !autoListen || !voiceTurnInProgressRef.current || !voiceRequestStartedRef.current || sending || speakingMessageId || isListening) return;
@@ -910,6 +928,8 @@ export default function App() {
   if (voiceHome) {
     const voiceStatus = isListening
       ? 'إزرا يستمع'
+      : voiceRetrying
+        ? 'أعيد الاتصال بالصوت…'
       : speakingMessageId
         ? 'إزرا يتحدث'
         : (sending || chatLoading)
