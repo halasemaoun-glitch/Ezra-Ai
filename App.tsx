@@ -338,6 +338,9 @@ export default function App() {
         );
         if (vocab.status < 200 || vocab.status >= 300) throw new Error('تعذّر تنزيل ملف مفردات Habibi.');
       }
+      setHabibiEngineReady(false);
+      await AsyncStorage.removeItem('ezra:habibiEnabled');
+      await EzraHabibiTts?.shutdown().catch(() => {});
       setHabibiDownloadProgress(1);
       Alert.alert('اكتمل تنزيل Habibi', 'تم حفظ النموذج وملف المفردات داخل التطبيق.');
     } catch (error) {
@@ -1860,13 +1863,13 @@ export default function App() {
                   <TextInput
                     style={[styles.authInput, { minHeight: 48, textAlign: 'right', writingDirection: 'rtl' }]}
                     value={habibiReferenceTranscript}
-                    onChangeText={value => { setHabibiReferenceTranscript(value); setHabibiEngineReady(false); AsyncStorage.removeItem('ezra:habibiEnabled').catch(() => {}); }}
+                    onChangeText={value => { setHabibiReferenceTranscript(value); setHabibiEngineReady(false); EzraHabibiTts?.shutdown().catch(() => {}); AsyncStorage.removeItem('ezra:habibiEnabled').catch(() => {}); }}
                     onBlur={() => AsyncStorage.setItem('ezra:habibiReferenceTranscript', habibiReferenceTranscript.trim()).catch(() => {})}
                     placeholder="اكتب حرفيًا ما يقوله التسجيل الصوتي"
                     placeholderTextColor="#777680"
                     multiline
                   />
-                  <Text style={styles.settingHint}>العينة يجب أن تكون صوت رجل واضحًا، WAV، من 3 إلى 5 ثوانٍ، مع نص مطابق تمامًا. تسجيلك السابق يبقى احتياطيًا ولن نستخدمه هنا.</Text>
+                  <Text style={styles.settingHint}>العينة يجب أن تكون صوت رجل واضحًا، WAV PCM 16-bit، من 3 إلى 5 ثوانٍ، مع نص مطابق تمامًا. تسجيلك السابق يبقى احتياطيًا ولن نستخدمه هنا.</Text>
                   <View style={{ flexDirection: 'row', gap: 8 }}>
                     {[
                       { code: 'ALG', label: 'جزائري' },
