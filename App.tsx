@@ -24,6 +24,7 @@ import {
   useSpeechRecognitionEvent,
 } from 'expo-speech-recognition';
 import { StatusBar } from 'expo-status-bar';
+import EzraOrb3D from './src/EzraOrb3D';
 import { supabase } from './src/lib/supabase';
 
 type Attachment = {
@@ -68,28 +69,11 @@ const createConversationId = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replac
 });
 
 function EzraOrb({ status }: { status: string }) {
-  const pulse = useRef(new Animated.Value(0)).current;
-  const rotation = useRef(new Animated.Value(0)).current;
   const waveform = useRef(Array.from({ length: 9 }, () => new Animated.Value(0.18))).current;
   const listening = status.includes('يستمع');
   const thinking = status.includes('أفكر');
   const speaking = status.includes('يتحدث');
   useEffect(() => {
-    pulse.setValue(0);
-    rotation.setValue(0);
-    const pulseDuration = listening ? 900 : thinking ? 2600 : speaking ? 620 : 2300;
-    const orbitDuration = thinking ? 22000 : listening ? 10500 : speaking ? 7800 : 18000;
-    const breathing = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: pulseDuration, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0, duration: pulseDuration, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-      ])
-    );
-    const orbit = Animated.loop(
-      Animated.timing(rotation, { toValue: 1, duration: orbitDuration, easing: Easing.linear, useNativeDriver: true })
-    );
-    breathing.start();
-    orbit.start();
     const waveLoops = waveform.map((bar, index) => {
       bar.setValue(0.18);
       const duration = thinking ? 1050 : speaking ? 360 : 560;
@@ -101,36 +85,14 @@ function EzraOrb({ status }: { status: string }) {
       if (listening || thinking || speaking) loop.start();
       return loop;
     });
-    return () => { breathing.stop(); orbit.stop(); waveLoops.forEach(loop => loop.stop()); };
-  }, [pulse, rotation, waveform, status]);
-  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.965, listening || speaking ? 1.055 : 1.025] });
-  const glow = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.3, listening || speaking ? 0.95 : 0.72] });
-  const rippleScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1.16] });
-  const spin = rotation.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
-  const reverseSpin = rotation.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-360deg'] });
+    return () => waveLoops.forEach(loop => loop.stop());
+  }, [waveform, status, listening, thinking, speaking]);
   const active = listening || thinking || speaking;
   const caption = listening ? 'أنا أسمعك… خذ وقتك' : thinking ? 'أرتّب أفكاري لأجيبك' : speaking ? 'أنا معك، ويمكنك مقاطعتي' : 'أنا هنا عندما تحتاجني';
   return (
     <View style={styles.orbSection}>
       <View style={styles.orbStage}>
-        <Animated.View style={[styles.orbRipple, { opacity: listening ? glow : 0.08, transform: [{ scale: rippleScale }] }]} />
-        <Animated.View style={[styles.orbHalo, listening && styles.orbHaloListening, thinking && styles.orbHaloThinking, speaking && styles.orbHaloSpeaking, { opacity: glow, transform: [{ scale }] }]} />
-        <Animated.View style={[styles.orbAura, { opacity: glow, transform: [{ scale }] }]} />
-        <Animated.View style={[styles.orbRingOuter, { transform: [{ rotate: spin }] }]}>
-          <View style={styles.orbOrbitDot} />
-        </Animated.View>
-        <Animated.View style={[styles.orbRingInner, { transform: [{ rotate: reverseSpin }] }]}>
-          <View style={styles.orbOrbitDotSmall} />
-        </Animated.View>
-        <View style={styles.orbParticleTop} />
-        <View style={styles.orbParticleLeft} />
-        <View style={styles.orbParticleBottom} />
-        <Animated.View style={[styles.orbCore, listening && styles.orbCoreListening, thinking && styles.orbCoreThinking, speaking && styles.orbCoreSpeaking, { transform: [{ scale }] }]}>
-          <View style={styles.orbCoreShade} />
-          <View style={styles.orbCoreInner} />
-          <View style={styles.orbCoreHighlight} />
-          <View style={styles.orbCoreSpark} />
-        </Animated.View>
+        <EzraOrb3D status={status} />
       </View>
       <View style={[styles.orbStatusPill, active && styles.orbStatusPillActive]}>
         <View style={[styles.orbStatusDot, active && styles.orbStatusDotActive]} />
