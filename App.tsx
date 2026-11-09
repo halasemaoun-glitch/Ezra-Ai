@@ -68,12 +68,19 @@ const createConversationId = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replac
   return value.toString(16);
 });
 
-function EzraOrb({ status }: { status: string }) {
+function EzraOrb({ status, voiceLevel = 0 }: { status: string; voiceLevel?: number }) {
   const waveform = useRef(Array.from({ length: 9 }, () => new Animated.Value(0.18))).current;
   const listening = status.includes('يستمع');
   const thinking = status.includes('أفكر');
   const speaking = status.includes('يتحدث');
   useEffect(() => {
+    if (listening) {
+      waveform.forEach((bar, index) => {
+        const envelope = 0.12 + voiceLevel * (0.38 + (Math.sin(index * 1.7) + 1) * 0.2);
+        bar.setValue(Math.max(0.12, Math.min(1, envelope)));
+      });
+      return () => waveform.forEach(bar => bar.stopAnimation());
+    }
     const waveLoops = waveform.map((bar, index) => {
       bar.setValue(0.18);
       const duration = thinking ? 1050 : speaking ? 360 : 560;
@@ -120,6 +127,7 @@ export default function App() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [attachment, setAttachment] = useState<Attachment | null>(null);
   const [isListening, setIsListening] = useState(false);
+  const [voiceLevel, setVoiceLevel] = useState(0);
   const [voiceRetrying, setVoiceRetrying] = useState(false);
   const [autoListen, setAutoListen] = useState(true);
   const autoListenRef = useRef(true);
@@ -499,10 +507,16 @@ export default function App() {
 
   useSpeechRecognitionEvent('start', () => {
     setVoiceRetrying(false);
+    setVoiceLevel(0);
     setIsListening(true);
+  });
+  useSpeechRecognitionEvent('volumechange', event => {
+    const normalized = Math.max(0, Math.min(1, (event.value + 2) / 12));
+    setVoiceLevel(normalized);
   });
   useSpeechRecognitionEvent('end', () => {
     setIsListening(false);
+    setVoiceLevel(0);
     const spokenText = voiceTranscriptRef.current.trim();
     if (autoListenRef.current && voiceHome && spokenText) {
       voiceTurnInProgressRef.current = true;
@@ -713,6 +727,7 @@ export default function App() {
         lang: recognitionLanguage === 'ar' ? 'ar' : 'en-US',
         interimResults: true,
         continuous: false,
+        volumeChangeEventOptions: { enabled: true, intervalMillis: 90 },
       });
     } catch {
       setIsListening(false);
@@ -926,7 +941,7 @@ export default function App() {
             <TouchableOpacity onPress={openConversationHistory} style={styles.voiceTopButton} accessibilityLabel="سجل المحادثات"><Text style={styles.voiceTopButtonText}>◷</Text></TouchableOpacity>
           </View>
           <View style={styles.voiceOrbWrap}>
-            <EzraOrb status={voiceStatus} />
+            <EzraOrb status={voiceStatus} voiceLevel={voiceLevel} />
           </View>
           <View style={styles.voiceMicWrap}>
             <Animated.View
