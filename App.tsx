@@ -28,6 +28,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import EzraOrb3D from './src/EzraOrb3D';
 import { supabase } from './src/lib/supabase';
+import { DEFAULT_EZRA_VOICE, detectEzraSpeechLanguage } from './src/voice/voiceProfile';
 import { requireNativeModule } from 'expo-modules-core';
 
 type EzraWakeWordNative = {
@@ -172,8 +173,8 @@ export default function App() {
   const [habibiCapacityLoading, setHabibiCapacityLoading] = useState(false);
   const [habibiCapacityError, setHabibiCapacityError] = useState('');
   const [autoSpeak, setAutoSpeak] = useState(true);
-  const [speechRate, setSpeechRate] = useState(0.92);
-  const [speechPitch, setSpeechPitch] = useState(0.9);
+  const [speechRate, setSpeechRate] = useState(DEFAULT_EZRA_VOICE.rate);
+  const [speechPitch, setSpeechPitch] = useState(DEFAULT_EZRA_VOICE.pitch);
   const [recognitionLanguage, setRecognitionLanguage] = useState<'ar' | 'en'>('ar');
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -1452,7 +1453,7 @@ export default function App() {
     }
     Speech.stop();
     setSpeakingMessageId(messageId);
-    const speechLanguage = /[\\u0600-\\u06FF]/.test(text) ? 'ar' : 'en';
+    const speechLanguage = detectEzraSpeechLanguage(text);
     const matchingVoice = ttsVoices
       .filter(voice => voice.language.toLowerCase().startsWith(speechLanguage))
       .sort((a, b) => Number(b.quality === 'Enhanced') - Number(a.quality === 'Enhanced'))[0];
@@ -1585,6 +1586,14 @@ export default function App() {
                 <View style={styles.historyHeader}>
                   <Text style={styles.historyTitle}>إعدادات الصوت</Text>                  <TouchableOpacity style={styles.historyClose} onPress={() => setSettingsVisible(false)}><Text style={styles.historyCloseText}>×</Text></TouchableOpacity>
                 </View>                <View style={styles.settingRow}>
+                  <View style={styles.settingCopy}>
+                    <Text style={styles.settingTitle}>ملف صوت EZRA المعتمد</Text>
+                    <Text style={styles.settingHint}>صوت رجالي دافئ وعميق · اكتشاف تلقائي للعربية والإنجليزية</Text>
+                    <Text style={styles.settingHint}>Habibi-TTS هو المحرك الأساسي المستهدف؛ يستخدم الهاتف صوته مؤقتًا إلى أن يكتمل دمج التوليد المحلي.</Text>
+                    <Text style={styles.settingHint}>اللهجات المطلوبة: الشامية · الجزائرية · السعودية · الإنجليزية</Text>
+                  </View>
+                </View>
+                <View style={styles.settingRow}>
                   <View style={styles.settingCopy}><Text style={styles.settingTitle}>كلمة التنبيه «يا EZRA»</Text><Text style={styles.settingHint}>استماع بالخلفية وعند قفل الشاشة · قد يزيد استهلاك البطارية</Text></View>
                   <Switch value={backgroundWakeEnabled} onValueChange={toggleBackgroundWake} trackColor={{ false: '#39323D', true: '#875477' }} thumbColor={backgroundWakeEnabled ? '#F2C8E5' : '#AAA'} />
                 </View>
