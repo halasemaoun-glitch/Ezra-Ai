@@ -7,6 +7,7 @@ type OrbStatus = { status: string };
 
 function OrbScene({ status }: OrbStatus) {
   const core = useRef<THREE.Mesh>(null);
+  const coreMaterial = useRef<THREE.MeshPhysicalMaterial>(null);
   const halo = useRef<THREE.Mesh>(null);
   const orbitA = useRef<THREE.Mesh>(null);
   const orbitB = useRef<THREE.Mesh>(null);
@@ -58,6 +59,10 @@ function OrbScene({ status }: OrbStatus) {
       particles.current.rotation.x = Math.sin(t * 0.18) * 0.08;
     }
     const activity = speaking ? 1 : listening ? 0.78 : thinking ? 0.48 : 0.28;
+    if (coreMaterial.current) {
+      const glow = speaking ? 1.12 : listening ? 0.92 : thinking ? 0.82 : 0.68;
+      coreMaterial.current.emissiveIntensity = glow + Math.sin(t * (speaking ? 4.2 : listening ? 2.5 : 1.1)) * (speaking ? 0.22 : listening ? 0.12 : 0.045);
+    }
     const pulse = 0.88 + (Math.sin(t * (speaking ? 4.8 : listening ? 2.8 : 1.35)) + 1) * 0.09;
     if (pinkLight.current) pinkLight.current.intensity = (speaking ? 4.1 : listening ? 3.5 : thinking ? 2.9 : 2.3) * pulse;
     if (violetLight.current) violetLight.current.intensity = (thinking ? 3.5 : 2.5) * (0.92 + Math.sin(t * 0.8 + 1.4) * 0.08);
@@ -83,6 +88,7 @@ function OrbScene({ status }: OrbStatus) {
         <mesh ref={core}>
           <sphereGeometry args={[0.92, 72, 72]} />
           <meshPhysicalMaterial
+            ref={coreMaterial}
             color={thinking ? '#230d3d' : '#35091f'}
             emissive={speaking ? '#b50b70' : listening ? '#8f145f' : '#64106d'}
             emissiveIntensity={speaking ? 1.15 : listening ? 0.9 : 0.68}
