@@ -23,8 +23,7 @@ function OrbScene({ status }: OrbStatus) {
       const spread = 1.55 + ((i * 17) % 13) / 35;
       points.push(new THREE.Vector3(Math.cos(angle) * radius * spread, y * spread, Math.sin(angle) * radius * spread));
     }
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    return geometry;
+    return new THREE.BufferGeometry().setFromPoints(points);
   }, []);
 
   useFrame(({ clock }) => {
@@ -94,7 +93,6 @@ export default function EzraOrb3D({ status }: OrbStatus) {
     <View style={styles.stage}>
       <Canvas
         camera={{ position: [0, 0, 4.5], fov: 38 }}
-        dpr={[1, 1.25]}
         gl={{ alpha: true, antialias: true, powerPreference: 'low-power' }}
         style={styles.canvas}
       >
