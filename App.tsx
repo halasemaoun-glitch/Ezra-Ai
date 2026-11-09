@@ -76,7 +76,7 @@ const EzraHabibiTts = Platform.OS === 'android'
     }>('EzraHabibiTts')
   : null;
 
-const splitHabibiText = (text: string, maxLength = 48) => {
+const splitHabibiText = (text: string, maxLength = 24) => {
   const words = text.trim().split(/\s+/).filter(Boolean);
   const chunks: string[] = [];
   let current = '';
@@ -388,7 +388,7 @@ export default function App() {
       if (result.canceled || !result.assets[0]) return;
       const selected = result.assets[0];
       if (!selected.name.toLowerCase().endsWith('.wav')) {
-        Alert.alert('صيغة غير مدعومة', 'اختر تسجيلًا بصيغة WAV فقط. يجب أن تكون العينة صوتًا رجاليًا واضحًا ومدتها من 3 إلى 5 ثوانٍ.');
+        Alert.alert('صيغة غير مدعومة', 'اختر تسجيلًا بصيغة WAV فقط. يجب أن تكون العينة صوتًا رجاليًا واضحًا ومدتها من نصف ثانية إلى 1.3 ثانية.');
         return;
       }
       const target = `${FileSystem.documentDirectory}habibi-reference.wav`;
@@ -1992,7 +1992,7 @@ export default function App() {
                     placeholderTextColor="#777680"
                     multiline
                   />
-                  <Text style={styles.settingHint}>العينة يجب أن تكون صوت رجل واضحًا، WAV PCM 16-bit، من 3 إلى 5 ثوانٍ، مع نص مطابق تمامًا. تسجيلك السابق يبقى احتياطيًا ولن نستخدمه هنا.</Text>
+                  <Text style={styles.settingHint}>العينة يجب أن تكون صوت رجل واضحًا، WAV PCM 16-bit، من نصف ثانية إلى 1.3 ثانية، مع نص مطابق تمامًا. تسجيلك السابق يبقى احتياطيًا ولن نستخدمه هنا.</Text>
                   <View style={{ flexDirection: 'row', gap: 8 }}>
                     {[
                       { code: 'LEV', label: 'شامي' },
