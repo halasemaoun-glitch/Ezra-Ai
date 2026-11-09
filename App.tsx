@@ -784,9 +784,10 @@ export default function App() {
   const handleCallCommand = async (commandText: string, voiceReply: boolean) => {
     if (Platform.OS !== 'android' || !EzraWakeWord) return false;
     const normalized = commandText.toLowerCase().replace(/[إأآ]/g, 'ا');
-    const asksToCall = /(?:اتصل|كلم|دق|رن|call|phone)/i.test(normalized);
-    const asksForMother = /(?:امي|ماما|mom|mother|mum)/i.test(normalized);
-    if (!asksToCall || !asksForMother) return false;
+    const contactMatch = normalized.match(/(?:اتصل|كلم|دق|رن|call|phone)\\s*(?:ب|على|ل|الى)?\\s*(.+)$/i);
+    if (!contactMatch) return false;
+    const contactName = contactMatch[1].replace(/\\s*(?:الان|الحين|حالاً|حالا|من فضلك)$/i, '').trim();
+    if (!contactName || /^(?:بي|me|myself)$/.test(contactName)) return false;
 
     setSending(true);
     const userId = `call-user-${Date.now()}`;
@@ -796,18 +797,18 @@ export default function App() {
     try {
       const contactsPermission = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_CONTACTS);
       if (contactsPermission !== PermissionsAndroid.RESULTS.GRANTED) {
-        reply = 'أحتاج إذن جهات الاتصال حتى أجد رقم أمك. اسمحي بالإذن ثم أعيدي الطلب.';
+        reply = 'أحتاج إذن جهات الاتصال حتى أجد الرقم. اسمحي بالإذن ثم أعيدي الطلب.';
       } else {
-        phone = await EzraWakeWord.findContactPhone('أمي');
+        phone = await EzraWakeWord.findContactPhone(contactName);
         if (!phone) {
-          reply = 'ما لقيت جهة اتصال محفوظة باسم أمي أو ماما. احفظي جهة الاتصال بهذا الاسم وجربي مرة ثانية.';
+          reply = `ما لقيت جهة اتصال محفوظة باسم ${contactName}. تأكدي من الاسم في جهات الاتصال وجربي مرة ثانية.`;
         } else {
           const callPermission = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CALL_PHONE);
           if (callPermission !== PermissionsAndroid.RESULTS.GRANTED) {
             reply = 'أحتاج إذن الاتصال حتى أقدر أبدأ المكالمة. اسمحي بالإذن من إعدادات الهاتف.';
             phone = '';
           } else {
-            reply = `وجدت رقم جهة اتصال أمك: ${phone}. هل تريدين أن أتصل الآن؟`;
+            reply = `وجدت رقم ${contactName}: ${phone}. هل تريدين أن أتصل الآن؟`;
           }
         }
       }
