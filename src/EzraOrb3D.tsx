@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Canvas, useFrame } from '@react-three/fiber/native';
 import * as THREE from 'three';
@@ -10,6 +10,7 @@ function OrbScene({ status }: OrbStatus) {
   const halo = useRef<THREE.Mesh>(null);
   const orbitA = useRef<THREE.Mesh>(null);
   const orbitB = useRef<THREE.Mesh>(null);
+  const particles = useRef<THREE.Points>(null);
   const listening = status.includes('يستمع');
   const thinking = status.includes('أفكر');
   const speaking = status.includes('يتحدث');
@@ -26,6 +27,8 @@ function OrbScene({ status }: OrbStatus) {
     return new THREE.BufferGeometry().setFromPoints(points);
   }, []);
 
+  useEffect(() => () => particleGeometry.dispose(), [particleGeometry]);
+
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
     if (core.current) {
@@ -40,6 +43,10 @@ function OrbScene({ status }: OrbStatus) {
     }
     if (orbitA.current) orbitA.current.rotation.z = t * speed * 0.72;
     if (orbitB.current) orbitB.current.rotation.x = 0.9 + t * speed * 0.5;
+    if (particles.current) {
+      particles.current.rotation.y = -t * (speaking ? 0.12 : listening ? 0.075 : 0.035);
+      particles.current.rotation.x = Math.sin(t * 0.18) * 0.08;
+    }
   });
 
   return (
@@ -77,7 +84,7 @@ function OrbScene({ status }: OrbStatus) {
           <torusGeometry args={[1.48, 0.006, 8, 180]} />
           <meshBasicMaterial color="#9b62ff" transparent opacity={0.58} />
         </mesh>
-        <points geometry={particleGeometry}>
+        <points ref={particles} geometry={particleGeometry}>
           <pointsMaterial color="#ffc0ed" size={0.025} transparent opacity={0.82} sizeAttenuation />
         </points>
       </group>
