@@ -325,10 +325,10 @@ export default function App() {
       if (freeBytes < 2_000_000_000) {
         throw new Error('المساحة الحرة أقل من 2 GB. أفرغ مساحة إضافية قبل تنزيل نموذج Habibi.');
       }
-      const directory = \`\${FileSystem.documentDirectory}habibi-unified/\`;
+      const directory = `${FileSystem.documentDirectory}habibi-unified/`;
       await FileSystem.makeDirectoryAsync(directory, { intermediates: true }).catch(() => {});
-      const modelPath = \`\${directory}habibi-unified-orig.gguf\`;
-      const vocabPath = \`\${directory}vocab.txt\`;
+      const modelPath = `${directory}habibi-unified-orig.gguf`;
+      const vocabPath = `${directory}vocab.txt`;
       const existing = await FileSystem.getInfoAsync(modelPath);
       if (existing.exists && existing.size && existing.size > 1_000_000_000) {
         setHabibiModelPath(modelPath);
@@ -391,7 +391,7 @@ export default function App() {
         Alert.alert('صيغة غير مدعومة', 'اختر تسجيلًا بصيغة WAV فقط. يجب أن تكون العينة صوتًا رجاليًا واضحًا ومدتها من 3 إلى 5 ثوانٍ.');
         return;
       }
-      const target = \`\${FileSystem.documentDirectory}habibi-reference.wav\`;
+      const target = `${FileSystem.documentDirectory}habibi-reference.wav`;
       await FileSystem.copyAsync({ from: selected.uri, to: target });
       setHabibiReferencePath(target);
       await AsyncStorage.setItem('ezra:habibiReferencePath', target);
@@ -456,7 +456,7 @@ export default function App() {
       Speech.stop();
       await EzraHabibiTts.stopAudio().catch(() => {});
       const outputDirectory = FileSystem.cacheDirectory || FileSystem.documentDirectory || '';
-      const outputPath = \`\${outputDirectory}ezra-habibi-test-\${Date.now()}.wav\`;
+      const outputPath = `${outputDirectory}ezra-habibi-test-${Date.now()}.wav`;
       const generated = await EzraHabibiTts.synthesize(
         'مرحباً، أنا إزرا. هذا اختبار لصوتي العربي الجديد.',
         outputPath
@@ -1700,7 +1700,7 @@ export default function App() {
     active.nextIndex += 1;
     try {
       const outputDirectory = FileSystem.cacheDirectory || FileSystem.documentDirectory || '';
-      const outputPath = \`\${outputDirectory}ezra-habibi-\${Date.now()}-\${active.nextIndex}.wav\`;
+      const outputPath = `${outputDirectory}ezra-habibi-${Date.now()}-${active.nextIndex}.wav`;
       const generated = await EzraHabibiTts.synthesize(chunk, outputPath);
       if (activeHabibiSpeechRef.current !== active) return;
       await EzraHabibiTts.playAudio(generated.path);
@@ -1955,10 +1955,10 @@ export default function App() {
                     onPress={downloadHabibiModel}
                     disabled={habibiModelDownloading || Platform.OS !== 'android'}
                   >
-                    <Text style={styles.memorySaveText}>{habibiModelDownloading ? \`تنزيل Habibi… \${Math.round(habibiDownloadProgress * 100)}%\` : habibiModelPath ? 'التحقق من النموذج / تنزيله' : 'تنزيل نموذج Habibi'}</Text>
+                    <Text style={styles.memorySaveText}>{habibiModelDownloading ? `تنزيل Habibi… ${Math.round(habibiDownloadProgress * 100)}%` : habibiModelPath ? 'التحقق من النموذج / تنزيله' : 'تنزيل نموذج Habibi'}</Text>
                   </TouchableOpacity>
                   <View style={{ height: 5, borderRadius: 5, backgroundColor: '#302631', overflow: 'hidden' }}>
-                    <View style={{ height: 5, width: \`\${Math.round(habibiDownloadProgress * 100)}%\`, backgroundColor: '#C47AA8' }} />
+                    <View style={{ height: 5, width: `${Math.round(habibiDownloadProgress * 100)}%`, backgroundColor: '#C47AA8' }} />
                   </View>
                   <TouchableOpacity style={[styles.memorySaveButton, { marginTop: 0 }]} onPress={pickHabibiReference} disabled={Platform.OS !== 'android'}>
                     <Text style={styles.memorySaveText}>{habibiReferencePath ? 'تغيير عينة الصوت الرجالي' : 'اختيار عينة صوت رجالي WAV'}</Text>
