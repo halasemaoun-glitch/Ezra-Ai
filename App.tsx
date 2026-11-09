@@ -149,6 +149,7 @@ export default function App() {
   const [memorySearch, setMemorySearch] = useState('');
   const [memoryFilter, setMemoryFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   const [historySearch, setHistorySearch] = useState('');
+  const micPulse = useRef(new Animated.Value(1)).current;
 
   const visibleMemories = memories.filter(item => {
     const matchesSearch = item.content.toLocaleLowerCase().includes(memorySearch.trim().toLocaleLowerCase());
@@ -181,6 +182,21 @@ export default function App() {
       }
     }).catch(error => console.warn('Could not restore voice preferences:', error));
   }, []);
+
+  useEffect(() => {
+    const active = isListening || !!speakingMessageId || sending;
+    if (!active) {
+      micPulse.stopAnimation();
+      micPulse.setValue(1);
+      return;
+    }
+    const pulse = Animated.loop(Animated.sequence([
+      Animated.timing(micPulse, { toValue: 1.2, duration: 760, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(micPulse, { toValue: 1, duration: 760, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+    ]));
+    pulse.start();
+    return () => pulse.stop();
+  }, [isListening, speakingMessageId, sending, micPulse]);
 
   useEffect(() => {
     Speech.getAvailableVoicesAsync()
@@ -912,13 +928,19 @@ export default function App() {
           <View style={styles.voiceOrbWrap}>
             <EzraOrb status={voiceStatus} />
           </View>
-          <TouchableOpacity
-            style={[styles.voiceMic, isListening && styles.voiceMicActive, !!speakingMessageId && styles.voiceMicSpeaking]}
-            onPress={startListening}
-            accessibilityLabel={speakingMessageId ? 'مقاطعة إزرا والتحدث الآن' : isListening ? 'إيقاف الاستماع' : 'ابدأ التحدث مع إزرا'}
-          >
-            <Text style={styles.voiceMicIcon}>{speakingMessageId ? 'Ⅱ' : isListening ? '■' : '⌁'}</Text>
-          </TouchableOpacity>
+          <View style={styles.voiceMicWrap}>
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.voiceMicHalo, { opacity: isListening || speakingMessageId || sending ? 0.72 : 0.24, transform: [{ scale: micPulse }] }]}
+            />
+            <TouchableOpacity
+              style={[styles.voiceMic, isListening && styles.voiceMicActive, !!speakingMessageId && styles.voiceMicSpeaking]}
+              onPress={startListening}
+              accessibilityLabel={speakingMessageId ? 'مقاطعة إزرا والتحدث الآن' : isListening ? 'إيقاف الاستماع' : 'ابدأ التحدث مع إزرا'}
+            >
+              <Text style={styles.voiceMicIcon}>{speakingMessageId ? 'Ⅱ' : isListening ? '■' : '⌁'}</Text>
+            </TouchableOpacity>
+          </View>
           {!!message.trim() && !isListening && (
             <View style={styles.voiceTranscriptCard}>
               <Text style={styles.voiceTranscript} numberOfLines={3}>{message}</Text>
@@ -1403,6 +1425,8 @@ const styles = StyleSheet.create({
 
   voiceOrbWrap: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center' },
 
+  voiceMicWrap: { width: 96, height: 96, alignItems: 'center', justifyContent: 'center' },
+  voiceMicHalo: { position: 'absolute', width: 84, height: 84, borderRadius: 42, borderWidth: 1, borderColor: '#D98AC4', backgroundColor: 'rgba(173,65,139,0.12)' },
   voiceMic: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', backgroundColor: '#35182F', borderWidth: 1, borderColor: '#C46BA9', shadowColor: '#D64BAF', shadowOpacity: 0.55, shadowRadius: 22, shadowOffset: { width: 0, height: 0 }, elevation: 12 },
   voiceMicActive: { backgroundColor: '#7A285F', borderColor: '#F0B5DE' },
   voiceMicSpeaking: { backgroundColor: '#4A285D', borderColor: '#C5A5F5' },
