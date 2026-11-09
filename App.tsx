@@ -665,6 +665,10 @@ export default function App() {
         }
 
         const reply = aiData.reply.trim();
+        // Start spoken playback as soon as the model reply arrives; saving history must not delay EZRA's voice.
+        const playbackMessageId = `reply-${Date.now()}`;
+        if (voiceReply || autoSpeak) speak(reply, playbackMessageId);
+
         const { data: savedReply, error: saveReplyError } = await supabase
           .from('chat_messages')
           .insert({
@@ -680,7 +684,7 @@ export default function App() {
           console.error('Could not save EZRA reply:', saveReplyError);
           setMessages(previous => [
             ...previous,
-            { id: `unsaved-${Date.now()}`, sender: 'ezra', text: reply },
+            { id: playbackMessageId, sender: 'ezra', text: reply },
           ]);
           Alert.alert('لم يُحفظ الرد', 'إزرا أجاب، لكن تعذّر حفظ الرد في سجل المحادثة.');
         } else {
@@ -688,7 +692,6 @@ export default function App() {
             ...previous,
             { id: savedReply.id, sender: 'ezra', text: reply },
           ]);
-          if (voiceReply || autoSpeak) speak(reply, savedReply.id);
         }
       }
     } catch (error) {
