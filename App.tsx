@@ -675,6 +675,54 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [appIsActive, sending, speakingMessageId, isListening, voiceHome, autoListen, backgroundWakeEnabled]);
 
+  const handleMemorySaveCommand = async (commandText: string, voiceReply: boolean) => {
+    const savePrefix = /^(?:يا\s*(?:إزرا|ازرا|ezra)[\s،,:-]*)?(?:تذكر(?:ي)?|احفظ(?:ي)?|لا\s*تنس(?:ى|ي)|سجل(?:ي)?)(?:\s*(?:أن|ان|هذا|هذي|لي))?\s*/i;
+    if (!savePrefix.test(commandText.trim())) return false;
+    const memoryContent = commandText.trim().replace(savePrefix, '').trim();
+    if (memoryContent.length < 4) return false;
+
+    setSending(true);
+    const userId = `memory-user-${Date.now()}`;
+    const replyId = `memory-reply-${Date.now()}`;
+    let reply = '';
+    try {
+      const { data, error } = await supabase.from('memories').insert({
+        owner_id: session!.user.id,
+        content: memoryContent,
+        category: 'general',
+        approval_status: 'pending',
+      }).select('id, content, category, approval_status, created_at').single();
+      if (error || !data) {
+        console.warn('Could not create EZRA memory suggestion:', error);
+        reply = 'حاولت أسجلها، لكن ما قدرت أحفظ اقتراح الذاكرة الآن. جربي مرة ثانية.';
+      } else {
+        setMemories(previous => [data as MemoryItem, ...previous]);
+        reply = 'أكيد، سجلتها كاقتراح في مركز الذاكرة. وافقي عليها من هناك حتى أستخدمها في محادثاتنا القادمة.';
+      }
+    } catch (error) {
+      console.warn('EZRA memory save failed:', error);
+      reply = 'صار خطأ وأنا أحاول أحفظها. خلينا نجرب مرة ثانية.';
+    }
+
+    try {
+      await supabase.from('chat_messages').insert([
+        { owner_id: session!.user.id, conversation_id: conversationId!, role: 'user', content: commandText },
+        { owner_id: session!.user.id, conversation_id: conversationId!, role: 'assistant', content: reply },
+      ]);
+    } catch (error) {
+      console.warn('Could not save memory command to conversation history:', error);
+    }
+    setMessages(previous => [
+      ...previous,
+      { id: userId, sender: 'user', text: commandText },
+      { id: replyId, sender: 'ezra', text: reply },
+    ]);
+    setMessage('');
+    if (voiceReply || autoSpeak) speak(reply, replyId);
+    setSending(false);
+    return true;
+  };
+
   const handleFlashCommand = async (commandText: string, voiceReply: boolean) => {
     if (Platform.OS !== 'android' || !EzraWakeWord) return false;
     const normalized = commandText.toLowerCase()
@@ -803,6 +851,7 @@ export default function App() {
     const text = (voiceText ?? message).trim();
     if ((!text && !attachment) || !session || !conversationId || sending) return;
     if (voiceText !== undefined) voiceRequestStartedRef.current = true;
+    if (await handleMemorySaveCommand(text, voiceReply)) return;
     if (await handleFlashCommand(text, voiceReply)) return;
     if (await handleCallCommand(text, voiceReply)) return;
 
