@@ -31,6 +31,21 @@ module.exports = function withEzraWakeWord(config) {
       });
     }
 
+    const launcherQueryExists = manifest.queries.some(query =>
+      query.intent?.some(intent =>
+        intent.action?.some(action => action.$["android:name"] === "android.intent.action.MAIN") &&
+        intent.category?.some(category => category.$["android:name"] === "android.intent.category.LAUNCHER")
+      )
+    );
+    if (!launcherQueryExists) {
+      manifest.queries.push({
+        intent: [{
+          action: [{ $: { "android:name": "android.intent.action.MAIN" } }],
+          category: [{ $: { "android:name": "android.intent.category.LAUNCHER" } }]
+        }]
+      });
+    }
+
     const application = manifest.application?.[0];
     if (!application) throw new Error("EZRA Android application manifest is missing.");
     application.service = application.service || [];
