@@ -30,6 +30,7 @@
   },
   "devDependencies": {
     "typescript": "~5.9.2",
-    "@types/react": "~19.1.10"
+    "@types/react": "~19.1.10",
+    "@types/three": "^0.180.0"
   }
 }
