@@ -17,6 +17,10 @@ on:
       - "docs/HABIBI_ANDROID_INTEGRATION.md"
       - ".github/workflows/habibi-android-audiocpp.yml"
 
+concurrency:
+  group: habibi-android-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
