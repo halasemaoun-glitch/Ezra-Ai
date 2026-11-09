@@ -830,6 +830,11 @@ export default function App() {
           Alert.alert('خدمة التعرف غير متاحة', 'فعّل خدمة التعرف على الكلام في هاتفك ثم حاول مجددًا.');
           return;
         }
+        if (isListening) {
+          voiceTranscriptRef.current = '';
+          ExpoSpeechRecognitionModule.stop();
+          setIsListening(false);
+        }
         await EzraWakeWord.start();
         setBackgroundWakeEnabled(true);
         await AsyncStorage.setItem('ezra:backgroundWake', 'true');
