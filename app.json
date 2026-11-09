@@ -19,7 +19,8 @@
         "backgroundColor": "#101014"
       },
       "package": "com.halasemaoun.ezra",
-      "versionCode": 1
+      "versionCode": 1,
+      "minSdkVersion": 26
     },
     "plugins": [
       [

@@ -332,7 +332,7 @@ export default function App() {
       const existing = await FileSystem.getInfoAsync(modelPath);
       if (existing.exists && existing.size && existing.size > 1_000_000_000) {
         setHabibiModelPath(modelPath);
-        await AsyncStorage.setItem('ezra:habibiModelPath', directory);
+        await AsyncStorage.setItem('ezra:habibiModelPath', modelPath);
       } else {
         if (existing.exists) await FileSystem.deleteAsync(modelPath, { idempotent: true });
         const task = FileSystem.createDownloadResumable(
@@ -353,8 +353,8 @@ export default function App() {
         if (!info.exists || !info.size || info.size < 1_000_000_000) {
           throw new Error('ملف النموذج الذي تم تنزيله غير مكتمل.');
         }
-        setHabibiModelPath(directory);
-        await AsyncStorage.setItem('ezra:habibiModelPath', directory);
+        setHabibiModelPath(modelPath);
+        await AsyncStorage.setItem('ezra:habibiModelPath', modelPath);
       }
       const vocabInfo = await FileSystem.getInfoAsync(vocabPath);
       if (!vocabInfo.exists || !vocabInfo.size || vocabInfo.size < 1000) {

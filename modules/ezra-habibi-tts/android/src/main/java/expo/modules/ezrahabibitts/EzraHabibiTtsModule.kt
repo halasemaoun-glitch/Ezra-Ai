@@ -6,6 +6,7 @@ import android.os.Build
 import android.net.Uri
 import android.os.StatFs
 import android.media.MediaPlayer
+import android.net.Uri
 import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -19,6 +20,12 @@ class EzraHabibiTtsModule : Module() {
     return if (uri.scheme == "file") File(uri.path ?: path) else File(path)
   }
   private var mediaPlayer: MediaPlayer? = null
+  private var mediaPlayerFile: File? = null
+
+  private fun resolveFile(path: String): File {
+    val uri = Uri.parse(path)
+    return if (uri.scheme == "file") File(uri.path ?: path) else File(path)
+  }
 
   private fun ensureNativeLoaded() {
     if (nativeLoaded) return
@@ -119,17 +126,23 @@ class EzraHabibiTtsModule : Module() {
         "Generated Habibi WAV file is missing or invalid."
       }
       mediaPlayer?.release()
+      mediaPlayerFile?.delete()
       val player = MediaPlayer()
+      mediaPlayerFile = audioFile
       mediaPlayer = player
       player.setOnPreparedListener { preparedPlayer -> preparedPlayer.start() }
       player.setOnCompletionListener {
         it.release()
         if (mediaPlayer === it) mediaPlayer = null
+        audioFile.delete()
+        mediaPlayerFile = null
         sendEvent("onPlaybackFinished", mapOf("path" to path))
       }
       player.setOnErrorListener { failedPlayer, what, extra ->
         failedPlayer.release()
         if (mediaPlayer === failedPlayer) mediaPlayer = null
+        audioFile.delete()
+        mediaPlayerFile = null
         sendEvent("onPlaybackError", mapOf("what" to what, "extra" to extra))
         true
       }
@@ -144,12 +157,16 @@ class EzraHabibiTtsModule : Module() {
         player.release()
       }
       mediaPlayer = null
+      mediaPlayerFile?.delete()
+      mediaPlayerFile = null
       mapOf("stopped" to true)
     }.runOnQueue(Queues.MAIN)
 
     AsyncFunction("shutdown") {
       mediaPlayer?.release()
       mediaPlayer = null
+      mediaPlayerFile?.delete()
+      mediaPlayerFile = null
       if (nativeLoaded) nativeShutdown()
       mapOf("ready" to false)
     }
