@@ -35,6 +35,7 @@ type EzraWakeWordNative = {
   stop: () => Promise<boolean>;
   consumePendingCommand: () => Promise<string>;
   isAvailable: () => Promise<boolean>;
+  setTorch: (enabled: boolean) => Promise<boolean>;
 };
 
 const EzraWakeWord = Platform.OS === 'android'
@@ -672,10 +673,57 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [appIsActive, sending, speakingMessageId, isListening, voiceHome, autoListen, backgroundWakeEnabled]);
 
+  const handleFlashCommand = async (commandText: string, voiceReply: boolean) => {
+    if (Platform.OS !== 'android' || !EzraWakeWord) return false;
+    const normalized = commandText.toLowerCase()
+      .replace(/[إأآ]/g, 'ا')
+      .replace(/[\u064B-\u065F\u0670ـ]/g, '');
+    const mentionsFlash = /(?:الفلاش|الكشاف|ضوء الهاتف|flash|torch)/i.test(normalized);
+    const wantsOn = /(?:افتح|شغل|ولع|اشعل|turn on|enable)/i.test(normalized);
+    const wantsOff = /(?:اطف|طفي|سكر|اغلق|اقفل|turn off|disable)/i.test(normalized);
+    if (!mentionsFlash || (!wantsOn && !wantsOff)) return false;
+
+    setSending(true);
+    const userId = `device-user-${Date.now()}`;
+    const replyId = `device-reply-${Date.now()}`;
+    let reply = '';
+    try {
+      const permission = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA);
+      if (permission !== PermissionsAndroid.RESULTS.GRANTED) {
+        reply = 'أحتاج إذن الكاميرا حتى أقدر أشغّل فلاش الهاتف. فعّلي الإذن من إعدادات التطبيق وجربي مرة ثانية.';
+      } else {
+        const enabled = wantsOn && !wantsOff;
+        const changed = await EzraWakeWord.setTorch(enabled);
+        reply = changed
+          ? (enabled ? 'تم، شغّلت الفلاش. نورت الدنيا!' : 'تمام، طفيت الفلاش.')
+          : 'يبدو أن هذا الهاتف لا يحتوي على فلاش متاح للتحكم.';
+      }
+    } catch (error) {
+      console.warn('EZRA flashlight command failed:', error);
+      reply = 'حاولت أتحكم بالفلاش، لكن الهاتف لم يسمح لي. تأكدي أن الكاميرا أو الفلاش غير مستخدم من تطبيق آخر.';
+    }
+
+    const { error } = await supabase.from('chat_messages').insert([
+      { owner_id: session!.user.id, conversation_id: conversationId!, role: 'user', content: commandText },
+      { owner_id: session!.user.id, conversation_id: conversationId!, role: 'assistant', content: reply },
+    ]);
+    if (error) console.warn('Could not save local device command to history:', error);
+    setMessages(previous => [
+      ...previous,
+      { id: userId, sender: 'user', text: commandText },
+      { id: replyId, sender: 'ezra', text: reply },
+    ]);
+    setMessage('');
+    if (voiceReply || autoSpeak) speak(reply, replyId);
+    setSending(false);
+    return true;
+  };
+
   const sendMessage = async (voiceReply = false, voiceText?: string) => {
     const text = (voiceText ?? message).trim();
     if ((!text && !attachment) || !session || !conversationId || sending) return;
     if (voiceText !== undefined) voiceRequestStartedRef.current = true;
+    if (await handleFlashCommand(text, voiceReply)) return;
 
     setSending(true);
 
