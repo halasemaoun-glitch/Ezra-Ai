@@ -1711,6 +1711,7 @@ export default function App() {
       console.warn('Habibi chunk synthesis failed; using Android TTS fallback:', error);
       setHabibiEngineReady(false);
       AsyncStorage.removeItem('ezra:habibiEnabled').catch(() => {});
+      EzraHabibiTts?.shutdown().catch(() => {});
       Speech.speak(active.text, {
         language: 'ar',
         rate: speechRate,
@@ -1797,6 +1798,7 @@ export default function App() {
       activeHabibiSpeechRef.current = null;
       setHabibiEngineReady(false);
       AsyncStorage.removeItem('ezra:habibiEnabled').catch(() => {});
+      EzraHabibiTts?.shutdown().catch(() => {});
       if (pending) {
         Speech.speak(pending.text, {
           language: 'ar',
