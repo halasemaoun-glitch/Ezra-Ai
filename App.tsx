@@ -305,7 +305,10 @@ export default function App() {
       'ezra:habibiReferenceTranscript',
       'ezra:habibiDialect',
     ]).then(values => {
-      if (values[0]?.[1]) setHabibiModelPath(values[0][1]);
+      if (values[0]?.[1]) {
+        const savedPath = values[0][1];
+        setHabibiModelPath(savedPath.endsWith('.gguf') ? savedPath : `${savedPath.replace(/\/+$/, '')}/habibi-unified-orig.gguf`);
+      }
       if (values[1]?.[1]) setHabibiReferencePath(values[1][1]);
       if (values[2]?.[1]) setHabibiReferenceTranscript(values[2][1]);
       if (values[3]?.[1]) setHabibiDialect(values[3][1]);
@@ -328,7 +331,7 @@ export default function App() {
       const vocabPath = \`\${directory}vocab.txt\`;
       const existing = await FileSystem.getInfoAsync(modelPath);
       if (existing.exists && existing.size && existing.size > 1_000_000_000) {
-        setHabibiModelPath(directory);
+        setHabibiModelPath(modelPath);
         await AsyncStorage.setItem('ezra:habibiModelPath', directory);
       } else {
         if (existing.exists) await FileSystem.deleteAsync(modelPath, { idempotent: true });
