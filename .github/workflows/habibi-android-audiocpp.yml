@@ -78,7 +78,7 @@ jobs:
         run: |
           test -s build-habibi-android/bin/libaudiocpp.so
           file build-habibi-android/bin/libaudiocpp.so
-          llvm-readelf -h build-habibi-android/bin/libaudiocpp.so | grep -E "Class:|Machine:"
+          "$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" -h build-habibi-android/bin/libaudiocpp.so | grep -E "Class:|Machine:"
 
       - name: Upload Android native runtime
         uses: actions/upload-artifact@v4
