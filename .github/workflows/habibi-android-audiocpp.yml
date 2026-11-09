@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: habibi-android-${{ github.ref }}
+  group: habibi-android-native
   cancel-in-progress: true
 
 permissions:
