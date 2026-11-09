@@ -162,7 +162,7 @@ Java_expo_modules_ezrahabibitts_EzraHabibiTtsModule_nativeInitialize(
   if (g_reference.size() < static_cast<size_t>(g_reference_rate / 2) ||
       g_reference.size() > static_cast<size_t>(g_reference_rate * 1.3)) {
     g_reference.clear();
-    return env->NewStringUTF("Reference audio must be between 0.5 and 11 seconds.");
+    return env->NewStringUTF("Reference audio must be between 0.5 and 1.3 seconds for the mobile frame budget.");
   }
 
   audiocpp_status status = audiocpp_registry_create(nullptr, &g_registry);
