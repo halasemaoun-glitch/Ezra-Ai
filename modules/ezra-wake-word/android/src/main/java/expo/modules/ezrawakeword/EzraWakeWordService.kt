@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -29,9 +30,16 @@ class EzraWakeWordService : Service(), RecognitionListener {
   private var recognizer: SpeechRecognizer? = null
   private var stopping = false
   private var wakeTriggered = false
+  private var wakeLock: PowerManager.WakeLock? = null
 
   override fun onCreate() {
     super.onCreate()
+    val powerManager = getSystemService(POWER_SERVICE) as PowerManager
+    wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "EZRA:WakeWord")
+      .apply {
+        setReferenceCounted(false)
+        acquire()
+      }
     createNotificationChannel()
     startAsForeground()
   }
@@ -50,6 +58,8 @@ class EzraWakeWordService : Service(), RecognitionListener {
     recognizer?.cancel()
     recognizer?.destroy()
     recognizer = null
+    if (wakeLock?.isHeld == true) wakeLock?.release()
+    wakeLock = null
     super.onDestroy()
   }
 
