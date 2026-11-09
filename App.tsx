@@ -128,6 +128,11 @@ export default function App() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [attachment, setAttachment] = useState<Attachment | null>(null);
   const [isListening, setIsListening] = useState(false);
+  const [autoListen, setAutoListen] = useState(true);
+  const autoListenRef = useRef(true);
+  const voiceTranscriptRef = useRef('');
+  const voiceTurnInProgressRef = useRef(false);
+  const [ttsVoices, setTtsVoices] = useState<{ identifier: string; language: string; quality?: string }[]>([]);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const [chatLoading, setChatLoading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -158,17 +163,29 @@ export default function App() {
   );
 
   useEffect(() => {
-    AsyncStorage.multiGet(['ezra:autoSpeak', 'ezra:speechRate', 'ezra:recognitionLanguage']).then(values => {
+    AsyncStorage.multiGet(['ezra:autoSpeak', 'ezra:speechRate', 'ezra:recognitionLanguage', 'ezra:autoListen']).then(values => {
       const savedAutoSpeak = values[0]?.[1];
       const savedRate = values[1]?.[1];
       const savedLanguage = values[2]?.[1];
+      const savedAutoListen = values[3]?.[1];
       if (savedLanguage === 'ar' || savedLanguage === 'en') setRecognitionLanguage(savedLanguage);
+      if (savedAutoListen !== null) {
+        const enabled = savedAutoListen === 'true';
+        autoListenRef.current = enabled;
+        setAutoListen(enabled);
+      }
       if (savedAutoSpeak !== null) setAutoSpeak(savedAutoSpeak === 'true');
       if (savedRate) {
         const parsed = Number(savedRate);
         if (Number.isFinite(parsed)) setSpeechRate(Math.min(1.15, Math.max(0.75, parsed)));
       }
     }).catch(error => console.warn('Could not restore voice preferences:', error));
+  }, []);
+
+  useEffect(() => {
+    Speech.getAvailableVoicesAsync()
+      .then(voices => setTtsVoices(voices.map(voice => ({ identifier: voice.identifier, language: voice.language, quality: voice.quality }))))
+      .catch(error => console.warn('Could not load device speech voices:', error));
   }, []);
 
   useEffect(() => {
@@ -465,15 +482,40 @@ export default function App() {
   }, [session?.user.id, conversationId]);
 
   useSpeechRecognitionEvent('start', () => setIsListening(true));
-  useSpeechRecognitionEvent('end', () => setIsListening(false));
+  useSpeechRecognitionEvent('end', () => {
+    setIsListening(false);
+    const spokenText = voiceTranscriptRef.current.trim();
+    if (autoListenRef.current && voiceHome && spokenText) {
+      voiceTurnInProgressRef.current = true;
+      voiceTranscriptRef.current = '';
+      setMessage(spokenText);
+      setTimeout(() => sendMessage(true, spokenText), 250);
+    }
+  });
   useSpeechRecognitionEvent('result', event => {
     const transcript = event.results[0]?.transcript;
-    if (transcript) setMessage(transcript);
+    if (transcript) {
+      voiceTranscriptRef.current = transcript;
+      setMessage(transcript);
+    }
   });
   useSpeechRecognitionEvent('error', () => setIsListening(false));
 
-  const sendMessage = async (voiceReply = false) => {
-    const text = message.trim();
+  useEffect(() => {
+    if (!session || !voiceHome || !autoListen || isListening || sending || speakingMessageId || chatLoading) return;
+    const timer = setTimeout(() => beginListening(), 500);
+    return () => clearTimeout(timer);
+  }, [session?.user.id, voiceHome, autoListen, recognitionLanguage]);
+
+  useEffect(() => {
+    if (!voiceHome || !autoListen || !voiceTurnInProgressRef.current || sending || speakingMessageId || isListening) return;
+    voiceTurnInProgressRef.current = false;
+    const timer = setTimeout(() => beginListening(), 700);
+    return () => clearTimeout(timer);
+  }, [sending, speakingMessageId, isListening, voiceHome, autoListen]);
+
+  const sendMessage = async (voiceReply = false, voiceText?: string) => {
+    const text = (voiceText ?? message).trim();
     if ((!text && !attachment) || !session || !conversationId || sending) return;
 
     setSending(true);
@@ -617,28 +659,40 @@ export default function App() {
     setSending(false);
   };
 
-  const startListening = async () => {
+  const beginListening = async () => {
+    if (!autoListenRef.current || isListening || sending || speakingMessageId) return;
     try {
-      Speech.stop();
-      setSpeakingMessageId(null);
-      if (isListening) {
-        ExpoSpeechRecognitionModule.stop();
-        return;
-      }
       const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert('إذن الميكروفون', 'اسمح باستخدام الميكروفون والتعرّف على الكلام من إعدادات الجهاز.');
+        autoListenRef.current = false;
+        setAutoListen(false);
+        Alert.alert('إذن الميكروفون', 'اسمح لـ EZRA باستخدام الميكروفون والتعرّف على الكلام لتفعيل المحادثة التلقائية.');
         return;
       }
+      voiceTranscriptRef.current = '';
       ExpoSpeechRecognitionModule.start({
-        lang: recognitionLanguage,
+        lang: recognitionLanguage === 'ar' ? 'ar' : 'en-US',
         interimResults: true,
         continuous: false,
       });
     } catch {
       setIsListening(false);
-      Alert.alert('الصوت غير متاح', 'التعرّف على الكلام غير متاح على هذا الجهاز حاليًا.');
+      console.warn('Automatic voice listening could not start.');
     }
+  };
+
+  const startListening = async () => {
+    if (isListening) {
+      autoListenRef.current = false;
+      setAutoListen(false);
+      AsyncStorage.setItem('ezra:autoListen', 'false').catch(() => {});
+      ExpoSpeechRecognitionModule.stop();
+      return;
+    }
+    autoListenRef.current = true;
+    setAutoListen(true);
+    AsyncStorage.setItem('ezra:autoListen', 'true').catch(() => {});
+    await beginListening();
   };
 
   const pickImage = async () => {
@@ -726,10 +780,15 @@ export default function App() {
     Speech.stop();
     setSpeakingMessageId(messageId);
     const speechLanguage = /[\\u0600-\\u06FF]/.test(text) ? 'ar' : 'en';
+    const matchingVoice = ttsVoices
+      .filter(voice => voice.language.toLowerCase().startsWith(speechLanguage))
+      .sort((a, b) => Number(b.quality === 'Enhanced') - Number(a.quality === 'Enhanced'))[0];
     Speech.speak(text, {
       language: speechLanguage,
+      ...(matchingVoice ? { voice: matchingVoice.identifier } : {}),
       rate: speechRate,
-      pitch: 0.92,
+      pitch: 1.0,
+      volume: 1.0,
       onDone: () => setSpeakingMessageId(current => current === messageId ? null : current),
       onStopped: () => setSpeakingMessageId(current => current === messageId ? null : current),
       onError: () => setSpeakingMessageId(current => current === messageId ? null : current),
@@ -839,6 +898,10 @@ export default function App() {
                 <View style={styles.historyHeader}>
                   <Text style={styles.historyTitle}>إعدادات الصوت</Text>                  <TouchableOpacity style={styles.historyClose} onPress={() => setSettingsVisible(false)}><Text style={styles.historyCloseText}>×</Text></TouchableOpacity>
                 </View>                <View style={styles.settingRow}>
+                  <View style={styles.settingCopy}><Text style={styles.settingTitle}>الاستماع التلقائي</Text><Text style={styles.settingHint}>يستمع بعد فتح الشاشة وبعد كل رد</Text></View>
+                  <Switch value={autoListen} onValueChange={value => { autoListenRef.current = value; setAutoListen(value); AsyncStorage.setItem('ezra:autoListen', String(value)).catch(() => {}); if (!value && isListening) ExpoSpeechRecognitionModule.stop(); }} trackColor={{ false: '#39323D', true: '#875477' }} thumbColor={autoListen ? '#F2C8E5' : '#AAA'} />
+                </View>
+                <View style={styles.settingRow}>
                   <View style={styles.settingCopy}><Text style={styles.settingTitle}>قراءة ردود EZRA تلقائيًا</Text><Text style={styles.settingHint}>ينطق الرد بعد وصوله</Text></View>
                   <Switch value={autoSpeak} onValueChange={value => { setAutoSpeak(value); AsyncStorage.setItem('ezra:autoSpeak', String(value)).catch(() => {}); }} trackColor={{ false: '#39323D', true: '#875477' }} thumbColor={autoSpeak ? '#F2C8E5' : '#AAA'} />
                 </View>
@@ -856,7 +919,7 @@ export default function App() {
                     <TouchableOpacity style={[styles.rateButton, recognitionLanguage === 'en' && styles.languageButtonActive]} onPress={() => { setRecognitionLanguage('en'); AsyncStorage.setItem('ezra:recognitionLanguage', 'en').catch(() => {}); }}><Text style={styles.rateButtonText}>EN</Text></TouchableOpacity>
                   </View>
                 </View>
-                <Text style={styles.settingsFootnote}>الصوت المتاح يعتمد على أصوات النظام المثبتة في هاتفك.</Text>
+                <Text style={styles.settingsFootnote}>نختار أفضل صوت عربي محسّن متاح على هاتفك تلقائيًا. جودة الصوت تعتمد أيضًا على محرّك تحويل النص إلى كلام والأصوات المثبتة في الجهاز.</Text>
               </View>
             </View>
           </Modal>
