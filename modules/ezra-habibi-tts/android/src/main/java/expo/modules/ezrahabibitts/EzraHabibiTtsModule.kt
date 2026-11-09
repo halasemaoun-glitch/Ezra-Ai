@@ -3,6 +3,7 @@ package expo.modules.ezrahabibitts
 import android.app.ActivityManager
 import android.content.Context
 import android.os.Build
+import android.net.Uri
 import android.os.StatFs
 import android.media.MediaPlayer
 import expo.modules.kotlin.functions.Queues
@@ -12,6 +13,11 @@ import java.io.File
 
 class EzraHabibiTtsModule : Module() {
   @Volatile private var nativeLoaded = false
+
+  private fun localFile(path: String): File {
+    val uri = Uri.parse(path)
+    return if (uri.scheme == "file") File(uri.path ?: path) else File(path)
+  }
   private var mediaPlayer: MediaPlayer? = null
 
   private fun ensureNativeLoaded() {
@@ -75,7 +81,7 @@ class EzraHabibiTtsModule : Module() {
     }
 
     AsyncFunction("inspectModelFile") { path: String ->
-      val file = File(path)
+      val file = localFile(path)
       mapOf(
         "exists" to file.exists(),
         "readable" to (file.exists() && file.canRead()),
@@ -86,8 +92,8 @@ class EzraHabibiTtsModule : Module() {
 
     AsyncFunction("initialize") { modelPath: String, referenceWavPath: String, transcript: String, dialect: String, threads: Int ->
       ensureNativeLoaded()
-      val model = File(modelPath)
-      val reference = File(referenceWavPath)
+      val model = localFile(modelPath)
+      val reference = localFile(referenceWavPath)
       require(model.exists() && model.canRead()) { "Habibi model directory or file is missing or unreadable." }
       require(reference.isFile && reference.canRead()) { "Approved male reference WAV is missing or unreadable." }
       require(transcript.isNotBlank()) { "The exact transcript of the reference recording is required." }
@@ -99,7 +105,7 @@ class EzraHabibiTtsModule : Module() {
     AsyncFunction("synthesize") { text: String, outputPath: String ->
       ensureNativeLoaded()
       require(text.isNotBlank()) { "Text to synthesize is empty." }
-      val output = File(outputPath)
+      val output = localFile(outputPath)
       output.parentFile?.mkdirs()
       val error = nativeSynthesize(text, output.absolutePath)
       if (error.isNotEmpty()) throw IllegalStateException(error)
