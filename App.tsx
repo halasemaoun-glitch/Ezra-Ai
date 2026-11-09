@@ -148,6 +148,8 @@ export default function App() {
   const [voiceRetryMessage, setVoiceRetryMessage] = useState('');
   const [autoListen, setAutoListen] = useState(true);
   const [backgroundWakeEnabled, setBackgroundWakeEnabled] = useState(false);
+  const [voicePrefsLoaded, setVoicePrefsLoaded] = useState(false);
+  const wakeServiceStartedRef = useRef(false);
   const [pendingWakeCommand, setPendingWakeCommand] = useState('');
   const autoListenRef = useRef(true);
   const voiceTranscriptRef = useRef('');
@@ -233,7 +235,11 @@ export default function App() {
         const parsed = Number(savedRate);
         if (Number.isFinite(parsed)) setSpeechRate(Math.min(1.15, Math.max(0.75, parsed)));
       }
-    }).catch(error => console.warn('Could not restore voice preferences:', error));
+      setVoicePrefsLoaded(true);
+    }).catch(error => {
+      console.warn('Could not restore voice preferences:', error);
+      setVoicePrefsLoaded(true);
+    });
   }, []);
 
   useEffect(() => {
@@ -500,8 +506,22 @@ export default function App() {
 
   const resumeBackgroundWake = () => {
     if (!backgroundWakeEnabled || Platform.OS !== 'android' || !EzraWakeWord) return;
-    EzraWakeWord.start().catch(error => console.warn('Could not resume EZRA wake service:', error));
+    EzraWakeWord.start().then(() => {
+      wakeServiceStartedRef.current = true;
+    }).catch(error => {
+      wakeServiceStartedRef.current = false;
+      console.warn('Could not resume EZRA wake service:', error);
+    });
   };
+
+  useEffect(() => {
+    if (!voicePrefsLoaded || !backgroundWakeEnabled || !session || !appIsActive || Platform.OS !== 'android' || !EzraWakeWord || wakeServiceStartedRef.current) return;
+    wakeServiceStartedRef.current = true;
+    EzraWakeWord.start().catch(error => {
+      wakeServiceStartedRef.current = false;
+      console.warn('Could not restore EZRA wake service:', error);
+    });
+  }, [voicePrefsLoaded, backgroundWakeEnabled, session?.user.id, appIsActive]);
 
   const returnToVoiceHome = () => {
     if (isListening) ExpoSpeechRecognitionModule.stop();
@@ -849,6 +869,7 @@ export default function App() {
           setIsListening(false);
         }
         await EzraWakeWord.start();
+        wakeServiceStartedRef.current = true;
         setBackgroundWakeEnabled(true);
         await AsyncStorage.setItem('ezra:backgroundWake', 'true');
         Alert.alert('تم تفعيل كلمة التنبيه', 'قل «يا EZRA» لإيقاظ المساعد. سيظهر إشعار دائم أثناء عمل الاستماع بالخلفية.');
@@ -863,6 +884,7 @@ export default function App() {
     } catch (error) {
       console.warn('Could not stop EZRA background wake service:', error);
     }
+    wakeServiceStartedRef.current = false;
     setBackgroundWakeEnabled(false);
     await AsyncStorage.setItem('ezra:backgroundWake', 'false');
   };
@@ -940,6 +962,7 @@ export default function App() {
   const startListening = async () => {
     if (backgroundWakeEnabled && EzraWakeWord) {
       await EzraWakeWord.stop().catch(error => console.warn('Could not pause wake service:', error));
+      wakeServiceStartedRef.current = false;
     }
     if (speakingMessageId) {
       Speech.stop();
