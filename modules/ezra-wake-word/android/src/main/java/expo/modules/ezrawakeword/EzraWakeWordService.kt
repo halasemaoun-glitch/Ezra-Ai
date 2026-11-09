@@ -154,7 +154,7 @@ class EzraWakeWordService : Service(), RecognitionListener {
       .trim(' ', ',', '،', '.', '!')
     getSharedPreferences(PREFERENCES, MODE_PRIVATE)
       .edit()
-      .putString(PENDING_COMMAND, command)
+      .putString(PENDING_COMMAND, if (command.isEmpty()) "__EZRA_WAKE_ONLY__" else command)
       .apply()
 
     handler.post {
