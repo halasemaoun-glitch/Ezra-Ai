@@ -17,6 +17,16 @@ module.exports = function withEzraWakeWord(config) {
       }
     }
 
+    manifest.queries = manifest.queries || [];
+    const recognitionQueryExists = manifest.queries.some(query =>
+      query.intent?.some(intent => intent.action?.some(action => action.$["android:name"] === "android.speech.RecognitionService"))
+    );
+    if (!recognitionQueryExists) {
+      manifest.queries.push({
+        intent: [{ action: [{ $: { "android:name": "android.speech.RecognitionService" } }] }]
+      });
+    }
+
     const application = manifest.application?.[0];
     if (!application) throw new Error("EZRA Android application manifest is missing.");
     application.service = application.service || [];
