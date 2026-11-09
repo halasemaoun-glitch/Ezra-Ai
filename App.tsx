@@ -93,13 +93,13 @@ function EzraOrb({ status, voiceLevel = 0 }: { status: string; voiceLevel?: numb
       return loop;
     });
     return () => waveLoops.forEach(loop => loop.stop());
-  }, [waveform, status, listening, thinking, speaking]);
+  }, [waveform, status, listening, thinking, speaking, voiceLevel]);
   const active = listening || thinking || speaking;
   const caption = listening ? 'أنا أسمعك… خذ وقتك' : thinking ? 'أرتّب أفكاري لأجيبك' : speaking ? 'أنا معك، ويمكنك مقاطعتي' : 'أنا هنا عندما تحتاجني';
   return (
     <View style={styles.orbSection}>
       <View style={styles.orbStage}>
-        <EzraOrb3D status={status} />
+        <EzraOrb3D status={status} level={listening ? voiceLevel : 0} />
       </View>
       <View style={[styles.orbStatusPill, active && styles.orbStatusPillActive]}>
         <View style={[styles.orbStatusDot, active && styles.orbStatusDotActive]} />
@@ -536,6 +536,7 @@ export default function App() {
   });
   useSpeechRecognitionEvent('error', () => {
     setIsListening(false);
+    setVoiceLevel(0);
     voiceTranscriptRef.current = '';
     if (autoListenRef.current && voiceHome && voiceRetryCountRef.current < 2) {
       voiceRetryCountRef.current += 1;
