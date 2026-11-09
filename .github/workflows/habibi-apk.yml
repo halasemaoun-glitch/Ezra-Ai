@@ -28,7 +28,7 @@ jobs:
       - name: Checkout EZRA
         uses: actions/checkout@v4
         with:
-          ref: \${{ github.sha }}
+          ref: ${{ github.sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -51,9 +51,9 @@ jobs:
         with:
           name: ezra-habibi-audiocpp-android-arm64
           path: habibi-runtime
-          repository: \${{ github.repository }}
+          repository: ${{ github.repository }}
           run-id: 42701773397
-          github-token: \${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install native runtime
         run: |
