@@ -210,6 +210,22 @@ class EzraWakeWordModule : Module() {
       true
     }
 
+    AsyncFunction("mediaControl") { requestedAction: String ->
+      val context = appContext.reactContext?.applicationContext
+        ?: throw IllegalStateException("EZRA Android context is unavailable")
+      val keyCode = when (requestedAction.lowercase(Locale.ROOT)) {
+        "play", "pause", "toggle" -> KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+        "next" -> KeyEvent.KEYCODE_MEDIA_NEXT
+        "previous" -> KeyEvent.KEYCODE_MEDIA_PREVIOUS
+        "stop" -> KeyEvent.KEYCODE_MEDIA_STOP
+        else -> return@AsyncFunction false
+      }
+      val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+      audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
+      audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
+      true
+    }
+
     AsyncFunction("isAvailable") {
       val context = appContext.reactContext?.applicationContext
         ?: return@AsyncFunction false
