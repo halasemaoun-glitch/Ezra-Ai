@@ -6,20 +6,47 @@ import android.os.Build
 import android.os.StatFs
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
-import ai.onnxruntime.OrtEnvironment
 import java.io.File
 
 class EzraHabibiTtsModule : Module() {
+  @Volatile private var nativeLoaded = false
+
+  private fun ensureNativeLoaded() {
+    if (nativeLoaded) return
+    synchronized(this) {
+      if (nativeLoaded) return
+      System.loadLibrary("audiocpp")
+      System.loadLibrary("ezra_habibi_jni")
+      nativeLoaded = true
+    }
+  }
+
+  private external fun nativeInitialize(
+    modelPath: String,
+    referenceWavPath: String,
+    transcript: String,
+    dialect: String,
+    threads: Int
+  ): String
+
+  private external fun nativeSynthesize(text: String, outputPath: String): String
+  private external fun nativeShutdown()
+
   override fun definition() = ModuleDefinition {
     Name("EzraHabibiTts")
 
     AsyncFunction("getRuntimeInfo") {
-      // Initialises the native ONNX Runtime library without downloading or
-      // loading the multi-gigabyte Habibi model into memory.
-      OrtEnvironment.getEnvironment()
+      val loaded = try {
+        ensureNativeLoaded()
+        true
+      } catch (_: UnsatisfiedLinkError) {
+        false
+      } catch (_: Exception) {
+        false
+      }
       mapOf(
-        "available" to true,
-        "runtime" to "ONNX Runtime Android 1.22.0",
+        "available" to loaded,
+        "runtime" to if (loaded) "audio.cpp Habibi/F5-TTS C ABI" else "Android native runtime not packaged",
         "androidApi" to Build.VERSION.SDK_INT
       )
     }
@@ -51,6 +78,34 @@ class EzraHabibiTtsModule : Module() {
         "bytes" to (if (file.exists()) file.length() else 0L),
         "absolutePath" to file.absolutePath
       )
+    }
+
+    AsyncFunction("initialize") { modelPath: String, referenceWavPath: String, transcript: String, dialect: String, threads: Int ->
+      ensureNativeLoaded()
+      val model = File(modelPath)
+      val reference = File(referenceWavPath)
+      require(model.isFile && model.canRead()) { "Habibi GGUF model file is missing or unreadable." }
+      require(reference.isFile && reference.canRead()) { "Approved male reference WAV is missing or unreadable." }
+      require(transcript.isNotBlank()) { "The exact transcript of the reference recording is required." }
+      val error = nativeInitialize(model.absolutePath, reference.absolutePath, transcript, dialect, threads)
+      if (error.isNotEmpty()) throw IllegalStateException(error)
+      mapOf("ready" to true, "engine" to "habibi-tts", "dialect" to dialect)
+    }
+
+    AsyncFunction("synthesize") { text: String, outputPath: String ->
+      ensureNativeLoaded()
+      require(text.isNotBlank()) { "Text to synthesize is empty." }
+      val output = File(outputPath)
+      output.parentFile?.mkdirs()
+      val error = nativeSynthesize(text, output.absolutePath)
+      if (error.isNotEmpty()) throw IllegalStateException(error)
+      if (!output.isFile || output.length() <= 44L) throw IllegalStateException("Habibi did not create a valid WAV output.")
+      mapOf("path" to output.absolutePath, "bytes" to output.length())
+    }
+
+    AsyncFunction("shutdown") {
+      if (nativeLoaded) nativeShutdown()
+      mapOf("ready" to false)
     }
   }
 }
