@@ -952,12 +952,14 @@ export default function App() {
             <TouchableOpacity
               style={[styles.voiceMic, isListening && styles.voiceMicActive, !!speakingMessageId && styles.voiceMicSpeaking]}
               onPress={startListening}
+              accessibilityRole="button"
               accessibilityLabel={speakingMessageId ? 'مقاطعة إزرا والتحدث الآن' : isListening ? 'إيقاف الاستماع' : 'ابدأ التحدث مع إزرا'}
+              accessibilityHint={speakingMessageId ? 'سيوقف صوت إزرا ويبدأ الاستماع إليك' : isListening ? 'اضغط لإيقاف التقاط صوتك' : 'اضغط لبدء المحادثة الصوتية'}
             >
               <Text style={styles.voiceMicIcon}>{speakingMessageId ? 'Ⅱ' : isListening ? '■' : '⌁'}</Text>
             </TouchableOpacity>
           </View>
-          <Text style={styles.voiceMicHint}>{speakingMessageId ? 'اضغط للمقاطعة والتحدث' : isListening ? 'أنا أسمعك الآن…' : sending ? 'أجهّز لك الرد…' : 'اضغط وتحدث معي بحرية'}</Text>
+          <Text style={styles.voiceMicHint}>{voiceRetrying ? 'أعيد الاتصال بخدمة الاستماع…' : speakingMessageId ? 'اضغط للمقاطعة والتحدث' : isListening ? 'أنا أسمعك الآن…' : sending ? 'أجهّز لك الرد…' : 'اضغط وتحدث معي بحرية'}</Text>
           {!!message.trim() && (
             <View style={styles.voiceTranscriptCard} accessibilityLiveRegion="polite">
               <Text style={styles.voiceTranscriptLabel}>{isListening ? 'ألتقط كلماتك الآن' : sending ? 'وصلني كلامك، أجهّز الرد' : 'النص الذي التقطته'}</Text>
