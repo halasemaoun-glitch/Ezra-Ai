@@ -427,7 +427,7 @@ export default function App() {
         habibiReferencePath,
         habibiReferenceTranscript.trim(),
         habibiDialect,
-        2
+        1
       );
       setHabibiEngineReady(result.ready);
       if (!result.ready) throw new Error('لم يتمكن محرك Habibi من التهيئة.');
