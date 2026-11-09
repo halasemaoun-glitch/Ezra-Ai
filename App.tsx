@@ -1975,6 +1975,7 @@ export default function App() {
                   <Text style={styles.settingHint}>العينة يجب أن تكون صوت رجل واضحًا، WAV PCM 16-bit، من 3 إلى 5 ثوانٍ، مع نص مطابق تمامًا. تسجيلك السابق يبقى احتياطيًا ولن نستخدمه هنا.</Text>
                   <View style={{ flexDirection: 'row', gap: 8 }}>
                     {[
+                      { code: 'LEV', label: 'شامي' },
                       { code: 'ALG', label: 'جزائري' },
                       { code: 'SAU', label: 'سعودي' },
                       { code: 'MSA', label: 'فصحى' },
@@ -1995,7 +1996,7 @@ export default function App() {
                       </TouchableOpacity>
                     ))}
                   </View>
-                  <Text style={styles.settingHint}>اللهجة الشامية LEV موجودة كرمز، لكن بيانات تدريبها غير كافية؛ لذلك لم أفعّلها كخيار مضمون.</Text>
+                  <Text style={styles.settingHint}>محرك Habibi Unified يوفّر رموز اللهجات الشامية والجزائرية والسعودية؛ جودة النطق النهائية تُحسم بالاختبار على الجهاز.</Text>
                   <TouchableOpacity
                     style={[styles.memorySaveButton, { marginTop: 0, opacity: habibiEngineBusy ? 0.6 : 1 }]}
                     onPress={() => { void initializeHabibiEngine(); }}
