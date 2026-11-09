@@ -445,6 +445,34 @@ export default function App() {
     }
   };
 
+  const testHabibiVoice = async () => {
+    if (!EzraHabibiTts || !habibiEngineReady || habibiEngineBusy) {
+      Alert.alert('Habibi غير جاهز', 'فعّل المحرك أولًا قبل تجربة الصوت.');
+      return;
+    }
+    setHabibiEngineBusy(true);
+    setHabibiEngineError('');
+    try {
+      Speech.stop();
+      await EzraHabibiTts.stopAudio().catch(() => {});
+      const outputDirectory = FileSystem.cacheDirectory || FileSystem.documentDirectory || '';
+      const outputPath = \`\${outputDirectory}ezra-habibi-test-\${Date.now()}.wav\`;
+      const generated = await EzraHabibiTts.synthesize(
+        'مرحباً، أنا إزرا. هذا اختبار لصوتي العربي الجديد.',
+        outputPath
+      );
+      setSpeakingMessageId('habibi-test');
+      await EzraHabibiTts.playAudio(generated.path);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'تعذّر توليد عينة الاختبار.';
+      setHabibiEngineError(message);
+      setSpeakingMessageId(null);
+      Alert.alert('فشل اختبار Habibi', message);
+    } finally {
+      setHabibiEngineBusy(false);
+    }
+  };
+
   useEffect(() => {
     if (!voicePrefsLoaded || !session?.user.id || !habibiModelPath || !habibiReferencePath ||
         !habibiReferenceTranscript.trim() || habibiAutoInitStartedRef.current) return;
@@ -1972,6 +2000,13 @@ export default function App() {
                     disabled={habibiEngineBusy || Platform.OS !== 'android'}
                   >
                     <Text style={styles.memorySaveText}>{habibiEngineBusy ? 'جارٍ تحميل المحرك…' : habibiEngineReady ? 'إعادة تهيئة Habibi' : 'تفعيل Habibi كمحرك الصوت العربي'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.memorySaveButton, { marginTop: 0, opacity: habibiEngineBusy || !habibiEngineReady ? 0.55 : 1 }]}
+                    onPress={testHabibiVoice}
+                    disabled={habibiEngineBusy || !habibiEngineReady || Platform.OS !== 'android'}
+                  >
+                    <Text style={styles.memorySaveText}>{habibiEngineBusy ? 'جارٍ تجهيز الصوت…' : 'تجربة صوت EZRA'}</Text>
                   </TouchableOpacity>
                   {habibiEngineError ? <Text style={styles.authError}>{habibiEngineError}</Text> : null}
                 </View>
