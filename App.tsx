@@ -2335,7 +2335,7 @@ export default function App() {
               ) : visibleMemories.length === 0 ? (
                 <Text style={styles.historyEmpty}>لا توجد ذكريات تطابق البحث أو التصفية.</Text>
               ) : (
-                <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} contentContainerStyle={styles.memoryList}>
+                <ScrollView style={{ flex: 1 }} nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.memoryList}>
                   {visibleMemories.map(item => (
                     <View key={item.id} style={styles.memoryItem}>
                       <Text style={styles.memoryItemText}>{item.content}</Text>
@@ -2406,7 +2406,7 @@ export default function App() {
               ) : visibleConversations.length === 0 ? (
                 <Text style={styles.historyEmpty}>لا توجد محادثات تطابق البحث.</Text>
               ) : (
-                <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                <ScrollView style={{ flex: 1 }} nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
                   {visibleConversations.map(item => (
                     <View key={item.id} style={styles.historyItemRow}>
                       <TouchableOpacity
