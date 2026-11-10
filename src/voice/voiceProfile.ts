@@ -1,9 +1,9 @@
 /**
  * EZRA's agreed voice profile.
  *
- * Habibi-TTS remains the intended primary engine. Until its complete Android
- * inference pipeline is available, App.tsx deliberately retains expo-speech
- * as a temporary device fallback instead of pretending that Habibi is running.
+ * Habibi-TTS remains the intended primary engine. Its Android bridge compiles in
+ * CI; until inference and playback are verified on the target phone, App.tsx
+ * retains expo-speech as a safe fallback.
  */
 export const DEFAULT_EZRA_VOICE = {
   engine: 'habibi-tts' as const,
