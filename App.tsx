@@ -33,6 +33,7 @@ import { DEFAULT_EZRA_VOICE, detectEzraSpeechLanguage } from './src/voice/voiceP
 import { requireNativeModule } from 'expo-modules-core';
 
 type EzraWakeWordNative = {
+  // Start the microphone foreground service only from a visible, foreground Activity (Android 12+ restriction).
   start: () => Promise<boolean>;
   stop: () => Promise<boolean>;
   consumePendingCommand: () => Promise<string>;
