@@ -219,7 +219,9 @@ Java_expo_modules_ezrahabibitts_EzraHabibiTtsModule_nativeSynthesize(
   if (status == AUDIOCPP_OK) status = audiocpp_request_set_option(
       request, "dialect", g_dialect.c_str());
   if (status == AUDIOCPP_OK) status = audiocpp_request_set_option(
-      request, "speed", "0.92");
+      request, "speed", "1.0");
+  if (status == AUDIOCPP_OK) status = audiocpp_request_set_option(
+      request, "strip_diacritics", "true");
   if (status != AUDIOCPP_OK) {
     std::string error = lastError("Habibi request setup", status);
     audiocpp_request_free(request);
