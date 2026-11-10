@@ -186,7 +186,7 @@ jobs:
           needle = "react {"
           if source.count(needle) != 1:
               raise SystemExit("Expected exactly one React Native Gradle react block")
-          source = source.replace(needle, needle + "\\n    // Ship the JS bundle so this APK runs without Metro.\\n    debuggableVariants = []", 1)
+          source = source.replace(needle, needle + chr(10) + "    // Ship the JS bundle so this APK runs without Metro." + chr(10) + "    debuggableVariants = []", 1)
           path.write_text(source)
           assert "debuggableVariants = []" in path.read_text()
 
