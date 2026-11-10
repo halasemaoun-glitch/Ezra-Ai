@@ -3,10 +3,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Alert,
   Animated,
+  AppState,
   Easing,
   KeyboardAvoidingView,
   Modal,
   Platform,
+  PermissionsAndroid,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -24,12 +26,39 @@ import {
   useSpeechRecognitionEvent,
 } from 'expo-speech-recognition';
 import { StatusBar } from 'expo-status-bar';
+import EzraOrb3D from './src/EzraOrb3D';
 import { supabase } from './src/lib/supabase';
+import { requireNativeModule } from 'expo-modules-core';
+
+type EzraWakeWordNative = {
+  start: () => Promise<boolean>;
+  stop: () => Promise<boolean>;
+  consumePendingCommand: () => Promise<string>;
+  isAvailable: () => Promise<boolean>;
+  setTorch: (enabled: boolean) => Promise<boolean>;
+  findContactPhone: (name: string) => Promise<string>;
+  callNumber: (phone: string) => Promise<boolean>;
+  dialNumber: (phone: string) => Promise<boolean>;
+  composeSms: (phone: string, body: string) => Promise<boolean>;
+  createAlarm: (hour: number, minute: number, label: string) => Promise<boolean>;
+  createTimer: (seconds: number, label: string) => Promise<boolean>;
+  openSystemSettings: (target: string) => Promise<boolean>;
+  launchApp: (name: string) => Promise<boolean>;
+  adjustVolume: (direction: string) => Promise<boolean>;
+  mediaControl: (action: string) => Promise<boolean>;
+};
+
+const EzraWakeWord = Platform.OS === 'android'
+  ? requireNativeModule<EzraWakeWordNative>('EzraWakeWord')
+  : null;
 
 type Attachment = {
   uri: string;
   name: string;
   kind: 'image' | 'file';
+  mimeType?: string;
+  base64?: string;
+  textContent?: string;
 };
 
 type ConversationSummary = {
@@ -64,52 +93,49 @@ const createConversationId = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replac
   return value.toString(16);
 });
 
-function EzraOrb({ status }: { status: string }) {
-  const pulse = useRef(new Animated.Value(0)).current;
-  const rotation = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const breathing = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 1850, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0, duration: 1850, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-      ])
-    );
-    const orbit = Animated.loop(
-      Animated.timing(rotation, { toValue: 1, duration: 14500, easing: Easing.linear, useNativeDriver: true })
-    );
-    breathing.start();
-    orbit.start();
-    return () => { breathing.stop(); orbit.stop(); };
-  }, [pulse, rotation]);
-  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1.07] });
-  const glow = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.38, 0.88] });
-  const spin = rotation.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
-  const reverseSpin = rotation.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-360deg'] });
-  const active = status !== 'أنا هنا';
+function EzraOrb({ status, voiceLevel = 0 }: { status: string; voiceLevel?: number }) {
+  const waveform = useRef(Array.from({ length: 9 }, () => new Animated.Value(0.18))).current;
   const listening = status.includes('يستمع');
   const thinking = status.includes('أفكر');
   const speaking = status.includes('يتحدث');
+  useEffect(() => {
+    if (listening) {
+      waveform.forEach((bar, index) => {
+        const envelope = 0.12 + voiceLevel * (0.38 + (Math.sin(index * 1.7) + 1) * 0.2);
+        bar.setValue(Math.max(0.12, Math.min(1, envelope)));
+      });
+      return () => waveform.forEach(bar => bar.stopAnimation());
+    }
+    const waveLoops = waveform.map((bar, index) => {
+      bar.setValue(0.18);
+      const duration = thinking ? 1050 : speaking ? 360 : 560;
+      const loop = Animated.loop(Animated.sequence([
+        Animated.delay(index * (thinking ? 110 : 65)),
+        Animated.timing(bar, { toValue: 0.95, duration, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(bar, { toValue: 0.18, duration, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]));
+      if (listening || thinking || speaking) loop.start();
+      return loop;
+    });
+    return () => waveLoops.forEach(loop => loop.stop());
+  }, [waveform, status, listening, thinking, speaking, voiceLevel]);
+  const active = listening || thinking || speaking;
+  const caption = listening ? 'أنا أسمعك… خذ وقتك' : thinking ? 'أرتّب أفكاري لأجيبك' : speaking ? 'أنا معك، ويمكنك مقاطعتي' : 'أنا هنا عندما تحتاجني';
   return (
     <View style={styles.orbSection}>
       <View style={styles.orbStage}>
-        <Animated.View style={[styles.orbHalo, listening && styles.orbHaloListening, thinking && styles.orbHaloThinking, speaking && styles.orbHaloSpeaking, { opacity: glow, transform: [{ scale }] }]} />
-        <Animated.View style={[styles.orbAura, { opacity: glow, transform: [{ scale }] }]} />
-        <Animated.View style={[styles.orbRingOuter, { transform: [{ rotate: spin }] }]}>
-          <View style={styles.orbOrbitDot} />
-        </Animated.View>
-        <Animated.View style={[styles.orbRingInner, { transform: [{ rotate: reverseSpin }] }]}>
-          <View style={styles.orbOrbitDotSmall} />
-        </Animated.View>
-        <Animated.View style={[styles.orbCore, listening && styles.orbCoreListening, thinking && styles.orbCoreThinking, speaking && styles.orbCoreSpeaking, { transform: [{ scale }] }]}>
-          <View style={styles.orbCoreHighlight} />
-          <View style={styles.orbCoreSpark} />
-        </Animated.View>
+        <EzraOrb3D status={status} level={listening ? voiceLevel : 0} />
       </View>
       <View style={[styles.orbStatusPill, active && styles.orbStatusPillActive]}>
         <View style={[styles.orbStatusDot, active && styles.orbStatusDotActive]} />
-        <Text style={styles.orbStatus}>{status}</Text>
+        <Text style={styles.orbStatus} accessibilityLiveRegion="polite">{status}</Text>
       </View>
-      <Text style={styles.orbCaption}>مساحتك الخاصة للحديث والتفكير</Text>
+      <View style={styles.orbWaveform} accessibilityLabel={listening ? 'موجات الاستماع' : speaking ? 'موجات التحدث' : 'موجات حالة إزرا'}>
+        {waveform.map((bar, index) => (
+          <Animated.View key={index} style={[styles.orbWaveBar, { opacity: active ? 0.9 : 0.18, transform: [{ scaleY: active ? bar : 0.18 }] }]} />
+        ))}
+      </View>
+      <Text style={styles.orbCaption}>{caption}</Text>
     </View>
   );
 }
@@ -117,19 +143,38 @@ function EzraOrb({ status }: { status: string }) {
 export default function App() {
   const [message, setMessage] = useState('');
   const [voiceHome, setVoiceHome] = useState(true);
+  const [appIsActive, setAppIsActive] = useState(AppState.currentState === 'active');
+  const appIsActiveRef = useRef(AppState.currentState === 'active');
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [autoSpeak, setAutoSpeak] = useState(true);
   const [speechRate, setSpeechRate] = useState(0.92);
+  const [speechPitch, setSpeechPitch] = useState(0.9);
   const [recognitionLanguage, setRecognitionLanguage] = useState<'ar' | 'en'>('ar');
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [attachment, setAttachment] = useState<Attachment | null>(null);
   const [isListening, setIsListening] = useState(false);
+  const [voiceLevel, setVoiceLevel] = useState(0);
+  const [voiceRetrying, setVoiceRetrying] = useState(false);
+  const [voiceRetryMessage, setVoiceRetryMessage] = useState('');
+  const [autoListen, setAutoListen] = useState(true);
+  const [backgroundWakeEnabled, setBackgroundWakeEnabled] = useState(false);
+  const [voicePrefsLoaded, setVoicePrefsLoaded] = useState(false);
+  const wakeServiceStartedRef = useRef(false);
+  const [pendingWakeCommand, setPendingWakeCommand] = useState('');
+  const autoListenRef = useRef(true);
+  const voiceTranscriptRef = useRef('');
+  const voiceTurnInProgressRef = useRef(false);
+  const voiceRequestStartedRef = useRef(false);
+  const voiceRetryCountRef = useRef(0);
+  const [ttsVoices, setTtsVoices] = useState<{ identifier: string; name: string; language: string; quality?: string }[]>([]);
+  const [selectedTtsVoice, setSelectedTtsVoice] = useState<string | null>(null);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const [chatLoading, setChatLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [session, setSession] = useState<import('@supabase/supabase-js').Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [assistantConnection, setAssistantConnection] = useState<'unknown' | 'online' | 'offline'>('unknown');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
@@ -142,19 +187,91 @@ export default function App() {
   const [memorySaving, setMemorySaving] = useState(false);
   const [memoryDraft, setMemoryDraft] = useState('');
   const [memories, setMemories] = useState<MemoryItem[]>([]);
+  const [memorySearch, setMemorySearch] = useState('');
+  const [memoryFilter, setMemoryFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [historySearch, setHistorySearch] = useState('');
+  const micPulse = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    AsyncStorage.multiGet(['ezra:autoSpeak', 'ezra:speechRate', 'ezra:recognitionLanguage']).then(values => {
+    const subscription = AppState.addEventListener('change', nextState => {
+      const active = nextState === 'active';
+      appIsActiveRef.current = active;
+      setAppIsActive(active);
+      if (!active) {
+        // Discard partial speech so background transitions can never submit an unfinished phrase.
+        const hadPartialTranscript = !!voiceTranscriptRef.current;
+        voiceTranscriptRef.current = '';
+        if (hadPartialTranscript) setMessage('');
+        setVoiceRetrying(false);
+        setVoiceRetryMessage('');
+        // Keep microphone capture foreground-only; resume automatically when the app returns.
+        ExpoSpeechRecognitionModule.stop();
+        Speech.stop();
+        setIsListening(false);
+        setSpeakingMessageId(null);
+        setVoiceLevel(0);
+      }
+    });
+    return () => subscription.remove();
+  }, []);
+
+  const visibleMemories = memories.filter(item => {
+    const matchesSearch = item.content.toLocaleLowerCase().includes(memorySearch.trim().toLocaleLowerCase());
+    return matchesSearch && (memoryFilter === 'all' || item.approval_status === memoryFilter);
+  });
+  const visibleConversations = conversations.filter(item =>
+    item.title.toLocaleLowerCase().includes(historySearch.trim().toLocaleLowerCase())
+  );
+
+  useEffect(() => {
+    AsyncStorage.multiGet(['ezra:autoSpeak', 'ezra:speechRate', 'ezra:recognitionLanguage', 'ezra:autoListen', 'ezra:ttsVoice', 'ezra:speechPitch', 'ezra:backgroundWake']).then(values => {
       const savedAutoSpeak = values[0]?.[1];
       const savedRate = values[1]?.[1];
       const savedLanguage = values[2]?.[1];
+      const savedAutoListen = values[3]?.[1];
+      const savedTtsVoice = values[4]?.[1];
+      if (savedTtsVoice) setSelectedTtsVoice(savedTtsVoice);
+      const savedPitch = Number(values[5]?.[1]);
+      const savedBackgroundWake = values[6]?.[1];
+      if (savedBackgroundWake !== null) setBackgroundWakeEnabled(savedBackgroundWake === 'true');
+      if (Number.isFinite(savedPitch) && savedPitch >= 0.75 && savedPitch <= 1.1) setSpeechPitch(savedPitch);
       if (savedLanguage === 'ar' || savedLanguage === 'en') setRecognitionLanguage(savedLanguage);
+      if (savedAutoListen !== null) {
+        const enabled = savedAutoListen === 'true';
+        autoListenRef.current = enabled;
+        setAutoListen(enabled);
+      }
       if (savedAutoSpeak !== null) setAutoSpeak(savedAutoSpeak === 'true');
       if (savedRate) {
         const parsed = Number(savedRate);
         if (Number.isFinite(parsed)) setSpeechRate(Math.min(1.15, Math.max(0.75, parsed)));
       }
-    }).catch(error => console.warn('Could not restore voice preferences:', error));
+      setVoicePrefsLoaded(true);
+    }).catch(error => {
+      console.warn('Could not restore voice preferences:', error);
+      setVoicePrefsLoaded(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    const active = isListening || !!speakingMessageId || sending;
+    if (!active) {
+      micPulse.stopAnimation();
+      micPulse.setValue(1);
+      return;
+    }
+    const pulse = Animated.loop(Animated.sequence([
+      Animated.timing(micPulse, { toValue: 1.2, duration: 760, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(micPulse, { toValue: 1, duration: 760, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+    ]));
+    pulse.start();
+    return () => pulse.stop();
+  }, [isListening, speakingMessageId, sending, micPulse]);
+
+  useEffect(() => {
+    Speech.getAvailableVoicesAsync()
+      .then(voices => setTtsVoices(voices.map(voice => ({ identifier: voice.identifier, name: voice.name, language: voice.language, quality: voice.quality }))))
+      .catch(error => console.warn('Could not load device speech voices:', error));
   }, []);
 
   useEffect(() => {
@@ -358,6 +475,31 @@ export default function App() {
     }
   };
 
+  const deleteConversation = (selectedId: string) => {
+    if (!session) return;
+    Alert.alert('حذف المحادثة', 'سيتم حذف رسائل هذه المحادثة نهائيًا. هل تريد المتابعة؟', [
+      { text: 'إلغاء', style: 'cancel' },
+      {
+        text: 'حذف',
+        style: 'destructive',
+        onPress: async () => {
+          const { error } = await supabase
+            .from('chat_messages')
+            .delete()
+            .eq('owner_id', session.user.id)
+            .eq('conversation_id', selectedId);
+          if (error) {
+            console.error('Could not delete conversation:', error);
+            Alert.alert('تعذّر حذف المحادثة', 'حاول مرة أخرى بعد قليل.');
+            return;
+          }
+          setConversations(previous => previous.filter(item => item.id !== selectedId));
+          if (selectedId === conversationId) await startNewConversation();
+        },
+      },
+    ]);
+  };
+
   const signIn = async () => {
     if (!email.trim() || !password) {
       setAuthError('أدخل البريد الإلكتروني وكلمة المرور.');
@@ -371,6 +513,33 @@ export default function App() {
     });
     if (error) setAuthError(error.message);
     setSigningIn(false);
+  };
+
+  const resumeBackgroundWake = () => {
+    if (!backgroundWakeEnabled || Platform.OS !== 'android' || !EzraWakeWord) return;
+    EzraWakeWord.start().then(() => {
+      wakeServiceStartedRef.current = true;
+    }).catch(error => {
+      wakeServiceStartedRef.current = false;
+      console.warn('Could not resume EZRA wake service:', error);
+    });
+  };
+
+  useEffect(() => {
+    if (!voicePrefsLoaded || !backgroundWakeEnabled || !session || !appIsActive || Platform.OS !== 'android' || !EzraWakeWord || wakeServiceStartedRef.current) return;
+    wakeServiceStartedRef.current = true;
+    EzraWakeWord.start().catch(error => {
+      wakeServiceStartedRef.current = false;
+      console.warn('Could not restore EZRA wake service:', error);
+    });
+  }, [voicePrefsLoaded, backgroundWakeEnabled, session?.user.id, appIsActive]);
+
+  const returnToVoiceHome = () => {
+    if (isListening) ExpoSpeechRecognitionModule.stop();
+    Speech.stop();
+    setIsListening(false);
+    setSpeakingMessageId(null);
+    setVoiceHome(true);
   };
 
   useEffect(() => {
@@ -417,17 +586,435 @@ export default function App() {
     };
   }, [session?.user.id, conversationId]);
 
-  useSpeechRecognitionEvent('start', () => setIsListening(true));
-  useSpeechRecognitionEvent('end', () => setIsListening(false));
-  useSpeechRecognitionEvent('result', event => {
-    const transcript = event.results[0]?.transcript;
-    if (transcript) setMessage(transcript);
+  useSpeechRecognitionEvent('start', () => {
+    setVoiceRetrying(false);
+    setVoiceRetryMessage('');
+    setVoiceLevel(0);
+    setIsListening(true);
   });
-  useSpeechRecognitionEvent('error', () => setIsListening(false));
+  useSpeechRecognitionEvent('volumechange', event => {
+    const normalized = event.value <= 0 ? 0 : Math.min(1, event.value / 10);
+    setVoiceLevel(previous => previous * 0.58 + normalized * 0.42);
+  });
+  useSpeechRecognitionEvent('soundend', () => {
+    setVoiceLevel(0);
+  });
+  useSpeechRecognitionEvent('end', () => {
+    setIsListening(false);
+    setVoiceLevel(0);
+    const spokenText = voiceTranscriptRef.current.trim();
+    voiceTranscriptRef.current = '';
+    if (appIsActiveRef.current && autoListenRef.current && voiceHome && spokenText) {
+      voiceTurnInProgressRef.current = true;
+      voiceTranscriptRef.current = '';
+      setMessage(spokenText);
+      setTimeout(() => sendMessage(true, spokenText), 250);
+    }
+  });
+  useSpeechRecognitionEvent('result', event => {
+    if (!appIsActiveRef.current) return;
+    const latestResult = event.results[event.results.length - 1];
+    const transcript = latestResult?.transcript;
+    if (transcript) {
+      voiceRetryCountRef.current = 0;
+      voiceTranscriptRef.current = transcript;
+      setMessage(transcript);
+    }
+  });
+  useSpeechRecognitionEvent('error', event => {
+    setIsListening(false);
+    setVoiceLevel(0);
+    voiceTranscriptRef.current = '';
+    const blocked = event.error === 'not-allowed' || event.error === 'service-not-allowed';
+    if (blocked) {
+      autoListenRef.current = false;
+      setAutoListen(false);
+      setVoiceRetrying(false);
+      setVoiceRetryMessage('');
+      Alert.alert('إذن الميكروفون أو خدمة الصوت', 'تحقق من إذن الميكروفون ومن تفعيل خدمة التعرّف على الكلام في إعدادات الهاتف.');
+    } else if (event.error === 'no-speech') {
+      // Silence is normal on a voice-first screen; retry without treating it as a service failure.
+      voiceRetryCountRef.current = 0;
+      setVoiceRetryMessage('لم أسمع كلامًا، سأحاول مجددًا…');
+      setVoiceRetrying(true);
+    } else if (event.error === 'aborted') {
+      setVoiceRetrying(false);
+      setVoiceRetryMessage('');
+    } else if (event.error === 'audio-capture') {
+      autoListenRef.current = false;
+      setAutoListen(false);
+      setVoiceRetrying(false);
+      setVoiceRetryMessage('');
+      Alert.alert('الميكروفون غير متاح', 'لم يتمكن الهاتف من الوصول إلى الميكروفون. أغلق أي تطبيق يستخدمه ثم حاول مجددًا.');
+    } else if (autoListenRef.current && voiceHome && voiceRetryCountRef.current < 2) {
+      voiceRetryCountRef.current += 1;
+      setVoiceRetryMessage('انقطع الاتصال بخدمة الصوت، أعيد المحاولة…');
+      setVoiceRetrying(true);
+    } else if (voiceRetryCountRef.current >= 2) {
+      setVoiceRetrying(false);
+      setVoiceRetryMessage('');
+      autoListenRef.current = false;
+      setAutoListen(false);
+      Alert.alert('تعذّر استمرار الاستماع', 'توقّف التعرّف الصوتي بعد محاولتين. تحقق من اتصال الإنترنت وإذن الميكروفون، ثم اضغط الميكروفون للمحاولة مجددًا.');
+    }
+  });
 
-  const sendMessage = async (voiceReply = false) => {
-    const text = message.trim();
+  useEffect(() => {
+    if (voiceHome) return;
+    if (isListening) ExpoSpeechRecognitionModule.stop();
+    if (speakingMessageId) {
+      Speech.stop();
+      setSpeakingMessageId(null);
+    }
+    setVoiceLevel(0);
+  }, [voiceHome, isListening, speakingMessageId]);
+
+  useEffect(() => {
+    if (!appIsActive || !session || !voiceHome || !autoListen || backgroundWakeEnabled || isListening || sending || speakingMessageId || chatLoading) return;
+    const timer = setTimeout(() => beginListening(), voiceRetrying ? 900 : 500);
+    return () => clearTimeout(timer);
+  }, [appIsActive, session?.user.id, voiceHome, autoListen, backgroundWakeEnabled, recognitionLanguage, isListening, sending, speakingMessageId, chatLoading, voiceRetrying]);
+
+  useEffect(() => {
+    if (!appIsActive || !voiceHome || !autoListen || backgroundWakeEnabled || !voiceTurnInProgressRef.current || !voiceRequestStartedRef.current || sending || speakingMessageId || isListening) return;
+    voiceTurnInProgressRef.current = false;
+    voiceRequestStartedRef.current = false;
+    const timer = setTimeout(() => beginListening(), 700);
+    return () => clearTimeout(timer);
+  }, [appIsActive, sending, speakingMessageId, isListening, voiceHome, autoListen, backgroundWakeEnabled]);
+
+  const handleMemorySaveCommand = async (commandText: string, voiceReply: boolean) => {
+    const savePrefix = /^(?:يا\s*(?:إزرا|ازرا|ezra)[\s،,:-]*)?(?:تذكر(?:ي)?|احفظ(?:ي)?|لا\s*تنس(?:ى|ي)|سجل(?:ي)?)(?:\s*(?:أن|ان|هذا|هذي|لي))?\s*/i;
+    if (!savePrefix.test(commandText.trim())) return false;
+    const memoryContent = commandText.trim().replace(savePrefix, '').trim();
+    if (memoryContent.length < 4) return false;
+
+    setSending(true);
+    const userId = `memory-user-${Date.now()}`;
+    const replyId = `memory-reply-${Date.now()}`;
+    let reply = '';
+    try {
+      const { data, error } = await supabase.from('memories').insert({
+        owner_id: session!.user.id,
+        content: memoryContent,
+        category: 'general',
+        approval_status: 'pending',
+      }).select('id, content, category, approval_status, created_at').single();
+      if (error || !data) {
+        console.warn('Could not create EZRA memory suggestion:', error);
+        reply = 'حاولت أسجلها، لكن ما قدرت أحفظ اقتراح الذاكرة الآن. جربي مرة ثانية.';
+      } else {
+        setMemories(previous => [data as MemoryItem, ...previous]);
+        reply = 'أكيد، سجلتها كاقتراح في مركز الذاكرة. وافقي عليها من هناك حتى أستخدمها في محادثاتنا القادمة.';
+      }
+    } catch (error) {
+      console.warn('EZRA memory save failed:', error);
+      reply = 'صار خطأ وأنا أحاول أحفظها. خلينا نجرب مرة ثانية.';
+    }
+
+    try {
+      await supabase.from('chat_messages').insert([
+        { owner_id: session!.user.id, conversation_id: conversationId!, role: 'user', content: commandText },
+        { owner_id: session!.user.id, conversation_id: conversationId!, role: 'assistant', content: reply },
+      ]);
+    } catch (error) {
+      console.warn('Could not save memory command to conversation history:', error);
+    }
+    setMessages(previous => [
+      ...previous,
+      { id: userId, sender: 'user', text: commandText },
+      { id: replyId, sender: 'ezra', text: reply },
+    ]);
+    setMessage('');
+    if (voiceReply || autoSpeak) speak(reply, replyId);
+    setSending(false);
+    return true;
+  };
+
+  const handleFlashCommand = async (commandText: string, voiceReply: boolean) => {
+    if (Platform.OS !== 'android' || !EzraWakeWord) return false;
+    const normalized = commandText.toLowerCase()
+      .replace(/[إأآ]/g, 'ا')
+      .replace(/[\u064B-\u065F\u0670ـ]/g, '');
+    const mentionsFlash = /(?:الفلاش|الكشاف|ضوء الهاتف|flash|torch)/i.test(normalized);
+    const wantsOn = /(?:افتح|شغل|ولع|اشعل|turn on|enable)/i.test(normalized);
+    const wantsOff = /(?:اطف|طفي|سكر|اغلق|اقفل|turn off|disable)/i.test(normalized);
+    if (!mentionsFlash || (!wantsOn && !wantsOff)) return false;
+
+    setSending(true);
+    const userId = `device-user-${Date.now()}`;
+    const replyId = `device-reply-${Date.now()}`;
+    let reply = '';
+    try {
+      const permission = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA);
+      if (permission !== PermissionsAndroid.RESULTS.GRANTED) {
+        reply = 'أحتاج إذن الكاميرا حتى أقدر أشغّل فلاش الهاتف. فعّلي الإذن من إعدادات التطبيق وجربي مرة ثانية.';
+      } else {
+        const enabled = wantsOn && !wantsOff;
+        const changed = await EzraWakeWord.setTorch(enabled);
+        reply = changed
+          ? (enabled ? 'تم، شغّلت الفلاش. نورت الدنيا!' : 'تمام، طفيت الفلاش.')
+          : 'يبدو أن هذا الهاتف لا يحتوي على فلاش متاح للتحكم.';
+      }
+    } catch (error) {
+      console.warn('EZRA flashlight command failed:', error);
+      reply = 'حاولت أتحكم بالفلاش، لكن الهاتف لم يسمح لي. تأكدي أن الكاميرا أو الفلاش غير مستخدم من تطبيق آخر.';
+    }
+
+    try {
+      const { error } = await supabase.from('chat_messages').insert([
+        { owner_id: session!.user.id, conversation_id: conversationId!, role: 'user', content: commandText },
+        { owner_id: session!.user.id, conversation_id: conversationId!, role: 'assistant', content: reply },
+      ]);
+      if (error) console.warn('Could not save local device command to history:', error);
+    } catch (error) {
+      console.warn('Could not save local device command to history:', error);
+    }
+    setMessages(previous => [
+      ...previous,
+      { id: userId, sender: 'user', text: commandText },
+      { id: replyId, sender: 'ezra', text: reply },
+    ]);
+    setMessage('');
+    if (voiceReply || autoSpeak) speak(reply, replyId);
+    setSending(false);
+    return true;
+  };
+
+  const handleCallCommand = async (commandText: string, voiceReply: boolean) => {
+    if (Platform.OS !== 'android' || !EzraWakeWord) return false;
+    const normalized = commandText.toLowerCase().replace(/[إأآ]/g, 'ا');
+    const contactMatch = normalized.match(/(?:اتصل|كلم|دق|رن|call|phone)\\s*(?:ب|على|ل|الى)?\\s*(.+)$/i);
+    if (!contactMatch) return false;
+    const contactName = contactMatch[1].replace(/\\s*(?:الان|الحين|حالاً|حالا|من فضلك)$/i, '').trim();
+    if (!contactName || /^(?:بي|me|myself)$/.test(contactName)) return false;
+
+    setSending(true);
+    const userId = `call-user-${Date.now()}`;
+    const replyId = `call-reply-${Date.now()}`;
+    let reply = '';
+    let phone = '';
+    try {
+      const contactsPermission = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_CONTACTS);
+      if (contactsPermission !== PermissionsAndroid.RESULTS.GRANTED) {
+        reply = 'أحتاج إذن جهات الاتصال حتى أجد الرقم. اسمحي بالإذن ثم أعيدي الطلب.';
+      } else {
+        phone = await EzraWakeWord.findContactPhone(contactName);
+        if (!phone) {
+          reply = `ما لقيت جهة اتصال محفوظة باسم ${contactName}. تأكدي من الاسم في جهات الاتصال وجربي مرة ثانية.`;
+        } else {
+          const callPermission = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CALL_PHONE);
+          if (callPermission !== PermissionsAndroid.RESULTS.GRANTED) {
+            reply = 'أحتاج إذن الاتصال حتى أقدر أبدأ المكالمة. اسمحي بالإذن من إعدادات الهاتف.';
+            phone = '';
+          } else {
+            reply = `وجدت رقم ${contactName}: ${phone}. هل تريدين أن أتصل الآن؟`;
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('EZRA contact lookup failed:', error);
+      reply = 'ما قدرت أوصل لجهات الاتصال. تأكدي من الأذونات وجربي مرة ثانية.';
+      phone = '';
+    }
+
+    try {
+      const { error } = await supabase.from('chat_messages').insert([
+        { owner_id: session!.user.id, conversation_id: conversationId!, role: 'user', content: commandText },
+        { owner_id: session!.user.id, conversation_id: conversationId!, role: 'assistant', content: reply },
+      ]);
+      if (error) console.warn('Could not save call command to history:', error);
+    } catch (error) {
+      console.warn('Could not save call command to history:', error);
+    }
+    setMessages(previous => [
+      ...previous,
+      { id: userId, sender: 'user', text: commandText },
+      { id: replyId, sender: 'ezra', text: reply },
+    ]);
+    setMessage('');
+    if (phone) {
+      const confirmedPhone = phone;
+      Alert.alert('تأكيد الاتصال', `هل تريدين الاتصال بهذا الرقم؟\n${confirmedPhone}`, [
+        { text: 'إلغاء', style: 'cancel' },
+        {
+          text: 'اتصال',
+          onPress: async () => {
+            try {
+              const started = await EzraWakeWord.callNumber(confirmedPhone);
+              if (started) Alert.alert('EZRA', 'بدأت الاتصال.');
+            } catch (error) {
+              console.warn('EZRA call could not start:', error);
+              Alert.alert('تعذّر الاتصال', 'لم أتمكن من بدء المكالمة. تحققي من إذن الاتصال.');
+            }
+          },
+        },
+      ]);
+    }
+    if (voiceReply || autoSpeak) speak(reply, replyId);
+    setSending(false);
+    return true;
+  };
+
+  const handleSystemCommand = async (commandText: string, voiceReply: boolean) => {
+    if (Platform.OS !== 'android' || !EzraWakeWord) return false;
+    const normalized = commandText.trim().toLowerCase()
+      .replace(/[إأآ]/g, 'ا')
+      .replace(/[\u064B-\u065F\u0670ـ]/g, '')
+      .replace(/[٠-٩]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)));
+    const sayResult = async (reply: string) => {
+      const userId = `system-user-${Date.now()}`;
+      const replyId = `system-reply-${Date.now()}`;
+      try {
+        const { error } = await supabase.from('chat_messages').insert([
+          { owner_id: session!.user.id, conversation_id: conversationId!, role: 'user', content: commandText },
+          { owner_id: session!.user.id, conversation_id: conversationId!, role: 'assistant', content: reply },
+        ]);
+        if (error) console.warn('Could not save system action to history:', error);
+      } catch (error) {
+        console.warn('Could not save system action to history:', error);
+      }
+      setMessages(previous => [
+        ...previous,
+        { id: userId, sender: 'user', text: commandText },
+        { id: replyId, sender: 'ezra', text: reply },
+      ]);
+      setMessage('');
+      if (voiceReply || autoSpeak) speak(reply, replyId);
+    };
+    const run = async (action: () => Promise<boolean>, success: string, failure: string) => {
+      setSending(true);
+      try {
+        const ok = await action();
+        await sayResult(ok ? success : failure);
+      } catch (error) {
+        console.warn('EZRA system action failed:', error);
+        await sayResult('لم أتمكن من تنفيذ الأمر. قد لا يدعم الهاتف هذه العملية أو يحتاج إلى إعداد إضافي.');
+      } finally {
+        setSending(false);
+      }
+    };
+
+    const timerMatch = normalized.match(/(?:اضبط\s+)?(?:مؤقت|تايمر|timer)\s*(?:لمدة)?\s*(\d+)\s*(ثاني(?:ة|تين)?|دقيق(?:ة|تين)|ساع(?:ة|تين)|second(?:s)?|minute(?:s)?|hour(?:s)?)/i);
+    if (timerMatch) {
+      const amount = Number(timerMatch[1]);
+      const unit = timerMatch[2];
+      const factor = /ثاني|second/i.test(unit) ? 1 : /ساع|hour/i.test(unit) ? 3600 : 60;
+      const seconds = amount * factor;
+      if (!Number.isSafeInteger(seconds) || seconds < 1 || seconds > 86400) {
+        await sayResult('مدة المؤقت يجب أن تكون بين ثانية واحدة و24 ساعة.');
+        return true;
+      }
+      await run(() => EzraWakeWord!.createTimer(seconds, 'EZRA'), 'تمام، فتحت إعداد المؤقت على هاتفك لتأكيده.', 'لم أتمكن من فتح تطبيق المؤقت.');
+      return true;
+    }
+
+    const alarmMatch = normalized.match(/(?:اضبط\s+)?(?:منبه|منبّه|alarm)\s*(?:على|الساعة|at)?\s*(\d{1,2})(?::(\d{1,2}))?\s*(صباحا|مساء|am|pm)?/i);
+    if (alarmMatch) {
+      let hour = Number(alarmMatch[1]);
+      const minute = Number(alarmMatch[2] || 0);
+      const period = (alarmMatch[3] || '').toLowerCase();
+      if (period && /مساء|pm/.test(period) && hour < 12) hour += 12;
+      if (period && /صباحا|am/.test(period) && hour === 12) hour = 0;
+      if (hour > 23 || minute > 59 || hour < 0) {
+        await sayResult('وقت المنبه غير صحيح. قولي مثلاً: اضبط منبه الساعة 7:30 صباحاً.');
+        return true;
+      }
+      await run(() => EzraWakeWord!.createAlarm(hour, minute, 'EZRA'), `فتحت المنبه على ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} لتأكيد الحفظ.`, 'لم أتمكن من فتح تطبيق المنبه.');
+      return true;
+    }
+
+    const volumeUp = /(?:ارفع|زود|علي|زيد).{0,12}(?:الصوت|الصوتية)|(?:رفع|زيادة) الصوت|volume up|increase volume/.test(normalized);
+    const volumeDown = /(?:اخفض|وطي|قلل|نقص).{0,12}(?:الصوت)|(?:خفض|تقليل) الصوت|volume down|decrease volume/.test(normalized);
+    const mute = /(?:اكتم|اسكت).{0,8}(?:الصوت)?|كتم الصوت|mute volume/.test(normalized);
+    const unmute = /(?:الغاء كتم|افتح الصوت)|unmute volume/.test(normalized);
+    if (volumeUp || volumeDown || mute || unmute) {
+      const direction = volumeUp ? 'up' : volumeDown ? 'down' : mute ? 'mute' : 'unmute';
+      await run(() => EzraWakeWord!.adjustVolume(direction), 'تم تعديل مستوى صوت الوسائط.', 'لم أتمكن من تعديل الصوت.');
+      return true;
+    }
+
+    const mediaRequested = /(?:الموسيقى|الاغنية|المقطع|الوسائط|media|music|song)/i.test(normalized)
+      || /^(?:التالي|السابق|pause|resume|stop|play|next|previous)$/i.test(normalized);
+    if (mediaRequested) {
+      const action = /التالي|next/i.test(normalized) ? 'next'
+        : /السابق|previous/i.test(normalized) ? 'previous'
+        : /وقف|اوقف|ايقاف|pause|stop/i.test(normalized) ? 'pause'
+        : 'play';
+      await run(() => EzraWakeWord!.mediaControl(action), 'نفذت أمر التحكم بالوسائط. قد يعتمد التأثير على التطبيق الذي يشغّل الصوت.', 'لم يستجب مشغل الوسائط لأمر التحكم.');
+      return true;
+    }
+
+    const settingsMatch = normalized.match(/(?:افتح|اذهب الى|روح على|show|open)\s*(?:اعدادات|الاعدادات|settings)?\s*(الواي فاي|wifi|wi-fi|الانترنت|internet|البلوتوث|bluetooth|الصوت|الصوتيات|sound|volume|الشاشة|display|الموقع|location|البطارية|battery|التطبيقات|apps|الاشعارات|notifications|امكانية الوصول|accessibility)/i);
+    if (settingsMatch) {
+      const value = settingsMatch[1];
+      const target = /wifi|واي فاي/.test(value) ? 'wifi'
+        : /internet|انترنت/.test(value) ? 'internet'
+        : /bluetooth|بلوتوث/.test(value) ? 'bluetooth'
+        : /صوت|sound|volume/.test(value) ? 'sound'
+        : /شاشة|display/.test(value) ? 'display'
+        : /موقع|location/.test(value) ? 'location'
+        : /بطارية|battery/.test(value) ? 'battery'
+        : /تطبيقات|apps/.test(value) ? 'apps'
+        : /اشعارات|notifications/.test(value) ? 'notifications' : 'accessibility';
+      await run(() => EzraWakeWord!.openSystemSettings(target), 'فتحت لك إعدادات الهاتف المطلوبة.', 'لم أتمكن من فتح هذه الإعدادات.');
+      return true;
+    }
+
+    const appMatch = normalized.match(/(?:افتح|شغل|ابدأ|open|launch)\s+(?:تطبيق\s+)?([\p{L}0-9 ._-]{2,40})$/iu);
+    if (appMatch) {
+      const requestedApp = appMatch[1].trim();
+      const aliases: Record<string, string> = {
+        'واتساب': 'WhatsApp', 'يوتيوب': 'YouTube', 'كروم': 'Chrome',
+        'انستغرام': 'Instagram', 'انستجرام': 'Instagram', 'فيسبوك': 'Facebook',
+        'تيك توك': 'TikTok', 'تيليجرام': 'Telegram', 'تلغرام': 'Telegram',
+        'خرائط': 'Maps', 'الخرائط': 'Maps', 'الكاميرا': 'Camera',
+        'الساعة': 'Clock', 'الاعدادات': 'Settings'
+      };
+      const appName = aliases[requestedApp] || requestedApp;
+      if (!/^(الفلاش|الكشاف|المنبه|المؤقت)$/.test(requestedApp)) {
+        await run(() => EzraWakeWord!.launchApp(appName), `فتحت ${appName}.`, `لم أجد تطبيقاً مثبتاً باسم ${appName} أو لم أتمكن من فتحه.`);
+        return true;
+      }
+    }
+
+    const smsMatch = normalized.match(/(?:ارسل|ابعث|اكتب)\s+(?:رسالة|sms)\s+(?:الى|ل)\s+(.+?)\s+(?:تقول|محتواها|نصها)\s+(.+)$/i);
+    if (smsMatch) {
+      const contactName = smsMatch[1].trim();
+      const smsBody = smsMatch[2].trim();
+      setSending(true);
+      try {
+        const permission = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_CONTACTS);
+        if (permission !== PermissionsAndroid.RESULTS.GRANTED) {
+          await sayResult('أحتاج إذن جهات الاتصال للعثور على الرقم.');
+        } else {
+          const phone = await EzraWakeWord.findContactPhone(contactName);
+          if (!phone) await sayResult(`لم أجد جهة اتصال باسم ${contactName}.`);
+          else {
+            const opened = await EzraWakeWord.composeSms(phone, smsBody);
+            await sayResult(opened ? 'فتحت تطبيق الرسائل والرسالة جاهزة. راجعيها واضغطي إرسال بنفسك.' : 'لم أتمكن من فتح تطبيق الرسائل.');
+          }
+        }
+      } catch (error) {
+        console.warn('EZRA SMS compose failed:', error);
+        await sayResult('تعذّر تجهيز الرسالة. تحققي من صلاحية جهات الاتصال وتطبيق الرسائل.');
+      } finally {
+        setSending(false);
+      }
+      return true;
+    }
+
+    return false;
+  };
+
+  const sendMessage = async (voiceReply = false, voiceText?: string) => {
+    const text = (voiceText ?? message).trim();
     if ((!text && !attachment) || !session || !conversationId || sending) return;
+    if (voiceText !== undefined) voiceRequestStartedRef.current = true;
+    if (await handleMemorySaveCommand(text, voiceReply)) return;
+    if (await handleFlashCommand(text, voiceReply)) return;
+    if (await handleSystemCommand(text, voiceReply)) return;
+    if (await handleCallCommand(text, voiceReply)) return;
 
     setSending(true);
 
@@ -458,6 +1045,8 @@ export default function App() {
               .join('\\n\\n')
           : 'Supabase returned no saved message row.';
         Alert.alert('لم تُحفظ الرسالة', diagnostic);
+        voiceTurnInProgressRef.current = false;
+        voiceRequestStartedRef.current = false;
         setSending(false);
         return;
       }
@@ -472,37 +1061,56 @@ export default function App() {
       setMessage('');
       setAttachment(null);
 
-      if (text) {
+      if (text || attachment) {
+        const attachmentPrompt = attachment?.kind === 'image'
+          ? 'Please inspect the attached image carefully and answer the user\'s question. If no question was provided, describe the image and any readable text.'
+          : attachment?.textContent
+            ? `The user attached a text document named ${attachment.name}. Analyze its contents below:\n\n${attachment.textContent.slice(0, 8000)}${attachment.textContent.length > 12000 ? '\\n\\n[The document was shortened to fit the request.]' : ''}`
+            : '';
+        const userInput = [text, attachmentPrompt].filter(Boolean).join('\n\n');
         const recentContext = messages
           .filter(item => item.id !== 'welcome' && !!item.text.trim())
-          .slice(-12)
+          .slice(-24)
           .map(item => `${item.sender === 'user' ? 'User' : 'EZRA'}: ${item.text}`)
-          .join('\n');
+          .join('\n').slice(-8000);
         const conversationInput = recentContext
-          ? `Continue this conversation naturally. Use the previous messages as context.\n\n${recentContext}\nUser: ${text}`
-          : text;
+          ? `Continue this conversation naturally. Use the previous messages as context.\n\n${recentContext}\nUser: ${userInput}`
+          : userInput;
 
         let timeoutId: ReturnType<typeof setTimeout> | undefined;
         const aiRequest = await Promise.race([
           supabase.functions.invoke('smart-service', {
-            body: { input: conversationInput },
+            body: {
+              input: conversationInput,
+              voiceMode: voiceReply,
+              ...(attachment?.kind === 'image' && attachment.base64
+                ? { imageDataUrl: `data:${attachment.mimeType || 'image/jpeg'};base64,${attachment.base64}` }
+                : {}),
+            },
           }).then(result => ({ kind: 'response' as const, result })),
           new Promise<{ kind: 'timeout' }>(resolve => {
-            timeoutId = setTimeout(() => resolve({ kind: 'timeout' }), 30000);
+            timeoutId = setTimeout(() => resolve({ kind: 'timeout' }), attachment ? 60000 : 30000);
           }),
         ]);
         if (timeoutId) clearTimeout(timeoutId);
 
         if (aiRequest.kind === 'timeout') {
+          setAssistantConnection('offline');
           console.error('EZRA AI request timed out after 30 seconds.');
           Alert.alert(
             'انتهت مهلة انتظار الرد',
             'تم حفظ رسالتك، لكن إزرا لم يرد خلال 30 ثانية. يمكنك المحاولة مرة أخرى بعد قليل.'
-          );          setSending(false);
-          return;        }
+          );
+          voiceTurnInProgressRef.current = false;
+          voiceRequestStartedRef.current = false;
+          setSending(false);
+          if (voiceReply) resumeBackgroundWake();
+          return;
+        }
 
         const { data: aiData, error: aiError } = aiRequest.result;
         if (aiError || typeof aiData?.reply !== 'string' || !aiData.reply.trim()) {
+          setAssistantConnection('offline');
           const context = (aiError as any)?.context;
           const details = [
             aiError?.message,
@@ -520,11 +1128,19 @@ export default function App() {
             'تعذّر على إزرا الرد',
             details || 'تم حفظ رسالتك، لكن الخدمة لم تُرجع ردًا. حاول مرة أخرى بعد قليل.'
           );
+          voiceTurnInProgressRef.current = false;
+          voiceRequestStartedRef.current = false;
           setSending(false);
+          if (voiceReply) resumeBackgroundWake();
           return;
         }
 
+        setAssistantConnection('online');
         const reply = aiData.reply.trim();
+        // Start spoken playback as soon as the model reply arrives; saving history must not delay EZRA's voice.
+        const playbackMessageId = `reply-${Date.now()}`;
+        if (voiceReply || autoSpeak) speak(reply, playbackMessageId);
+
         const { data: savedReply, error: saveReplyError } = await supabase
           .from('chat_messages')
           .insert({
@@ -540,7 +1156,7 @@ export default function App() {
           console.error('Could not save EZRA reply:', saveReplyError);
           setMessages(previous => [
             ...previous,
-            { id: `unsaved-${Date.now()}`, sender: 'ezra', text: reply },
+            { id: playbackMessageId, sender: 'ezra', text: reply },
           ]);
           Alert.alert('لم يُحفظ الرد', 'إزرا أجاب، لكن تعذّر حفظ الرد في سجل المحادثة.');
         } else {
@@ -548,58 +1164,198 @@ export default function App() {
             ...previous,
             { id: savedReply.id, sender: 'ezra', text: reply },
           ]);
-          if (voiceReply || autoSpeak) speak(reply, savedReply.id);
         }
-      } else {
-        Alert.alert(
-          'تم حفظ المرفق',
-          'تم حفظ اسم المرفق. سنضيف إرسال الملف نفسه إلى إزرا في مرحلة لاحقة.'
-        );
       }
     } catch (error) {
+      setAssistantConnection('offline');
       console.error('Message sending failed:', error);
       Alert.alert('حدث خطأ', 'حاول إرسال رسالتك مرة أخرى.');
+      voiceTurnInProgressRef.current = false;
+      voiceRequestStartedRef.current = false;
+      if (voiceReply) resumeBackgroundWake();
     }
 
     setSending(false);
   };
 
-  const startListening = async () => {
+  const toggleBackgroundWake = async (enabled: boolean) => {
+    if (Platform.OS !== 'android' || !EzraWakeWord) {
+      Alert.alert('غير متاح', 'الاستماع بكلمة التنبيه متاح حاليًا على Android فقط.');
+      return;
+    }
+    if (enabled) {
+      try {
+        const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+        if (!permission.granted) {
+          Alert.alert('إذن الميكروفون مطلوب', 'اسمح لـ EZRA باستخدام الميكروفون أولًا لتفعيل كلمة التنبيه.');
+          return;
+        }
+        if (Number(Platform.Version) >= 33) {
+          const notificationPermission = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+          if (notificationPermission !== PermissionsAndroid.RESULTS.GRANTED) {
+            Alert.alert('إذن الإشعارات مطلوب', 'اسمح بإشعارات EZRA حتى يظهر الإشعار الدائم أثناء الاستماع في الخلفية.');
+            return;
+          }
+        }
+        const available = await EzraWakeWord.isAvailable();
+        if (!available) {
+          Alert.alert('خدمة التعرف غير متاحة', 'فعّل خدمة التعرف على الكلام في هاتفك ثم حاول مجددًا.');
+          return;
+        }
+        if (isListening) {
+          voiceTranscriptRef.current = '';
+          ExpoSpeechRecognitionModule.stop();
+          setIsListening(false);
+        }
+        await EzraWakeWord.start();
+        wakeServiceStartedRef.current = true;
+        setBackgroundWakeEnabled(true);
+        await AsyncStorage.setItem('ezra:backgroundWake', 'true');
+        Alert.alert('تم تفعيل كلمة التنبيه', 'قل «يا EZRA» لإيقاظ المساعد. سيظهر إشعار دائم أثناء عمل الاستماع بالخلفية.');
+      } catch (error) {
+        console.error('Could not start EZRA background wake service:', error);
+        Alert.alert('تعذّر تشغيل الاستماع بالخلفية', 'تحقق من إذن الميكروفون ثم حاول مرة أخرى. يمكنك متابعة استخدام الشاشة الصوتية كالمعتاد.');
+      }
+      return;
+    }
     try {
-      Speech.stop();
-      setSpeakingMessageId(null);
-      if (isListening) {
-        ExpoSpeechRecognitionModule.stop();
-        return;
+      await EzraWakeWord.stop();
+    } catch (error) {
+      console.warn('Could not stop EZRA background wake service:', error);
+    }
+    wakeServiceStartedRef.current = false;
+    setBackgroundWakeEnabled(false);
+    await AsyncStorage.setItem('ezra:backgroundWake', 'false');
+  };
+
+  useEffect(() => {
+    if (!pendingWakeCommand || !session || !conversationId || sending) return;
+    const command = pendingWakeCommand;
+    setMessage(command);
+    const timer = setTimeout(() => {
+      setPendingWakeCommand('');
+      sendMessage(true, command);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [pendingWakeCommand, session?.user.id, conversationId, sending]);
+
+  useEffect(() => {
+    if (!backgroundWakeEnabled || !appIsActive || Platform.OS !== 'android' || !EzraWakeWord) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const pollForWakeCommand = async () => {
+      try {
+        const command = await EzraWakeWord.consumePendingCommand();
+        if (cancelled) return;
+        if (command === '__EZRA_WAKE_ONLY__') {
+          const greeting = 'نعم، أنا هنا. كيف أساعدك؟';
+          setMessage(greeting);
+          Speech.speak(greeting, {
+            language: 'ar',
+            rate: speechRate,
+            pitch: speechPitch,
+            onDone: () => { EzraWakeWord.start().catch(error => console.warn('Could not resume wake service:', error)); },
+            onStopped: () => { EzraWakeWord.start().catch(error => console.warn('Could not resume wake service:', error)); },
+            onError: () => { EzraWakeWord.start().catch(error => console.warn('Could not resume wake service:', error)); },
+          });
+        } else if (command) {
+          // Keep the wake service paused while EZRA processes and speaks the command.
+          setPendingWakeCommand(command);
+        }
+      } catch (error) {
+        console.warn('Could not poll EZRA wake service:', error);
       }
+      if (!cancelled) timer = setTimeout(pollForWakeCommand, 800);
+    };
+    pollForWakeCommand();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [backgroundWakeEnabled, appIsActive, speechRate, speechPitch]);
+
+  const beginListening = async (interruptSpeech = false) => {
+    if (!appIsActiveRef.current || !appIsActive || !autoListenRef.current || isListening || sending || (speakingMessageId && !interruptSpeech)) return;
+    try {
       const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (!appIsActiveRef.current) return;
       if (!permission.granted) {
-        Alert.alert('إذن الميكروفون', 'اسمح باستخدام الميكروفون والتعرّف على الكلام من إعدادات الجهاز.');
+        autoListenRef.current = false;
+        setAutoListen(false);
+        Alert.alert('إذن الميكروفون', 'اسمح لـ EZRA باستخدام الميكروفون والتعرّف على الكلام لتفعيل المحادثة التلقائية.');
         return;
       }
+      voiceTranscriptRef.current = '';
       ExpoSpeechRecognitionModule.start({
-        lang: recognitionLanguage,
+        lang: recognitionLanguage === 'ar' ? 'ar' : 'en-US',
         interimResults: true,
         continuous: false,
+        volumeChangeEventOptions: { enabled: true, intervalMillis: 90 },
       });
     } catch {
       setIsListening(false);
-      Alert.alert('الصوت غير متاح', 'التعرّف على الكلام غير متاح على هذا الجهاز حاليًا.');
+      console.warn('Automatic voice listening could not start.');
     }
+  };
+
+  const startListening = async () => {
+    if (backgroundWakeEnabled && EzraWakeWord) {
+      await EzraWakeWord.stop().catch(error => console.warn('Could not pause wake service:', error));
+      wakeServiceStartedRef.current = false;
+    }
+    if (speakingMessageId) {
+      Speech.stop();
+      setSpeakingMessageId(null);
+      voiceTurnInProgressRef.current = false;
+      voiceRequestStartedRef.current = false;
+      autoListenRef.current = true;
+      setAutoListen(true);
+      AsyncStorage.setItem('ezra:autoListen', 'true').catch(() => {});
+      setTimeout(() => beginListening(true), 250);
+      return;
+    }
+    if (isListening) {
+      autoListenRef.current = false;
+      setAutoListen(false);
+      AsyncStorage.setItem('ezra:autoListen', 'false').catch(() => {});
+      ExpoSpeechRecognitionModule.stop();
+      resumeBackgroundWake();
+      return;
+    }
+    autoListenRef.current = true;
+    setAutoListen(true);
+    AsyncStorage.setItem('ezra:autoListen', 'true').catch(() => {});
+    await beginListening();
   };
 
   const pickImage = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.8,
+        quality: 0.7,
+        base64: true,
       });
       if (result.canceled || !result.assets[0]) return;
       const asset = result.assets[0];
+      if (!asset.base64) {
+        Alert.alert('تعذّر قراءة الصورة', 'لم نتمكن من تجهيز الصورة لإرسالها. حاول اختيار صورة أخرى.');
+        return;
+      }
+      if (asset.base64.length > 3.5 * 1024 * 1024) {
+        Alert.alert('الصورة كبيرة جدًا', 'اختر صورة أصغر حتى نتمكن من تحليلها.');
+        return;
+      }
+      const mimeType = asset.mimeType || 'image/jpeg';
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(mimeType)) {
+        Alert.alert('صيغة الصورة غير مدعومة', 'اختر صورة بصيغة JPG أو PNG أو WebP.');
+        return;
+      }
       setAttachment({
         uri: asset.uri,
-        name: asset.fileName || 'Selected photo',
+        name: asset.fileName || 'صورة مرفقة',
         kind: 'image',
+        mimeType,
+        base64: asset.base64,
       });
     } catch {
       Alert.alert('الصورة غير متاحة', 'تعذّر فتح معرض الصور.');
@@ -614,7 +1370,27 @@ export default function App() {
       });
       if (result.canceled || !result.assets[0]) return;
       const file = result.assets[0];
-      setAttachment({ uri: file.uri, name: file.name, kind: 'file' });
+      const extension = file.name.split('.').pop()?.toLowerCase() || '';
+      const supportedTextTypes = ['txt', 'md', 'csv', 'json'];
+      if (!supportedTextTypes.includes(extension)) {
+        Alert.alert('نوع الملف غير مدعوم بعد', 'حاليًا يستطيع إزرا قراءة ملفات TXT وMD وCSV وJSON. دعم PDF وWord قادم لاحقًا.');
+        return;
+      }
+      if (typeof file.size === 'number' && file.size > 1024 * 1024) {
+        Alert.alert('الملف كبير جدًا', 'اختر ملفًا نصيًا أصغر من 1 ميغابايت.');
+        return;
+      }
+      const response = await fetch(file.uri);
+      const textContent = await response.text();
+      if (!textContent.trim()) {
+        Alert.alert('الملف فارغ', 'لم نعثر على نص قابل للقراءة داخل الملف.');
+        return;
+      }
+      if (textContent.length > 1024 * 1024) {
+        Alert.alert('الملف كبير جدًا', 'اختر ملفًا نصيًا أصغر من 1 ميغابايت.');
+        return;
+      }
+      setAttachment({ uri: file.uri, name: file.name, kind: 'file', mimeType: file.mimeType, textContent });
     } catch {
       Alert.alert('تعذّر فتح الملفات', 'حاول مرة أخرى.');
     }
@@ -637,13 +1413,28 @@ export default function App() {
     Speech.stop();
     setSpeakingMessageId(messageId);
     const speechLanguage = /[\\u0600-\\u06FF]/.test(text) ? 'ar' : 'en';
+    const matchingVoice = ttsVoices
+      .filter(voice => voice.language.toLowerCase().startsWith(speechLanguage))
+      .sort((a, b) => Number(b.quality === 'Enhanced') - Number(a.quality === 'Enhanced'))[0];
+    const preferredVoice = ttsVoices.find(voice => voice.identifier === selectedTtsVoice && voice.language.toLowerCase().startsWith(speechLanguage)) || matchingVoice;
     Speech.speak(text, {
       language: speechLanguage,
+      ...(preferredVoice ? { voice: preferredVoice.identifier } : {}),
       rate: speechRate,
-      pitch: 0.92,
-      onDone: () => setSpeakingMessageId(current => current === messageId ? null : current),
-      onStopped: () => setSpeakingMessageId(current => current === messageId ? null : current),
-      onError: () => setSpeakingMessageId(current => current === messageId ? null : current),
+      pitch: speechPitch,
+      volume: 1.0,
+      onDone: () => {
+        setSpeakingMessageId(current => current === messageId ? null : current);
+        resumeBackgroundWake();
+      },
+      onStopped: () => {
+        setSpeakingMessageId(current => current === messageId ? null : current);
+        resumeBackgroundWake();
+      },
+      onError: () => {
+        setSpeakingMessageId(current => current === messageId ? null : current);
+        resumeBackgroundWake();
+      },
     });
   };
 
@@ -669,10 +1460,10 @@ export default function App() {
           <Text style={styles.authTitle}>مساحتك الخاصة.</Text>
           <Text style={styles.authHint}>سجّل الدخول للمتابعة مع مساعدك الشخصي.</Text>
           <TextInput
-            style={styles.authInput}
-            textAlign="right"
+            style={[styles.authInput, styles.authInputLtr]}
             placeholder="البريد الإلكتروني"
             placeholderTextColor="#777680"
+            textAlign="left"
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -680,9 +1471,10 @@ export default function App() {
             autoComplete="email"
           />
           <TextInput
-            style={styles.authInput}
+            style={[styles.authInput, styles.authInputLtr]}
             placeholder="كلمة المرور"
             placeholderTextColor="#777680"
+            textAlign="left"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -705,9 +1497,11 @@ export default function App() {
 
   if (voiceHome) {
     const voiceStatus = isListening
-      ? 'إيزرا يستمع'
+      ? 'إزرا يستمع'
+      : voiceRetrying
+        ? (voiceRetryMessage || 'أعيد الاتصال بالصوت…')
       : speakingMessageId
-        ? 'إيزرا يتحدث'
+        ? 'إزرا يتحدث'
         : (sending || chatLoading)
           ? 'لحظة، أفكر…'
           : 'أنا هنا';
@@ -716,39 +1510,49 @@ export default function App() {
         <StatusBar style="light" />
         <View style={styles.voiceHome}>
           <View style={styles.voiceTopActions}>
-            <TouchableOpacity onPress={() => setSettingsVisible(true)} style={styles.voiceTopButton}><Text style={styles.voiceTopButtonText}>الإعدادات</Text></TouchableOpacity>
-            <TouchableOpacity onPress={openConversationHistory} style={styles.voiceTopButton}><Text style={styles.voiceTopButtonText}>السجل</Text></TouchableOpacity>
+            <View style={styles.voiceIdentityMark} accessibilityLabel="هوية EZRA"><Text style={styles.voiceIdentityMarkText}>✦</Text></View>
+            <View style={styles.voiceBrand}>
+              <Text style={styles.voiceBrandName}>EZRA</Text>
+              <View style={styles.voiceBrandStatus}>
+                <View style={[styles.voiceBrandDot, assistantConnection === 'online' ? styles.voiceBrandDotOnline : assistantConnection === 'offline' ? styles.voiceBrandDotOffline : null]} />
+                <Text style={styles.voiceBrandStatusText}>{assistantConnection === 'online' ? 'متصل' : assistantConnection === 'offline' ? 'غير متصل' : 'EZRA AI'}</Text>
+              </View>
+            </View>
+            <TouchableOpacity onPress={() => setSettingsVisible(true)} style={styles.voiceTopButton} accessibilityLabel="الإعدادات"><Text style={styles.voiceTopButtonText}>⚙</Text></TouchableOpacity>
           </View>
           <View style={styles.voiceOrbWrap}>
-            <EzraOrb status={voiceStatus} />
+            <EzraOrb status={voiceStatus} voiceLevel={voiceLevel} />
           </View>
-          <TouchableOpacity
-            style={[styles.voiceMic, isListening && styles.voiceMicActive]}
-            onPress={startListening}
-            accessibilityLabel={isListening ? 'إيقاف الاستماع' : 'ابدأ التحدث مع إزرا'}
-          >
-            <Text style={styles.voiceMicIcon}>{isListening ? '■' : '⌁'}</Text>
-          </TouchableOpacity>
-          {!!message.trim() && !isListening && (
-            <View style={styles.voiceTranscriptCard}>
-              <Text style={styles.voiceTranscript} numberOfLines={3}>{message}</Text>
-              <TouchableOpacity style={styles.voiceSendButton} onPress={() => sendMessage(true)} disabled={sending}>
-                <Text style={styles.voiceSendLabel}>إرسال إلى إزرا  ↑</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-          <TouchableOpacity style={styles.voiceTextLink} onPress={() => setVoiceHome(false)}>
-            <Text style={styles.voiceTextLinkLabel}>المحادثة النصية  ·  السجل والملفات</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.voiceMemoryLink} onPress={openMemoryCenter}>
-            <Text style={styles.voiceMemoryLabel}>الذاكرة</Text>
-          </TouchableOpacity>
+          <View style={styles.voiceMicWrap}>
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.voiceMicHalo, { opacity: isListening || speakingMessageId || sending ? 0.72 : 0.24, transform: [{ scale: micPulse }] }]}
+            />
+            <TouchableOpacity
+              style={[styles.voiceMic, isListening && styles.voiceMicActive, !!speakingMessageId && styles.voiceMicSpeaking]}
+              onPress={startListening}
+              accessibilityRole="button"
+              accessibilityLabel={speakingMessageId ? 'مقاطعة إزرا والتحدث الآن' : isListening ? 'إيقاف الاستماع' : 'ابدأ التحدث مع إزرا'}
+              accessibilityHint={speakingMessageId ? 'سيوقف صوت إزرا ويبدأ الاستماع إليك' : isListening ? 'اضغط لإيقاف التقاط صوتك' : 'اضغط لبدء المحادثة الصوتية'}
+            >
+              <Text style={styles.voiceMicIcon}>{speakingMessageId ? 'Ⅱ' : isListening ? '■' : '⌁'}</Text>
+            </TouchableOpacity>
+          </View>
+          {/* Keep the voice home focused on the orb and the single manual microphone control. */}
           <Modal visible={settingsVisible} transparent animationType="slide" onRequestClose={() => setSettingsVisible(false)}>
             <View style={styles.settingsBackdrop}>
               <View style={styles.settingsPanel}>
                 <View style={styles.historyHeader}>
                   <Text style={styles.historyTitle}>إعدادات الصوت</Text>                  <TouchableOpacity style={styles.historyClose} onPress={() => setSettingsVisible(false)}><Text style={styles.historyCloseText}>×</Text></TouchableOpacity>
                 </View>                <View style={styles.settingRow}>
+                  <View style={styles.settingCopy}><Text style={styles.settingTitle}>كلمة التنبيه «يا EZRA»</Text><Text style={styles.settingHint}>استماع بالخلفية وعند قفل الشاشة · قد يزيد استهلاك البطارية</Text></View>
+                  <Switch value={backgroundWakeEnabled} onValueChange={toggleBackgroundWake} trackColor={{ false: '#39323D', true: '#875477' }} thumbColor={backgroundWakeEnabled ? '#F2C8E5' : '#AAA'} />
+                </View>
+                <View style={styles.settingRow}>
+                  <View style={styles.settingCopy}><Text style={styles.settingTitle}>الاستماع التلقائي</Text><Text style={styles.settingHint}>يستمع بعد فتح الشاشة وبعد كل رد</Text></View>
+                  <Switch value={autoListen} onValueChange={value => { autoListenRef.current = value; setAutoListen(value); if (!value) { setVoiceRetrying(false); setVoiceRetryMessage(''); } AsyncStorage.setItem('ezra:autoListen', String(value)).catch(() => {}); if (!value && isListening) ExpoSpeechRecognitionModule.stop(); }} trackColor={{ false: '#39323D', true: '#875477' }} thumbColor={autoListen ? '#F2C8E5' : '#AAA'} />
+                </View>
+                <View style={styles.settingRow}>
                   <View style={styles.settingCopy}><Text style={styles.settingTitle}>قراءة ردود EZRA تلقائيًا</Text><Text style={styles.settingHint}>ينطق الرد بعد وصوله</Text></View>
                   <Switch value={autoSpeak} onValueChange={value => { setAutoSpeak(value); AsyncStorage.setItem('ezra:autoSpeak', String(value)).catch(() => {}); }} trackColor={{ false: '#39323D', true: '#875477' }} thumbColor={autoSpeak ? '#F2C8E5' : '#AAA'} />
                 </View>
@@ -760,13 +1564,49 @@ export default function App() {
                   </View>
                 </View>
                 <View style={styles.settingRow}>
+                  <View style={styles.settingCopy}><Text style={styles.settingTitle}>عمق الصوت</Text><Text style={styles.settingHint}>{speechPitch.toFixed(2)} · نبرة أعمق</Text></View>
+                  <View style={styles.rateControls}>
+                    <TouchableOpacity style={styles.rateButton} onPress={() => { const value = Math.max(0.75, Number((speechPitch - 0.05).toFixed(2))); setSpeechPitch(value); AsyncStorage.setItem('ezra:speechPitch', String(value)).catch(() => {}); }}><Text style={styles.rateButtonText}>−</Text></TouchableOpacity>
+                    <TouchableOpacity style={styles.rateButton} onPress={() => { const value = Math.min(1.1, Number((speechPitch + 0.05).toFixed(2))); setSpeechPitch(value); AsyncStorage.setItem('ezra:speechPitch', String(value)).catch(() => {}); }}><Text style={styles.rateButtonText}>＋</Text></TouchableOpacity>
+                  </View>
+                </View>
+                <View style={styles.settingRow}>
+                  <View style={styles.settingCopy}>
+                    <Text style={styles.settingTitle}>الصوت العربي</Text>
+                    <Text style={styles.settingHint}>{ttsVoices.find(voice => voice.identifier === selectedTtsVoice)?.name || 'تلقائي · أفضل صوت محسّن متاح'}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.voiceTopButton}
+                    onPress={() => {
+                      const arabicVoices = ttsVoices.filter(voice => voice.language.toLowerCase().startsWith('ar'));
+                      Alert.alert('اختيار الصوت العربي', 'اختر صوتًا متاحًا على هاتفك. يمكنك تجربة الأصوات لاختيار الأنسب لك.', [
+                        { text: 'تلقائي · الأفضل', onPress: () => { setSelectedTtsVoice(null); AsyncStorage.removeItem('ezra:ttsVoice').catch(() => {}); } },
+                        ...arabicVoices.slice(0, 8).map(voice => ({
+                          text: `${voice.name}${voice.quality === 'Enhanced' ? ' · محسّن' : ''} · تجربة`,
+                          onPress: () => {
+                            setSelectedTtsVoice(voice.identifier);
+                            AsyncStorage.setItem('ezra:ttsVoice', voice.identifier).catch(() => {});
+                            Speech.stop();
+                            Speech.speak('مرحباً، أنا إزرا. سعيد بالحديث معك، كيف أستطيع مساعدتك؟', {
+                              language: 'ar', voice: voice.identifier, rate: speechRate, pitch: speechPitch, volume: 1,
+                            });
+                          },
+                        })),
+                        { text: 'إغلاق', style: 'cancel' as const },
+                      ]);
+                    }}
+                  >
+                    <Text style={styles.voiceTopButtonText}>اختيار</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.settingRow}>
                   <View style={styles.settingCopy}><Text style={styles.settingTitle}>لغة التعرّف الصوتي</Text><Text style={styles.settingHint}>{recognitionLanguage === 'ar' ? 'العربية' : 'English'}</Text></View>
                   <View style={styles.rateControls}>
                     <TouchableOpacity style={[styles.rateButton, recognitionLanguage === 'ar' && styles.languageButtonActive]} onPress={() => { setRecognitionLanguage('ar'); AsyncStorage.setItem('ezra:recognitionLanguage', 'ar').catch(() => {}); }}><Text style={styles.rateButtonText}>ع</Text></TouchableOpacity>
                     <TouchableOpacity style={[styles.rateButton, recognitionLanguage === 'en' && styles.languageButtonActive]} onPress={() => { setRecognitionLanguage('en'); AsyncStorage.setItem('ezra:recognitionLanguage', 'en').catch(() => {}); }}><Text style={styles.rateButtonText}>EN</Text></TouchableOpacity>
                   </View>
                 </View>
-                <Text style={styles.settingsFootnote}>الصوت المتاح يعتمد على أصوات النظام المثبتة في هاتفك.</Text>
+                <Text style={styles.settingsFootnote}>نختار أفضل صوت عربي محسّن متاح على هاتفك تلقائيًا. جودة الصوت تعتمد أيضًا على محرّك تحويل النص إلى كلام والأصوات المثبتة في الجهاز. عند تفعيل «يا EZRA» تعمل خدمة استماع أمامية بإشعار دائم ويمكنها إيقاظ التطبيق عند التقاط كلمة التنبيه. قد يقيّد النظام الخدمة أو يوقفها بسبب توفير البطارية؛ أوقف الميزة من هنا متى شئت.</Text>
               </View>
             </View>
           </Modal>
@@ -796,6 +1636,13 @@ export default function App() {
             </View>
           </View>
           <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.historyButton}
+              onPress={returnToVoiceHome}
+              accessibilityLabel="العودة إلى الشاشة الصوتية"
+            >
+              <Text style={styles.newChatText}>◉ الصوت</Text>
+            </TouchableOpacity>
             <TouchableOpacity
               style={styles.historyButton}
               onPress={openConversationHistory}
@@ -864,13 +1711,39 @@ export default function App() {
               </TouchableOpacity>
 
               <Text style={styles.memorySectionTitle}>الذكريات المحفوظة والاقتراحات</Text>
+              <TextInput
+                style={styles.memorySearchInput}
+                value={memorySearch}
+                onChangeText={setMemorySearch}
+                placeholder="ابحث داخل ذكرياتك…"
+                placeholderTextColor="#777680"
+                textAlign="right"
+              />
+              <View style={styles.memoryFilters}>
+                {([
+                  ['all', 'الكل'],
+                  ['pending', 'بانتظار الموافقة'],
+                  ['approved', 'معتمدة'],
+                  ['rejected', 'مرفوضة'],
+                ] as const).map(([value, label]) => (
+                  <TouchableOpacity
+                    key={value}
+                    style={[styles.memoryFilter, memoryFilter === value && styles.memoryFilterActive]}
+                    onPress={() => setMemoryFilter(value)}
+                  >
+                    <Text style={[styles.memoryFilterText, memoryFilter === value && styles.memoryFilterTextActive]}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
               {memoryLoading ? (
                 <Text style={styles.historyEmpty}>جارٍ تحميل الذكريات…</Text>
               ) : memories.length === 0 ? (
                 <Text style={styles.historyEmpty}>لا توجد ذكريات بعد. يمكنك إضافة أول ذكرى أعلاه.</Text>
+              ) : visibleMemories.length === 0 ? (
+                <Text style={styles.historyEmpty}>لا توجد ذكريات تطابق البحث أو التصفية.</Text>
               ) : (
                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.memoryList}>
-                  {memories.map(item => (
+                  {visibleMemories.map(item => (
                     <View key={item.id} style={styles.memoryItem}>
                       <Text style={styles.memoryItemText}>{item.content}</Text>
                       <Text style={styles.memoryStatus}>
@@ -925,24 +1798,42 @@ export default function App() {
                   <Text style={styles.historySubtitle}>كل حديثك محفوظ هنا</Text>
                 </View>
               </View>
+              <TextInput
+                style={styles.memorySearchInput}
+                value={historySearch}
+                onChangeText={setHistorySearch}
+                placeholder="ابحث في المحادثات…"
+                placeholderTextColor="#777680"
+                textAlign="right"
+              />
               {historyLoading ? (
                 <Text style={styles.historyEmpty}>جارٍ تحميل المحادثات…</Text>
               ) : conversations.length === 0 ? (
                 <Text style={styles.historyEmpty}>لا توجد محادثات سابقة حتى الآن.</Text>
+              ) : visibleConversations.length === 0 ? (
+                <Text style={styles.historyEmpty}>لا توجد محادثات تطابق البحث.</Text>
               ) : (
                 <ScrollView showsVerticalScrollIndicator={false}>
-                  {conversations.map(item => (
-                    <TouchableOpacity
-                      key={item.id}
-                      style={[styles.historyItem, item.id === conversationId && styles.historyItemActive]}
-                      onPress={() => selectConversation(item.id)}
-                    >
-                      <Text style={styles.historyDate}>
-                        {new Date(item.updatedAt).toLocaleDateString('ar-DZ')}
-                      </Text>
-                      <Text style={styles.historyItemTitle} numberOfLines={2}>{item.title}</Text>
-                      {item.id === conversationId && <Text style={styles.historyCurrent}>المحادثة الحالية</Text>}
-                    </TouchableOpacity>
+                  {visibleConversations.map(item => (
+                    <View key={item.id} style={styles.historyItemRow}>
+                      <TouchableOpacity
+                        style={[styles.historyItem, styles.historyItemOpen, item.id === conversationId && styles.historyItemActive]}
+                        onPress={() => selectConversation(item.id)}
+                      >
+                        <Text style={styles.historyDate}>
+                          {new Date(item.updatedAt).toLocaleDateString('ar-DZ')}
+                        </Text>
+                        <Text style={styles.historyItemTitle} numberOfLines={2}>{item.title}</Text>
+                        {item.id === conversationId && <Text style={styles.historyCurrent}>المحادثة الحالية</Text>}
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.historyDeleteButton}
+                        onPress={() => deleteConversation(item.id)}
+                        accessibilityLabel="حذف المحادثة"
+                      >
+                        <Text style={styles.historyDeleteText}>حذف</Text>
+                      </TouchableOpacity>
+                    </View>
                   ))}
                 </ScrollView>
               )}
@@ -1009,10 +1900,10 @@ export default function App() {
         </ScrollView>
 
         <View style={styles.quickActions}>
-          <TouchableOpacity style={styles.quickButton} onPress={() => setMessage('Let’s talk.')}>
+          <TouchableOpacity style={styles.quickButton} onPress={() => setMessage('مرحبًا إزرا، أريد أن نتحدث.')}>
             <Text style={styles.quickText}>✧  لنتحدث</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.quickButton} onPress={() => setMessage('Help me plan my day.')}>
+          <TouchableOpacity style={styles.quickButton} onPress={() => setMessage('ساعدني في تنظيم يومي.')}>
             <Text style={styles.quickText}>◷  يومي</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.quickButton} onPress={openMemoryCenter}>
@@ -1023,7 +1914,7 @@ export default function App() {
         {attachment && (
           <View style={styles.pendingAttachment}>
             <Text style={styles.pendingText} numberOfLines={1}>
-              {attachment.kind === 'image' ? 'صورة: ' : 'ملف: '}{attachment.name}
+              {attachment.kind === 'image' ? 'صورة جاهزة للتحليل: ' : 'ملف جاهز للقراءة: '}{attachment.name}
             </Text>
             <TouchableOpacity onPress={() => setAttachment(null)}>
               <Text style={styles.removeAttachment}>×</Text>
@@ -1069,7 +1960,8 @@ export default function App() {
 
 const styles = StyleSheet.create({
   orbSection: { alignItems: 'center', paddingTop: 0, paddingBottom: 10 },
-  orbStage: { width: 292, height: 292, alignItems: 'center', justifyContent: 'center' },
+  orbStage: { width: 344, height: 344, maxWidth: '100%', alignItems: 'center', justifyContent: 'center' },
+  orbRipple: { position: 'absolute', width: 252, height: 252, borderRadius: 126, borderWidth: 1, borderColor: 'rgba(239,133,203,0.46)' },
   orbHalo: { position: 'absolute', width: 224, height: 224, borderRadius: 112, backgroundColor: '#8E3B78', shadowColor: '#E34BB5', shadowOpacity: 0.9, shadowRadius: 32, shadowOffset: { width: 0, height: 0 }, elevation: 18 },
   orbAura: { position: 'absolute', width: 278, height: 278, borderRadius: 139, borderWidth: 1, borderColor: 'rgba(191,92,164,0.22)' },
   orbHaloListening: { backgroundColor: '#A13E86', shadowColor: '#F05CC4' },
@@ -1083,16 +1975,32 @@ const styles = StyleSheet.create({
   orbCoreListening: { backgroundColor: '#81366D', borderColor: '#F4B2E1' },
   orbCoreThinking: { backgroundColor: '#4D326E', borderColor: '#C5A5F5' },
   orbCoreSpeaking: { backgroundColor: '#79345F', borderColor: '#FFD0EB' },
-  orbCoreHighlight: { width: 78, height: 78, borderRadius: 39, backgroundColor: '#B85A9D', opacity: 0.55, borderWidth: 1, borderColor: '#F0B7DF' },
+  orbCoreShade: { position: 'absolute', width: 142, height: 142, borderRadius: 71, backgroundColor: 'rgba(15,5,22,0.42)', transform: [{ translateX: 10 }, { translateY: 13 }] },
+  orbCoreInner: { position: 'absolute', width: 112, height: 112, borderRadius: 56, backgroundColor: 'rgba(194,91,164,0.26)', borderWidth: 1, borderColor: 'rgba(255,204,239,0.28)' },
+  orbCoreHighlight: { width: 78, height: 78, borderRadius: 39, backgroundColor: '#D07AB5', opacity: 0.48, borderWidth: 1, borderColor: '#F0B7DF', transform: [{ translateX: -9 }, { translateY: -11 }] },
+  orbParticleTop: { position: 'absolute', width: 4, height: 4, borderRadius: 2, backgroundColor: '#F7D8ED', top: 35, right: 83, opacity: 0.8 },
+  orbParticleLeft: { position: 'absolute', width: 3, height: 3, borderRadius: 2, backgroundColor: '#D6A5F2', left: 42, top: 147, opacity: 0.75 },
+  orbParticleBottom: { position: 'absolute', width: 5, height: 5, borderRadius: 3, backgroundColor: '#E6A0D0', bottom: 43, right: 75, opacity: 0.75 },
   orbCoreSpark: { position: 'absolute', width: 12, height: 12, borderRadius: 6, backgroundColor: '#F4D7EC', top: 34, right: 38, opacity: 0.8 },
   orbStatusPill: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 13, paddingVertical: 6, borderRadius: 20, backgroundColor: '#211B27', borderWidth: 1, borderColor: '#493044', marginTop: -1 },
   orbStatusPillActive: { borderColor: '#9C5C91', backgroundColor: '#2B1C2D' },
   orbStatusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#9EBD9D' },
   orbStatusDotActive: { backgroundColor: '#E7A6D2' },
   orbStatus: { color: '#E7B9D8', fontSize: 11, fontWeight: '600' },
+  orbWaveform: { height: 26, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 12 },
+  orbWaveBar: { width: 3, height: 22, borderRadius: 2, backgroundColor: '#D88BC1', shadowColor: '#D84AAE', shadowOpacity: 0.7, shadowRadius: 6 },
   orbCaption: { color: '#77717E', fontSize: 9, marginTop: 6 },
   voiceSafe: { flex: 1, backgroundColor: '#08070D' },
-  voiceTopActions: { width: '100%', flexDirection: 'row', justifyContent: 'space-between' },
+  voiceTopActions: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  voiceIdentityMark: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(117,29,73,0.18)', borderWidth: 1, borderColor: 'rgba(164,65,108,0.52)' },
+  voiceIdentityMarkText: { color: '#C66A91', fontSize: 17, fontWeight: '600' },
+  voiceBrand: { alignItems: 'center', justifyContent: 'center', gap: 3 },
+  voiceBrandName: { color: '#A83B68', fontSize: 20, fontWeight: '800', letterSpacing: 5 },
+  voiceBrandStatus: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  voiceBrandDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#9C8B9A' },
+  voiceBrandDotOnline: { backgroundColor: '#79C99A' },
+  voiceBrandDotOffline: { backgroundColor: '#D66B78' },
+  voiceBrandStatusText: { color: '#817583', fontSize: 7, letterSpacing: 1.7 },
   voiceTopButton: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14, backgroundColor: 'rgba(36,24,38,0.72)', borderWidth: 1, borderColor: '#493044' },
   voiceTopButtonText: { color: '#BFA4BA', fontSize: 11 },
   settingsBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.76)', justifyContent: 'flex-end' },
@@ -1109,10 +2017,15 @@ const styles = StyleSheet.create({
 
   voiceOrbWrap: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center' },
 
+  voiceMicWrap: { width: 96, height: 96, alignItems: 'center', justifyContent: 'center' },
+  voiceMicHalo: { position: 'absolute', width: 84, height: 84, borderRadius: 42, borderWidth: 1, borderColor: '#D98AC4', backgroundColor: 'rgba(173,65,139,0.12)' },
   voiceMic: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', backgroundColor: '#35182F', borderWidth: 1, borderColor: '#C46BA9', shadowColor: '#D64BAF', shadowOpacity: 0.55, shadowRadius: 22, shadowOffset: { width: 0, height: 0 }, elevation: 12 },
   voiceMicActive: { backgroundColor: '#7A285F', borderColor: '#F0B5DE' },
+  voiceMicSpeaking: { backgroundColor: '#4A285D', borderColor: '#C5A5F5' },
   voiceMicIcon: { color: '#F7D8ED', fontSize: 30, fontWeight: '600' },
+  voiceMicHint: { color: '#8F7B91', fontSize: 11, letterSpacing: 0.25, marginTop: -8, marginBottom: 2 },
   voiceTranscriptCard: { width: '100%', maxWidth: 360, padding: 14, borderRadius: 18, backgroundColor: '#19131F', borderWidth: 1, borderColor: '#57364F', marginBottom: 12 },
+  voiceTranscriptLabel: { color: '#C58BB7', textAlign: 'right', fontSize: 10, marginBottom: 6, letterSpacing: 0.3 },
   voiceTranscript: { color: '#F5EAF3', textAlign: 'right', fontSize: 13, lineHeight: 21 },
   voiceSendButton: { alignSelf: 'flex-end', marginTop: 10, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 14, backgroundColor: '#A94F91' },
   voiceSendLabel: { color: '#FFF5FC', fontSize: 12, fontWeight: '700' },
@@ -1126,6 +2039,7 @@ const styles = StyleSheet.create({
   authTitle: { color: '#F5F0F5', fontSize: 23, fontWeight: '600', marginTop: 26 },
   authHint: { color: '#918B98', fontSize: 13, textAlign: 'center', lineHeight: 20, marginTop: 9, marginBottom: 22 },
   authInput: { width: '100%', textAlign: 'right', writingDirection: 'rtl', color: '#F5F0F5', backgroundColor: '#211F27', borderWidth: 1, borderColor: '#39323D', borderRadius: 14, paddingHorizontal: 15, paddingVertical: 15, marginBottom: 12, fontSize: 14 },
+  authInputLtr: { textAlign: 'left', writingDirection: 'ltr' },
   authError: { width: '100%', color: '#F0A4A4', fontSize: 12, marginBottom: 12 },
   authButton: { width: '100%', backgroundColor: '#B58DAE', borderRadius: 14, alignItems: 'center', paddingVertical: 16, marginTop: 4 },
   authButtonDisabled: { opacity: 0.6 },
@@ -1186,16 +2100,26 @@ const styles = StyleSheet.create({
   historyCloseText: { color: '#E7B9D8', fontSize: 25, lineHeight: 28 },
   historyEmpty: { color: '#A69BAA', textAlign: 'center', marginTop: 45, fontSize: 13 },
   historyItem: { padding: 15, marginBottom: 9, borderRadius: 14, backgroundColor: '#211F27', borderWidth: 1, borderColor: '#39323D' },
+  historyItemRow: { flexDirection: 'row', alignItems: 'stretch', gap: 8, marginBottom: 9 },
+  historyItemOpen: { flex: 1, marginBottom: 0 },
+  historyDeleteButton: { paddingHorizontal: 12, justifyContent: 'center', alignItems: 'center', borderRadius: 12, backgroundColor: '#38252B', borderWidth: 1, borderColor: '#63404B' },
+  historyDeleteText: { color: '#E7B9D8', fontSize: 10, fontWeight: '600' },
   historyItemActive: { borderColor: '#B58DAE', backgroundColor: '#2B202D' },
   historyDate: { color: '#A98BA5', fontSize: 10, textAlign: 'right', marginBottom: 7 },
   historyItemTitle: { color: '#F1ECF2', fontSize: 13, lineHeight: 20, textAlign: 'right' },
   historyCurrent: { color: '#D5A9CC', fontSize: 10, textAlign: 'right', marginTop: 7 },
   memoryPanel: { height: '88%', backgroundColor: '#15131A', borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderColor: '#493849', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 24 },
   memoryNotice: { color: '#A69BAA', fontSize: 11, lineHeight: 18, textAlign: 'right', marginBottom: 10 },
-  memoryInput: { minHeight: 76, maxHeight: 120, color: '#F5F0F5', backgroundColor: '#211F27', borderWidth: 1, borderColor: '#493849', borderRadius: 13, padding: 12, textAlignVertical: 'top', fontSize: 12 },
+  memoryInput: { minHeight: 76, maxHeight: 120, color: '#F5F0F5', backgroundColor: '#211F27', borderWidth: 1, borderColor: '#493849', borderRadius: 13, padding: 12, textAlignVertical: 'top', textAlign: 'right', writingDirection: 'rtl', fontSize: 12 },
   memorySaveButton: { backgroundColor: '#B58DAE', borderRadius: 12, paddingVertical: 12, alignItems: 'center', marginTop: 9 },
   memorySaveText: { color: '#171219', fontSize: 12, fontWeight: '700' },
   memorySectionTitle: { color: '#E7B9D8', fontSize: 12, fontWeight: '700', textAlign: 'right', marginTop: 20, marginBottom: 10 },
+  memorySearchInput: { minHeight: 42, color: '#F5F0F5', backgroundColor: '#211F27', borderWidth: 1, borderColor: '#493849', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, textAlign: 'right', fontSize: 12, marginBottom: 9 },
+  memoryFilters: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 6, marginBottom: 10 },
+  memoryFilter: { paddingHorizontal: 9, paddingVertical: 7, borderRadius: 10, backgroundColor: '#211F27', borderWidth: 1, borderColor: '#39323D' },
+  memoryFilterActive: { backgroundColor: '#3B3040', borderColor: '#B58DAE' },
+  memoryFilterText: { color: '#A69BAA', fontSize: 9 },
+  memoryFilterTextActive: { color: '#F0C9E4', fontWeight: '700' },
   memoryList: { paddingBottom: 16, gap: 9 },
   memoryItem: { padding: 13, borderRadius: 13, backgroundColor: '#211F27', borderWidth: 1, borderColor: '#39323D' },
   memoryItemText: { color: '#F1ECF2', fontSize: 12, lineHeight: 19, textAlign: 'right' },
