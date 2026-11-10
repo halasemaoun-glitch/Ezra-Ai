@@ -7,8 +7,7 @@ const PERMISSIONS = [
   "android.permission.CAMERA",
   "android.permission.READ_CONTACTS",
   "android.permission.WAKE_LOCK",
-  "android.permission.POST_NOTIFICATIONS",
-  "android.permission.WAKE_LOCK"
+  "android.permission.POST_NOTIFICATIONS"
 ];
 
 module.exports = function withEzraWakeWord(config) {
