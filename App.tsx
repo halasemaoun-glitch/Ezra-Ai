@@ -2068,7 +2068,33 @@ export default function App() {
                     <Text style={styles.settingTitle}>الصوت العربي</Text>
                     <Text style={styles.settingHint}>{ttsVoices.find(voice => voice.identifier === selectedTtsVoice)?.name || 'تلقائي · أفضل صوت محسّن متاح'}</Text>
                   </View>
-                                <View style={styles.settingRow}>
+                  <TouchableOpacity
+                    style={styles.voiceTopButton}
+                    onPress={() => {
+                      const arabicVoices = ttsVoices
+                        .filter(voice => voice.language.toLowerCase().startsWith('ar'))
+                        .sort((a, b) => Number(b.quality === 'Enhanced') - Number(a.quality === 'Enhanced'));
+                      Alert.alert('اختيار الصوت العربي', 'اختر صوتًا متاحًا على هاتفك. يمكنك تجربة الأصوات لاختيار الأنسب لك.', [
+                        { text: 'تلقائي · الأفضل', onPress: () => { setSelectedTtsVoice(null); AsyncStorage.removeItem('ezra:ttsVoice').catch(() => {}); } },
+                        ...arabicVoices.slice(0, 8).map(voice => ({
+                          text: `${voice.name}${voice.quality === 'Enhanced' ? ' · محسّن' : ''} · تجربة`,
+                          onPress: () => {
+                            setSelectedTtsVoice(voice.identifier);
+                            AsyncStorage.setItem('ezra:ttsVoice', voice.identifier).catch(() => {});
+                            Speech.stop();
+                            Speech.speak('مرحباً، أنا إزرا. سعيد بالحديث معك، كيف أستطيع مساعدتك؟', {
+                              language: 'ar', voice: voice.identifier, rate: speechRate, pitch: speechPitch, volume: 1,
+                            });
+                          },
+                        })),
+                        { text: 'إغلاق', style: 'cancel' as const },
+                      ]);
+                    }}
+                  >
+                    <Text style={styles.voiceTopButtonText}>اختيار</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.settingRow}>
                   <View style={styles.settingCopy}>
                     <Text style={styles.settingTitle}>الصوت الإنجليزي</Text>
                     <Text style={styles.settingHint}>{ttsVoices.find(voice => voice.identifier === selectedEnglishTtsVoice)?.name || 'تلقائي · أفضل صوت إنجليزي متاح'}</Text>
@@ -2101,31 +2127,7 @@ export default function App() {
                     <Text style={styles.voiceTopButtonText}>اختيار</Text>
                   </TouchableOpacity>
                 </View>
-                  <TouchableOpacity
-                    style={styles.voiceTopButton}
-                    onPress={() => {
-                      const arabicVoices = ttsVoices.filter(voice => voice.language.toLowerCase().startsWith('ar'));
-                      Alert.alert('اختيار الصوت العربي', 'اختر صوتًا متاحًا على هاتفك. يمكنك تجربة الأصوات لاختيار الأنسب لك.', [
-                        { text: 'تلقائي · الأفضل', onPress: () => { setSelectedTtsVoice(null); AsyncStorage.removeItem('ezra:ttsVoice').catch(() => {}); } },
-                        ...arabicVoices.slice(0, 8).map(voice => ({
-                          text: `${voice.name}${voice.quality === 'Enhanced' ? ' · محسّن' : ''} · تجربة`,
-                          onPress: () => {
-                            setSelectedTtsVoice(voice.identifier);
-                            AsyncStorage.setItem('ezra:ttsVoice', voice.identifier).catch(() => {});
-                            Speech.stop();
-                            Speech.speak('مرحباً، أنا إزرا. سعيد بالحديث معك، كيف أستطيع مساعدتك؟', {
-                              language: 'ar', voice: voice.identifier, rate: speechRate, pitch: speechPitch, volume: 1,
-                            });
-                          },
-                        })),
-                        { text: 'إغلاق', style: 'cancel' as const },
-                      ]);
-                    }}
-                  >
-                    <Text style={styles.voiceTopButtonText}>اختيار</Text>
-                  </TouchableOpacity>
-                </View>
-                <View style={styles.settingRow}>
+                                <View style={styles.settingRow}>
                   <View style={styles.settingCopy}><Text style={styles.settingTitle}>لغة التعرّف الصوتي</Text><Text style={styles.settingHint}>{recognitionLanguage === 'ar' ? 'العربية' : 'English'}</Text></View>
                   <View style={styles.rateControls}>
                     <TouchableOpacity style={[styles.rateButton, recognitionLanguage === 'ar' && styles.languageButtonActive]} onPress={() => { setRecognitionLanguage('ar'); AsyncStorage.setItem('ezra:recognitionLanguage', 'ar').catch(() => {}); }}><Text style={styles.rateButtonText}>ع</Text></TouchableOpacity>
