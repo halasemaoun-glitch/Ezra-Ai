@@ -1185,6 +1185,7 @@ export default function App() {
     setMessage('');
     if (phone) {
       const confirmedPhone = phone;
+      // Privacy-first: show the destination number and let the user place the call in Android's dialer.
       Alert.alert('تأكيد الاتصال', `هل تريدين الاتصال بهذا الرقم؟\n${confirmedPhone}`, [
         { text: 'إلغاء', style: 'cancel' },
         {
