@@ -6,6 +6,7 @@ import android.os.Build
 import android.net.Uri
 import android.os.StatFs
 import android.media.MediaPlayer
+import android.media.AudioAttributes
 import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -119,29 +120,57 @@ class EzraHabibiTtsModule : Module() {
       require(audioFile.isFile && audioFile.canRead() && audioFile.length() > 44L) {
         "Generated Habibi WAV file is missing or invalid."
       }
+      val validWav = audioFile.inputStream().use { stream ->
+        val header = ByteArray(12)
+        var offset = 0
+        while (offset < header.size) {
+          val count = stream.read(header, offset, header.size - offset)
+          if (count <= 0) break
+          offset += count
+        }
+        offset == header.size &&
+          String(header, 0, 4, Charsets.US_ASCII) == "RIFF" &&
+          String(header, 8, 4, Charsets.US_ASCII) == "WAVE"
+      }
+      require(validWav) { "Generated audio is not a valid RIFF/WAVE file." }
+
       mediaPlayer?.release()
       mediaPlayerFile?.delete()
       val player = MediaPlayer()
       mediaPlayerFile = audioFile
       mediaPlayer = player
+      player.setAudioAttributes(
+        AudioAttributes.Builder()
+          .setUsage(AudioAttributes.USAGE_MEDIA)
+          .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+          .build()
+      )
       player.setOnPreparedListener { preparedPlayer -> preparedPlayer.start() }
       player.setOnCompletionListener {
         it.release()
         if (mediaPlayer === it) mediaPlayer = null
         audioFile.delete()
-        mediaPlayerFile = null
+        if (mediaPlayerFile == audioFile) mediaPlayerFile = null
         sendEvent("onPlaybackFinished", mapOf("path" to path))
       }
       player.setOnErrorListener { failedPlayer, what, extra ->
         failedPlayer.release()
         if (mediaPlayer === failedPlayer) mediaPlayer = null
         audioFile.delete()
-        mediaPlayerFile = null
+        if (mediaPlayerFile == audioFile) mediaPlayerFile = null
         sendEvent("onPlaybackError", mapOf("what" to what, "extra" to extra))
         true
       }
-      player.setDataSource(audioFile.absolutePath)
-      player.prepareAsync()
+      try {
+        player.setDataSource(audioFile.absolutePath)
+        player.prepareAsync()
+      } catch (error: Exception) {
+        player.release()
+        if (mediaPlayer === player) mediaPlayer = null
+        audioFile.delete()
+        if (mediaPlayerFile == audioFile) mediaPlayerFile = null
+        throw IllegalStateException("Android could not prepare the generated Habibi WAV for playback.", error)
+      }
       mapOf("playing" to true)
     }.runOnQueue(Queues.MAIN)
 
