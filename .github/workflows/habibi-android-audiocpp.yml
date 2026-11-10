@@ -181,14 +181,13 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
           path = Path("android/app/build.gradle")
           source = path.read_text()
-          pattern = r"(react\\s*\\{)"
-          updated, count = re.subn(pattern, r"\\1\\n    // Ship the JS bundle so this APK runs without Metro.\\n    debuggableVariants = []", source, count=1)
-          if count != 1:
-              raise SystemExit("Could not find exactly one React Native Gradle react block")
-          path.write_text(updated)
+          needle = "react {"
+          if source.count(needle) != 1:
+              raise SystemExit("Expected exactly one React Native Gradle react block")
+          source = source.replace(needle, needle + "\\n    // Ship the JS bundle so this APK runs without Metro.\\n    debuggableVariants = []", 1)
+          path.write_text(source)
           assert "debuggableVariants = []" in path.read_text()
 
       - name: Assemble Android debug APK with Habibi native runtime
