@@ -448,8 +448,14 @@ export default function App() {
         throw new Error('ملف العينة الصوتية غير موجود أو فارغ. اختر تسجيل WAV صالحًا من جديد.');
       }
       const capacity = await EzraHabibiTts.getDeviceCapacity();
-      if (capacity.lowMemory || capacity.availableRamBytes < 1_500_000_000) {
-        throw new Error('الذاكرة المتاحة حاليًا منخفضة لتشغيل نموذج الصوت بأمان. أغلق التطبيقات الأخرى ثم أعد المحاولة.');
+      // audio.cpp v0.9.4 reserves a 9 MiB CPU DiT graph pool per mel frame.
+      // Habibi's minimum 256-frame budget therefore needs about 2.25 GiB for
+      // this pool alone, before model weights, vocoder, app heap, and Android.
+      // Require extra headroom rather than risking an LMK/OOM crash on 6 GB phones.
+      const minimumHabibiFreeRamBytes = 3_500 * 1024 * 1024;
+      if (capacity.lowMemory || capacity.availableRamBytes < minimumHabibiFreeRamBytes) {
+        const availableGb = (capacity.availableRamBytes / (1024 * 1024 * 1024)).toFixed(1);
+        throw new Error(`ذاكرة الهاتف المتاحة الآن ${availableGb} GB فقط. محرك Habibi يحتاج مساحة أكبر بكثير من ذلك؛ أغلق التطبيقات وأعد المحاولة عندما تتوفر 3.5 GB على الأقل. لم نبدأ تحميل النموذج إلى الذاكرة، لذلك لم نخاطر بإغلاق التطبيق.`);
       }
       await AsyncStorage.multiSet([
         ['ezra:habibiReferenceTranscript', habibiReferenceTranscript.trim()],
