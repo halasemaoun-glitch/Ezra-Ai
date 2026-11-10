@@ -83,21 +83,6 @@ class EzraWakeWordModule : Module() {
       cursor?.use { if (it.moveToFirst()) it.getString(1).orEmpty() else "" } ?: ""
     }
 
-    AsyncFunction("callNumber") { requestedNumber: String ->
-      val context = appContext.reactContext?.applicationContext
-        ?: throw IllegalStateException("EZRA Android context is unavailable")
-      if (context.checkSelfPermission(Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
-        throw SecurityException("Phone permission is required")
-      }
-      val number = requestedNumber.filter { it.isDigit() || it == '+' || it == '*' || it == '#' }
-      if (number.isBlank()) return@AsyncFunction false
-      val callIntent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$number")).apply {
-        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-      }
-      context.startActivity(callIntent)
-      true
-    }
-
     AsyncFunction("dialNumber") { requestedNumber: String ->
       val context = appContext.reactContext?.applicationContext
         ?: throw IllegalStateException("EZRA Android context is unavailable")
