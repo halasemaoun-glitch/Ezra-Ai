@@ -6,6 +6,8 @@ on:
       - ezra/habibi-android-spike
     paths:
       - "modules/ezra-habibi-tts/**"
+      - "modules/ezra-wake-word/**"
+      - "plugins/withEzraWakeWord.js"
       - "App.tsx"
       - "src/EzraOrb3D.tsx"
       - "package.json"
