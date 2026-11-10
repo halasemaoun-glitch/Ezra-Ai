@@ -188,3 +188,13 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7
+
+      - name: Publish APK build through Expo EAS
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::warning::EXPO_TOKEN is not configured. GitHub APK is available, but expo.dev publishing is skipped."
+            exit 0
+          fi
+          npx --yes eas-cli@27.4.1 build --platform android --profile preview --non-interactive --no-wait
