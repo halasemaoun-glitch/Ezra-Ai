@@ -41,7 +41,6 @@ type EzraWakeWordNative = {
   isAvailable: () => Promise<boolean>;
   setTorch: (enabled: boolean) => Promise<boolean>;
   findContactPhone: (name: string) => Promise<string>;
-  callNumber: (phone: string) => Promise<boolean>;
   dialNumber: (phone: string) => Promise<boolean>;
   composeSms: (phone: string, body: string) => Promise<boolean>;
   createAlarm: (hour: number, minute: number, label: string) => Promise<boolean>;
@@ -1160,13 +1159,7 @@ export default function App() {
         if (!phone) {
           reply = `ما لقيت جهة اتصال محفوظة باسم ${contactName}. تأكدي من الاسم في جهات الاتصال وجربي مرة ثانية.`;
         } else {
-          const callPermission = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CALL_PHONE);
-          if (callPermission !== PermissionsAndroid.RESULTS.GRANTED) {
-            reply = 'أحتاج إذن الاتصال حتى أقدر أبدأ المكالمة. اسمحي بالإذن من إعدادات الهاتف.';
-            phone = '';
-          } else {
-            reply = `وجدت رقم ${contactName}: ${phone}. هل تريدين أن أتصل الآن؟`;
-          }
+          reply = `وجدت رقم ${contactName}: ${phone}. هل تريدين فتح شاشة الاتصال بهذا الرقم؟`;
         }
       }
     } catch (error) {
@@ -1198,11 +1191,11 @@ export default function App() {
           text: 'اتصال',
           onPress: async () => {
             try {
-              const started = await EzraWakeWord.callNumber(confirmedPhone);
-              if (started) Alert.alert('EZRA', 'بدأت الاتصال.');
+              const started = await EzraWakeWord.dialNumber(confirmedPhone);
+              if (started) Alert.alert('EZRA', 'فتحت شاشة الاتصال. راجعي الرقم واضغطي اتصال بنفسك.');
             } catch (error) {
               console.warn('EZRA call could not start:', error);
-              Alert.alert('تعذّر الاتصال', 'لم أتمكن من بدء المكالمة. تحققي من إذن الاتصال.');
+              Alert.alert('تعذّر فتح الاتصال', 'لم أتمكن من فتح تطبيق الهاتف لهذا الرقم.');
             }
           },
         },
