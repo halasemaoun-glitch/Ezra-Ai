@@ -217,7 +217,13 @@ export default function App() {
   const [autoSpeak, setAutoSpeak] = useState(true);
   const [speechRate, setSpeechRate] = useState(DEFAULT_EZRA_VOICE.rate);
   const [speechPitch, setSpeechPitch] = useState(DEFAULT_EZRA_VOICE.pitch);
-  const [recognitionLanguage, setRecognitionLanguage] = useState<'ar' | 'en'>('ar');
+  const [recognitionLocale, setRecognitionLocale] = useState(() => {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().locale || 'ar-DZ';
+    } catch {
+      return 'ar-DZ';
+    }
+  });
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [attachment, setAttachment] = useState<Attachment | null>(null);
@@ -549,7 +555,6 @@ export default function App() {
     AsyncStorage.multiGet(['ezra:autoSpeak', 'ezra:speechRate', 'ezra:recognitionLanguage', 'ezra:autoListen', 'ezra:ttsVoice', 'ezra:speechPitch', 'ezra:backgroundWake', 'ezra:ttsEnglishVoice']).then(values => {
       const savedAutoSpeak = values[0]?.[1];
       const savedRate = values[1]?.[1];
-      const savedLanguage = values[2]?.[1];
       const savedAutoListen = values[3]?.[1];
       const savedTtsVoice = values[4]?.[1];
       if (savedTtsVoice) setSelectedTtsVoice(savedTtsVoice);
@@ -566,7 +571,7 @@ export default function App() {
           AsyncStorage.setItem('ezra:speechPitch', String(restoredPitch)).catch(() => {});
         }
       }
-      if (savedLanguage === 'ar' || savedLanguage === 'en') setRecognitionLanguage(savedLanguage);
+      AsyncStorage.removeItem('ezra:recognitionLanguage').catch(() => {});
       if (savedAutoListen !== null) {
         const enabled = savedAutoListen === 'true';
         autoListenRef.current = enabled;
@@ -928,6 +933,10 @@ export default function App() {
     const normalized = event.value <= 0 ? 0 : Math.min(1, event.value / 10);
     setVoiceLevel(previous => previous * 0.58 + normalized * 0.42);
   });
+  useSpeechRecognitionEvent('languagedetection', event => {
+    const detected = typeof event.detectedLanguage === 'string' ? event.detectedLanguage.trim() : '';
+    if (detected && (event.confidence ?? 0) >= 0.55) setRecognitionLocale(detected);
+  });
   useSpeechRecognitionEvent('soundend', () => {
     setVoiceLevel(0);
   });
@@ -1006,7 +1015,7 @@ export default function App() {
     if (!appIsActive || !session || !voiceHome || !autoListen || backgroundWakeEnabled || isListening || sending || speakingMessageId || chatLoading) return;
     const timer = setTimeout(() => beginListening(), voiceRetrying ? 900 : 500);
     return () => clearTimeout(timer);
-  }, [appIsActive, session?.user.id, voiceHome, autoListen, backgroundWakeEnabled, recognitionLanguage, isListening, sending, speakingMessageId, chatLoading, voiceRetrying]);
+  }, [appIsActive, session?.user.id, voiceHome, autoListen, backgroundWakeEnabled, recognitionLocale, isListening, sending, speakingMessageId, chatLoading, voiceRetrying]);
 
   useEffect(() => {
     if (!appIsActive || !voiceHome || !autoListen || backgroundWakeEnabled || !voiceTurnInProgressRef.current || !voiceRequestStartedRef.current || sending || speakingMessageId || isListening) return;
@@ -1619,8 +1628,16 @@ export default function App() {
         return;
       }
       voiceTranscriptRef.current = '';
+      const supportsNativeLanguageSwitch = Platform.OS === 'android' && Number(Platform.Version) >= 34;
       ExpoSpeechRecognitionModule.start({
-        lang: recognitionLanguage === 'ar' ? 'ar' : 'en-US',
+        lang: recognitionLocale,
+        ...(supportsNativeLanguageSwitch ? {
+          androidRecognitionServicePackage: 'com.google.android.as',
+          androidIntentOptions: {
+            EXTRA_ENABLE_LANGUAGE_DETECTION: true,
+            EXTRA_ENABLE_LANGUAGE_SWITCH: 'balanced',
+          },
+        } : {}),
         interimResults: true,
         continuous: false,
         volumeChangeEventOptions: { enabled: true, intervalMillis: 90 },
@@ -1797,7 +1814,7 @@ export default function App() {
     await EzraHabibiTts?.stopAudio().catch(() => {});
     activeHabibiSpeechRef.current = null;
     setSpeakingMessageId(messageId);
-    const speechLanguage = detectEzraSpeechLanguage(text);
+    const speechLanguage = detectEzraSpeechLanguage(text, recognitionLocale);
 
     if (speechLanguage === 'ar' && habibiEngineReady && EzraHabibiTts && Platform.OS === 'android') {
       activeHabibiSpeechRef.current = {
@@ -2139,14 +2156,7 @@ export default function App() {
                     <Text style={styles.voiceTopButtonText}>اختيار</Text>
                   </TouchableOpacity>
                 </View>
-                                <View style={styles.settingRow}>
-                  <View style={styles.settingCopy}><Text style={styles.settingTitle}>لغة التعرّف الصوتي</Text><Text style={styles.settingHint}>{recognitionLanguage === 'ar' ? 'العربية' : 'English'}</Text></View>
-                  <View style={styles.rateControls}>
-                    <TouchableOpacity style={[styles.rateButton, recognitionLanguage === 'ar' && styles.languageButtonActive]} onPress={() => { setRecognitionLanguage('ar'); AsyncStorage.setItem('ezra:recognitionLanguage', 'ar').catch(() => {}); }}><Text style={styles.rateButtonText}>ع</Text></TouchableOpacity>
-                    <TouchableOpacity style={[styles.rateButton, recognitionLanguage === 'en' && styles.languageButtonActive]} onPress={() => { setRecognitionLanguage('en'); AsyncStorage.setItem('ezra:recognitionLanguage', 'en').catch(() => {}); }}><Text style={styles.rateButtonText}>EN</Text></TouchableOpacity>
-                  </View>
-                </View>
-                <View style={[styles.settingRow, { flexDirection: 'column', alignItems: 'stretch', gap: 10 }]}>
+                                <View style={[styles.settingRow, { flexDirection: 'column', alignItems: 'stretch', gap: 10 }]}>
                   <View style={styles.settingCopy}>
                     <Text style={styles.settingTitle}>فحص جاهزية Habibi على هذا الهاتف</Text>
                     <Text style={styles.settingHint}>يقيس الذاكرة والمساحة المتاحة فقط، ولا يحمّل أي نموذج.</Text>
