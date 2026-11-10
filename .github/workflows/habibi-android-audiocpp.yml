@@ -7,6 +7,7 @@ on:
     paths:
       - "modules/ezra-habibi-tts/**"
       - "App.tsx"
+      - "src/EzraOrb3D.tsx"
       - "package.json"
       - "app.json"
       - "docs/HABIBI_ANDROID_INTEGRATION.md"
@@ -207,12 +208,3 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Publish APK build through Expo EAS
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: |
-          if [ -z "$EXPO_TOKEN" ]; then
-            echo "::warning::EXPO_TOKEN is not configured. GitHub APK is available, but expo.dev publishing is skipped."
-            exit 0
-          fi
-          npx --yes eas-cli@27.4.1 build --platform android --profile preview --non-interactive --no-wait
