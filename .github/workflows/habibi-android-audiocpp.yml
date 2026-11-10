@@ -177,9 +177,28 @@ jobs:
       - name: Generate Android project
         run: npx expo prebuild --platform android --no-install --non-interactive
 
+      - name: Configure debug APK to embed the JavaScript bundle
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          path = Path("android/app/build.gradle")
+          source = path.read_text()
+          pattern = r"(react\\s*\\{)"
+          updated, count = re.subn(pattern, r"\\1\\n    // Ship the JS bundle so this APK runs without Metro.\\n    debuggableVariants = []", source, count=1)
+          if count != 1:
+              raise SystemExit("Could not find exactly one React Native Gradle react block")
+          path.write_text(updated)
+          assert "debuggableVariants = []" in path.read_text()
+
       - name: Assemble Android debug APK with Habibi native runtime
         working-directory: android
-        run: ./gradlew :app:assembleDebug --no-daemon
+        run: |
+          ./gradlew :app:assembleDebug --no-daemon
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          unzip -l "$APK" | grep -q "assets/index.android.bundle"
+          echo "Verified: APK contains assets/index.android.bundle"
 
       - name: Upload EZRA Android APK with Habibi runtime
         uses: actions/upload-artifact@v4
