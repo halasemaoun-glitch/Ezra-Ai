@@ -44,7 +44,7 @@ Deno.serve(async (req: Request) => {
     // Require a real Supabase user access token for every chat request.
     // A publishable/anon key by itself is not an authenticated user session.
     const authorization = req.headers.get("Authorization") ?? "";
-    const bearerToken = authorization.match(/^Bearer\\s+(.+)$/i)?.[1];
+    const bearerToken = authorization.match(/^Bearer\s+(.+)$/i)?.[1];
     if (!bearerToken) {
       return new Response(JSON.stringify({ error: "Sign in to use EZRA." }), {
         status: 401, headers: jsonHeaders,
