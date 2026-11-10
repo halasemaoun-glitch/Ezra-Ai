@@ -205,7 +205,7 @@ export default function App() {
   const [habibiModelPath, setHabibiModelPath] = useState('');
   const [habibiReferencePath, setHabibiReferencePath] = useState('');
   const [habibiReferenceTranscript, setHabibiReferenceTranscript] = useState('');
-  const [habibiDialect, setHabibiDialect] = useState('ALG');
+  const [habibiDialect, setHabibiDialect] = useState('LEV');
   const [habibiModelDownloading, setHabibiModelDownloading] = useState(false);
   const [habibiDownloadProgress, setHabibiDownloadProgress] = useState(0);
   const [habibiEngineReady, setHabibiEngineReady] = useState(false);
@@ -396,13 +396,25 @@ export default function App() {
       await FileSystem.copyAsync({ from: selected.uri, to: target });
       setHabibiReferencePath(target);
       await AsyncStorage.setItem('ezra:habibiReferencePath', target);
-      // A newly selected recording must never inherit the previous recording's transcript.
-      setHabibiReferenceTranscript('');
-      await AsyncStorage.removeItem('ezra:habibiReferenceTranscript');
+      // Pre-fill the exact transcript only for the user-approved EZRA reference file.
+      // Other recordings always require a fresh transcript to prevent reference/text mismatch.
+      const isApprovedEzraReference = selected.name.toLowerCase() === 'ezra_habibi_reference.wav';
+      const referenceTranscript = isApprovedEzraReference ? 'حبيبتي' : '';
+      setHabibiReferenceTranscript(referenceTranscript);
+      if (referenceTranscript) {
+        await AsyncStorage.setItem('ezra:habibiReferenceTranscript', referenceTranscript);
+      } else {
+        await AsyncStorage.removeItem('ezra:habibiReferenceTranscript');
+      }
       setHabibiEngineReady(false);
       await AsyncStorage.removeItem('ezra:habibiEnabled');
       await EzraHabibiTts?.shutdown().catch(() => {});
-      Alert.alert('تم اختيار العينة', 'أدخل النص المنطوق في التسجيل حرفيًا، ثم فعّل المحرك.');
+      Alert.alert(
+        'تم اختيار العينة',
+        referenceTranscript
+          ? 'تم التعرف على عينة EZRA المعتمدة وتعبئة نصها المطابق «حبيبتي». نزّل النموذج ثم فعّل المحرك.'
+          : 'أدخل النص المنطوق في التسجيل حرفيًا، ثم فعّل المحرك.'
+      );
     } catch (error) {
       console.warn('Could not select Habibi reference audio:', error);
       Alert.alert('تعذّر اختيار التسجيل', 'لم نتمكن من حفظ ملف الصوت. جرّب ملف WAV آخر.');
