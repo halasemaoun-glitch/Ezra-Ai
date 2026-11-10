@@ -35,7 +35,8 @@
           "photosPermission": "Allow EZRA to access photos you choose to attach.",
           "cameraPermission": "Allow EZRA to take photos you choose to attach."
         }
-      ]
+      ],
+      "./plugins/withEzraWakeWord"
     ],
     "extra": {
       "eas": {
