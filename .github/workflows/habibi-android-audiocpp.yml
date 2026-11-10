@@ -9,6 +9,7 @@ on:
       - "modules/ezra-wake-word/**"
       - "plugins/withEzraWakeWord.js"
       - "App.tsx"
+      - "src/voice/**"
       - "src/EzraOrb3D.tsx"
       - "package.json"
       - "app.json"
