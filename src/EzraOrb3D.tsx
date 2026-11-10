@@ -1,184 +1,119 @@
-import React, { useEffect, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { Canvas, useFrame } from '@react-three/fiber/native';
-import * as THREE from 'three';
+import React, { useEffect, useRef } from 'react';
+import { Animated, Easing, StyleSheet, View } from 'react-native';
 
 type OrbStatus = { status: string; level?: number };
 
-function OrbScene({ status, level = 0 }: OrbStatus) {
-  const core = useRef<THREE.Mesh>(null);
-  const coreMaterial = useRef<THREE.MeshPhysicalMaterial>(null);
-  const halo = useRef<THREE.Mesh>(null);
-  const orbitA = useRef<THREE.Mesh>(null);
-  const orbitB = useRef<THREE.Mesh>(null);
-  const particles = useRef<THREE.Points>(null);
-  const pinkLight = useRef<THREE.PointLight>(null);
-  const violetLight = useRef<THREE.PointLight>(null);
-  const burgundyLight = useRef<THREE.PointLight>(null);
-  const pulseRing = useRef<THREE.Mesh>(null);
-  const rimRing = useRef<THREE.Mesh>(null);
-  const smoothedLevel = useRef(0);
-  const smoothedActivity = useRef(0.28);
-  const smoothedSpeed = useRef(0.12);
-  const listening = status.includes('يستمع');
-  const thinking = status.includes('أفكر');
-  const speaking = status.includes('يتحدث');
-  const speed = speaking ? 0.8 : listening ? 0.52 : thinking ? 0.2 : 0.12;
-  const particleGeometry = useMemo(() => {
-    const points: THREE.Vector3[] = [];
-    for (let i = 0; i < 110; i += 1) {
-      const y = 1 - (i / 109) * 2;
-      const radius = Math.sqrt(1 - y * y);
-      const angle = Math.PI * (3 - Math.sqrt(5)) * i;
-      const spread = 1.55 + ((i * 17) % 13) / 35;
-      points.push(new THREE.Vector3(Math.cos(angle) * radius * spread, y * spread, Math.sin(angle) * radius * spread));
-    }
-    return new THREE.BufferGeometry().setFromPoints(points);
-  }, []);
-
-  useEffect(() => () => particleGeometry.dispose(), [particleGeometry]);
-
-  useFrame(({ clock }, delta) => {
-    const t = clock.getElapsedTime();
-    smoothedLevel.current = THREE.MathUtils.damp(smoothedLevel.current, level, 9, delta);
-    const targetActivity = listening ? 0.42 + smoothedLevel.current * 0.72 : speaking ? 1 : thinking ? 0.48 : 0.28;
-    smoothedActivity.current = THREE.MathUtils.damp(smoothedActivity.current, targetActivity, 4.5, delta);
-    smoothedSpeed.current = THREE.MathUtils.damp(smoothedSpeed.current, speed, 3.5, delta);
-    const activity = smoothedActivity.current;
-    const motionLevel = smoothedLevel.current;
-    const motionSpeed = smoothedSpeed.current;
-    if (core.current) {
-      core.current.rotation.y = t * motionSpeed;
-      core.current.rotation.x = Math.sin(t * 0.22) * 0.12;
-      const breath = 1 + Math.sin(t * (0.9 + activity * 2.8)) * (0.018 + activity * 0.027);
-      core.current.scale.setScalar(breath);
-    }
-    if (halo.current) {
-      halo.current.rotation.y = -t * motionSpeed * 0.42;
-    }
-    if (orbitA.current) orbitA.current.rotation.z = t * motionSpeed * 0.72;
-    if (orbitB.current) orbitB.current.rotation.x = 0.9 + t * motionSpeed * 0.5;
-    if (rimRing.current) rimRing.current.rotation.set(1.05 + Math.sin(t * 0.16) * 0.08, t * motionSpeed * 0.32, -0.35);
-    if (pulseRing.current) {
-      const wave = (Math.sin(t * (speaking ? 3.2 : listening ? 2.1 : 0.9)) + 1) * 0.5;
-      pulseRing.current.scale.setScalar(1.02 + wave * (0.045 + activity * 0.17));
-      const material = pulseRing.current.material as THREE.MeshBasicMaterial;
-      material.opacity = 0.1 + (1 - wave) * (0.1 + activity * 0.24);
-    }
-    if (particles.current) {
-      particles.current.rotation.y = -t * (0.025 + activity * 0.095);
-      particles.current.rotation.x = Math.sin(t * 0.18) * 0.08;
-    }
-    if (coreMaterial.current) {
-      const glow = speaking ? 1.12 : listening ? 0.92 : thinking ? 0.82 : 0.68;
-      const targetGlow = glow + Math.sin(t * (0.9 + activity * 3.1)) * (0.04 + activity * 0.18) + (listening ? motionLevel * 0.42 : 0);
-      coreMaterial.current.emissiveIntensity = THREE.MathUtils.damp(coreMaterial.current.emissiveIntensity, targetGlow, 5, delta);
-    }
-    const pulse = 0.88 + (Math.sin(t * (speaking ? 4.8 : listening ? 2.8 : 1.35)) + 1) * 0.09;
-    if (pinkLight.current) {
-      const targetPink = speaking ? 4.1 : listening ? 3.1 + motionLevel * 1.25 : thinking ? 2.9 : 2.3;
-      pinkLight.current.intensity = THREE.MathUtils.damp(pinkLight.current.intensity, targetPink, 5, delta) * pulse;
-    }
-    if (violetLight.current) {
-      const targetViolet = thinking ? 3.8 : speaking ? 2.9 : listening ? 3.1 : 2.5;
-      violetLight.current.intensity = THREE.MathUtils.damp(violetLight.current.intensity, targetViolet, 3.5, delta) * (0.92 + Math.sin(t * 0.8 + 1.4) * 0.08);
-    }
-    if (burgundyLight.current) {
-      const targetBurgundy = thinking ? 1.45 : speaking ? 1.25 : listening ? 1.55 : 2.0;
-      burgundyLight.current.intensity = THREE.MathUtils.damp(burgundyLight.current.intensity, targetBurgundy, 3.8, delta) * (0.94 + Math.sin(t * 0.66 + 2.1) * 0.06);
-    }
-    if (halo.current) halo.current.scale.setScalar(1.1 + activity * 0.035 + Math.sin(t * 1.15) * 0.018);
-  });
-
-  return (
-    <>
-      <ambientLight intensity={0.62} />
-      <pointLight ref={pinkLight} position={[2.5, 2.2, 3]} color="#ff70c8" intensity={3.2} distance={8} />
-      <pointLight ref={violetLight} position={[-2.8, -1.2, 2]} color="#7928ff" intensity={2.7} distance={7} />
-      <pointLight ref={burgundyLight} position={[0, -2.6, 2.3]} color="#9e174e" intensity={1.8} distance={7} />
-      <pointLight position={[0, 0, -3]} color="#e51b83" intensity={2.2} distance={6} />
-      <pointLight position={[0, 2.8, 0.8]} color="#f7b4e4" intensity={1.25} distance={5} />
-      <group>
-        <mesh ref={halo}>
-          <sphereGeometry args={[1.22, 48, 48]} />
-          <meshBasicMaterial color="#a90b67" transparent opacity={0.105} side={THREE.BackSide} />
-        </mesh>
-        <mesh ref={pulseRing}>
-          <torusGeometry args={[1.12, 0.012, 8, 160]} />
-          <meshBasicMaterial color="#f65ab5" transparent opacity={0.2} />
-        </mesh>
-        <mesh ref={core}>
-          <sphereGeometry args={[0.92, 72, 72]} />
-          <meshPhysicalMaterial
-            ref={coreMaterial}
-            color={thinking ? '#230d3d' : '#35091f'}
-            emissive={speaking ? '#c01877' : listening ? '#a51a69' : thinking ? '#6b2aa8' : '#70113f'}
-            emissiveIntensity={speaking ? 1.15 : listening ? 0.9 : 0.68}
-            metalness={0.32}
-            roughness={0.22}
-            clearcoat={1}
-            clearcoatRoughness={0.12}
-          />
-        </mesh>
-        <mesh scale={1.006}>
-          <sphereGeometry args={[0.92, 48, 48]} />
-          <meshBasicMaterial color="#f4a2db" transparent opacity={0.045} side={THREE.BackSide} />
-        </mesh>
-        <mesh scale={0.77}>
-          <sphereGeometry args={[0.92, 48, 48]} />
-          <meshBasicMaterial color="#ff6bbd" transparent opacity={0.09} />
-        </mesh>
-        <mesh ref={orbitA} rotation={[0.8, 0.2, 0.35]}>
-          <torusGeometry args={[1.34, 0.009, 8, 180]} />
-          <meshBasicMaterial color="#ff77c8" transparent opacity={0.72} />
-        </mesh>
-        <mesh ref={rimRing} rotation={[1.05, 0.2, -0.35]}>
-          <torusGeometry args={[1.19, 0.0035, 6, 180]} />
-          <meshBasicMaterial color="#f8b6e6" transparent opacity={0.34} />
-        </mesh>
-        <mesh ref={orbitB} rotation={[1.2, 0.4, -0.5]}>
-          <torusGeometry args={[1.48, 0.006, 8, 180]} />
-          <meshBasicMaterial color="#9b62ff" transparent opacity={0.58} />
-        </mesh>
-        <points ref={particles} geometry={particleGeometry}>
-          <pointsMaterial color="#ffc0ed" size={0.025} transparent opacity={0.82} sizeAttenuation />
-        </points>
-      </group>
-    </>
-  );
-}
-
+/**
+ * GPU-safe EZRA orb.
+ *
+ * The previous implementation mounted a Three.js WebGL Canvas on the very
+ * first app render. Some Android 13 devices (including lower-memory Adreno
+ * configurations) can terminate the process while creating the GL context,
+ * before React Native has rendered the first screen. This native-view version
+ * keeps the same burgundy/pink/purple glowing-orb identity without requiring
+ * an OpenGL context during startup.
+ */
 export default function EzraOrb3D({ status, level = 0 }: OrbStatus) {
   const listening = status.includes('يستمع');
   const thinking = status.includes('أفكر');
   const speaking = status.includes('يتحدث');
+  const active = listening || thinking || speaking;
+  const pulse = useRef(new Animated.Value(0)).current;
+  const rotation = useRef(new Animated.Value(0)).current;
+  const glow = useRef(new Animated.Value(0.55)).current;
+
+  useEffect(() => {
+    const pulseLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: speaking ? 520 : listening ? 680 : thinking ? 1050 : 1700,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0,
+          duration: speaking ? 520 : listening ? 680 : thinking ? 1050 : 1700,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    const rotationLoop = Animated.loop(
+      Animated.timing(rotation, {
+        toValue: 1,
+        duration: speaking ? 6500 : listening ? 9000 : 18000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    );
+    const glowLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glow, { toValue: 1, duration: 1200, useNativeDriver: true }),
+        Animated.timing(glow, { toValue: 0.48, duration: 1200, useNativeDriver: true }),
+      ])
+    );
+    pulseLoop.start();
+    rotationLoop.start();
+    glowLoop.start();
+    return () => {
+      pulseLoop.stop();
+      rotationLoop.stop();
+      glowLoop.stop();
+      pulse.stopAnimation();
+      rotation.stopAnimation();
+      glow.stopAnimation();
+    };
+  }, [pulse, rotation, glow, speaking, listening, thinking]);
+
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, active ? 1.055 + Math.min(0.025, level * 0.025) : 1.025] });
+  const ringRotation = rotation.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const reverseRotation = rotation.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-360deg'] });
+  const haloOpacity = glow.interpolate({ inputRange: [0.48, 1], outputRange: [0.12, active ? 0.34 : 0.22] });
+  const coreColor = thinking ? '#28103F' : speaking ? '#5B0B3D' : '#3B0B29';
+  const glowColor = thinking ? '#8A55FF' : speaking ? '#FF5DB8' : '#D92C91';
+
   return (
     <View style={styles.stage}>
-      <Canvas
-        camera={{ position: [0, 0, 4.5], fov: 38 }}
-        gl={{ alpha: true, antialias: true, powerPreference: 'low-power' }}
-        style={styles.canvas}
-      >
-        <OrbScene status={status} level={level} />
-      </Canvas>
-      <View pointerEvents="none" style={styles.ornamentLayer}>
-        <View style={[styles.orbitSpark, styles.sparkTop, (listening || speaking) && styles.sparkActive]} />
-        <View style={[styles.orbitSpark, styles.sparkRight]} />
-        <View style={[styles.orbitSpark, styles.sparkLeft, thinking && styles.sparkActive]} />
-        <View style={[styles.orbitSpark, styles.sparkBottom]} />
+      <Animated.View pointerEvents="none" style={[styles.outerHalo, { opacity: haloOpacity, transform: [{ scale }] }]} />
+      <Animated.View pointerEvents="none" style={[styles.orbit, styles.orbitPink, { transform: [{ rotate: ringRotation }] }]} />
+      <Animated.View pointerEvents="none" style={[styles.orbit, styles.orbitViolet, { transform: [{ rotate: reverseRotation }, { scaleX: 0.72 }] }]} />
+      <Animated.View pointerEvents="none" style={[styles.orbit, styles.orbitFine, { transform: [{ rotate: ringRotation }, { scaleX: 0.88 }] }]} />
+      <Animated.View style={[styles.coreWrap, { transform: [{ scale }] }]}>
+        <View style={[styles.core, { backgroundColor: coreColor, borderColor: glowColor, shadowColor: glowColor }]}>
+          <View style={[styles.coreHighlight, { backgroundColor: glowColor }]} />
+          <View style={styles.coreInnerGlow} />
+          <View style={styles.coreBottomShade} />
+        </View>
+      </Animated.View>
+      <View pointerEvents="none" style={styles.particles}>
+        <View style={[styles.particle, styles.particleA, { backgroundColor: '#FFC0ED' }]} />
+        <View style={[styles.particle, styles.particleB, { backgroundColor: '#A98AFF' }]} />
+        <View style={[styles.particle, styles.particleC, { backgroundColor: '#F06AB8' }]} />
+        <View style={[styles.particle, styles.particleD, { backgroundColor: '#D6B4FF' }]} />
+        <View style={[styles.particle, styles.particleE, { backgroundColor: '#FF9BD6' }]} />
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  stage: { width: '100%', height: 344, alignItems: 'center', justifyContent: 'center' },
-  canvas: { backgroundColor: 'transparent' },
-  ornamentLayer: { ...StyleSheet.absoluteFillObject },
-  orbitSpark: { position: 'absolute', width: 5, height: 5, borderRadius: 3, backgroundColor: '#E9A6D5', opacity: 0.58, shadowColor: '#E83CA8', shadowOpacity: 0.9, shadowRadius: 9, elevation: 4 },
-  sparkTop: { top: 18, left: '49%' },
-  sparkRight: { right: '9%', top: '43%', width: 3, height: 3, backgroundColor: '#B69AFF' },
-  sparkLeft: { left: '9%', top: '35%', width: 4, height: 4, backgroundColor: '#D86AB7' },
-  sparkBottom: { bottom: 22, right: '25%', width: 3, height: 3, backgroundColor: '#B69AFF' },
-  sparkActive: { opacity: 1, transform: [{ scale: 1.45 }] },
+  stage: { width: '100%', height: 344, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  outerHalo: { position: 'absolute', width: 236, height: 236, borderRadius: 118, backgroundColor: '#C51B83', shadowColor: '#E83CA8', shadowOpacity: 0.95, shadowRadius: 38, elevation: 16 },
+  orbit: { position: 'absolute', width: 252, height: 112, borderRadius: 126, borderWidth: 1, backgroundColor: 'transparent' },
+  orbitPink: { borderColor: 'rgba(255,119,200,0.78)', transform: [{ rotate: '28deg' }] },
+  orbitViolet: { width: 276, height: 132, borderColor: 'rgba(155,98,255,0.62)', transform: [{ rotate: '-38deg' }] },
+  orbitFine: { width: 226, height: 98, borderColor: 'rgba(248,182,230,0.34)', transform: [{ rotate: '78deg' }] },
+  coreWrap: { width: 190, height: 190, alignItems: 'center', justifyContent: 'center' },
+  core: { width: 176, height: 176, borderRadius: 88, borderWidth: 1.5, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', shadowOpacity: 0.82, shadowRadius: 32, shadowOffset: { width: 0, height: 0 }, elevation: 20 },
+  coreHighlight: { position: 'absolute', width: 90, height: 64, borderRadius: 50, top: 17, left: 26, opacity: 0.22, transform: [{ rotate: '-32deg' }] },
+  coreInnerGlow: { width: 116, height: 116, borderRadius: 58, borderWidth: 1, borderColor: 'rgba(255,174,225,0.22)', backgroundColor: 'rgba(220,54,151,0.12)' },
+  coreBottomShade: { position: 'absolute', width: 160, height: 70, borderRadius: 80, bottom: -35, backgroundColor: 'rgba(12,3,18,0.42)' },
+  particles: { ...StyleSheet.absoluteFillObject },
+  particle: { position: 'absolute', width: 5, height: 5, borderRadius: 3, shadowColor: '#F06AB8', shadowOpacity: 0.9, shadowRadius: 8, elevation: 5 },
+  particleA: { top: 48, left: '49%' },
+  particleB: { top: '39%', right: '12%', width: 4, height: 4 },
+  particleC: { top: '34%', left: '12%', width: 4, height: 4 },
+  particleD: { bottom: 49, right: '26%', width: 3, height: 3 },
+  particleE: { bottom: 57, left: '25%', width: 3, height: 3 },
 });
