@@ -479,7 +479,7 @@ export default function App() {
       const outputDirectory = FileSystem.cacheDirectory || FileSystem.documentDirectory || '';
       const outputPath = `${outputDirectory}ezra-habibi-test-${Date.now()}.wav`;
       const generated = await EzraHabibiTts.synthesize(
-        'مرحباً، أنا إزرا. هذا اختبار لصوتي العربي الجديد.',
+        'أهلاً، أنا إزرا.',
         outputPath
       );
       setSpeakingMessageId('habibi-test');
