@@ -1997,7 +1997,7 @@ export default function App() {
                     <Text style={styles.settingHint}>صوت رجالي دافئ وعميق · اكتشاف تلقائي للعربية والإنجليزية</Text>
                     <Text style={styles.settingHint}>Habibi-TTS هو المحرك العربي الأساسي بعد تنزيل النموذج واعتماد عينة صوت؛ صوت الهاتف احتياطي عند عدم جاهزيته.</Text>
                     <Text style={styles.settingHint}>تنبيه الذاكرة: تفعيل Habibi يتطلب 3.5 GB RAM متاحة على الأقل قبل بدء التحميل إلى الذاكرة؛ هذا شرط أمان وليس ضمانًا للتشغيل على كل هاتف.</Text>
-                    <Text style={styles.settingHint}>اللهجات المطلوبة: الشامية · الجزائرية · السعودية · الإنجليزية</Text>
+                    <Text style={styles.settingHint}>الصوت العربي: اللهجة الجزائرية عبر Habibi ALG · الإنجليزية: محرك النظام</Text>
                   </View>
                 </View>
                 <View style={[styles.settingRow, { flexDirection: 'column', alignItems: 'stretch', gap: 10 }]}>
