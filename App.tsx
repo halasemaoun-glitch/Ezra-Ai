@@ -1735,8 +1735,10 @@ export default function App() {
       setHabibiEngineReady(false);
       AsyncStorage.removeItem('ezra:habibiEnabled').catch(() => {});
       EzraHabibiTts?.shutdown().catch(() => {});
+      const fallbackArabicVoice = ttsVoices.find(voice => voice.identifier === selectedTtsVoice && voice.language.toLowerCase().startsWith('ar'));
       Speech.speak(active.text, {
         language: 'ar',
+        ...(fallbackArabicVoice ? { voice: fallbackArabicVoice.identifier } : {}),
         rate: speechRate,
         pitch: speechPitch,
         volume: 1,
@@ -1824,8 +1826,10 @@ export default function App() {
       AsyncStorage.removeItem('ezra:habibiEnabled').catch(() => {});
       EzraHabibiTts?.shutdown().catch(() => {});
       if (pending) {
+        const fallbackArabicVoice = ttsVoices.find(voice => voice.identifier === selectedTtsVoice && voice.language.toLowerCase().startsWith('ar'));
         Speech.speak(pending.text, {
           language: 'ar',
+          ...(fallbackArabicVoice ? { voice: fallbackArabicVoice.identifier } : {}),
           rate: speechRate,
           pitch: speechPitch,
           volume: 1,
