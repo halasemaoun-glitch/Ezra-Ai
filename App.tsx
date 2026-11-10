@@ -1628,6 +1628,7 @@ export default function App() {
         return;
       }
       voiceTranscriptRef.current = '';
+      // Android 14+ Google on-device recognition can detect and switch installed speech locales; older versions use the device locale.
       const supportsNativeLanguageSwitch = Platform.OS === 'android' && Number(Platform.Version) >= 34;
       ExpoSpeechRecognitionModule.start({
         lang: recognitionLocale,
