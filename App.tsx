@@ -4,6 +4,7 @@ import {
   Alert,
   Animated,
   AppState,
+  BackHandler,
   Easing,
   KeyboardAvoidingView,
   Modal,
@@ -290,6 +291,20 @@ export default function App() {
     });
     return () => subscription.remove();
   }, []);
+
+  // Android back follows the visible screen hierarchy; native Modals handle their own close requests.
+  useEffect(() => {
+    if (!session) return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (settingsVisible || historyVisible || memoryVisible) return false;
+      if (!voiceHome) {
+        setVoiceHome(true);
+        return true;
+      }
+      return false;
+    });
+    return () => subscription.remove();
+  }, [session, settingsVisible, historyVisible, memoryVisible, voiceHome]);
 
   const checkHabibiDeviceCapacity = async () => {
     if (!EzraHabibiTts || habibiCapacityLoading) return;
@@ -2010,7 +2025,9 @@ export default function App() {
               <View style={styles.settingsPanel}>
                 <View style={styles.historyHeader}>
                   <Text style={styles.historyTitle}>إعدادات الصوت</Text>                  <TouchableOpacity style={styles.historyClose} onPress={() => setSettingsVisible(false)}><Text style={styles.historyCloseText}>×</Text></TouchableOpacity>
-                </View>                <View style={styles.settingRow}>
+                </View>
+                <ScrollView style={styles.settingsScroll} contentContainerStyle={styles.settingsScrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                <View style={styles.settingRow}>
                   <View style={styles.settingCopy}>
                     <Text style={styles.settingTitle}>ملف صوت EZRA المعتمد</Text>
                     <Text style={styles.settingHint}>صوت رجالي دافئ وعميق · اكتشاف تلقائي للعربية والإنجليزية</Text>
@@ -2182,6 +2199,7 @@ export default function App() {
                   ) : null}
                 </View>
                 <Text style={styles.settingsFootnote}>بعد تفعيل Habibi تُولّد الردود العربية محليًا بصوت العينة المعتمدة؛ الإنجليزية تستخدم صوت النظام، ويظل صوت النظام احتياطيًا إذا تعذّر تشغيل Habibi. عند تفعيل «يا EZRA» تعمل خدمة استماع أمامية بإشعار دائم ويمكنها إيقاظ التطبيق عند التقاط كلمة التنبيه. قد يقيّد النظام الخدمة أو يوقفها بسبب توفير البطارية؛ أوقف الميزة من هنا متى شئت.</Text>
+                </ScrollView>
               </View>
             </View>
           </Modal>
@@ -2317,7 +2335,7 @@ export default function App() {
               ) : visibleMemories.length === 0 ? (
                 <Text style={styles.historyEmpty}>لا توجد ذكريات تطابق البحث أو التصفية.</Text>
               ) : (
-                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.memoryList}>
+                <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} contentContainerStyle={styles.memoryList}>
                   {visibleMemories.map(item => (
                     <View key={item.id} style={styles.memoryItem}>
                       <Text style={styles.memoryItemText}>{item.content}</Text>
@@ -2388,7 +2406,7 @@ export default function App() {
               ) : visibleConversations.length === 0 ? (
                 <Text style={styles.historyEmpty}>لا توجد محادثات تطابق البحث.</Text>
               ) : (
-                <ScrollView showsVerticalScrollIndicator={false}>
+                <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
                   {visibleConversations.map(item => (
                     <View key={item.id} style={styles.historyItemRow}>
                       <TouchableOpacity
@@ -2427,6 +2445,7 @@ export default function App() {
         <EzraOrb status={isListening ? 'أستمع إليك الآن' : speakingMessageId ? 'أتحدث إليك' : (sending || chatLoading) ? 'أفكر في كلامك…' : 'أنا معك'} />
 
         <ScrollView
+          keyboardShouldPersistTaps="handled"
           style={styles.chat}
           contentContainerStyle={styles.chatContent}
           showsVerticalScrollIndicator={false}
@@ -2579,7 +2598,9 @@ const styles = StyleSheet.create({
   voiceTopButton: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14, backgroundColor: 'rgba(36,24,38,0.72)', borderWidth: 1, borderColor: '#493044' },
   voiceTopButtonText: { color: '#BFA4BA', fontSize: 11 },
   settingsBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.76)', justifyContent: 'flex-end' },
-  settingsPanel: { backgroundColor: '#17131C', borderTopLeftRadius: 26, borderTopRightRadius: 26, borderWidth: 1, borderColor: '#56384F', padding: 22, paddingBottom: 34 },
+  settingsPanel: { height: '90%', maxHeight: '92%', flexShrink: 1, backgroundColor: '#17131C', borderTopLeftRadius: 26, borderTopRightRadius: 26, borderWidth: 1, borderColor: '#56384F', padding: 22, paddingBottom: 18 },
+  settingsScroll: { flex: 1, minHeight: 0 },
+  settingsScrollContent: { paddingBottom: 18 },
   settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 17, borderBottomWidth: 1, borderBottomColor: '#302532' },
   settingCopy: { flex: 1, alignItems: 'flex-end', marginRight: 12 },
   settingTitle: { color: '#F3EAF2', fontSize: 13, fontWeight: '600' },
