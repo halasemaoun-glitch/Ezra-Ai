@@ -162,7 +162,7 @@ Deno.serve(async (req: Request) => {
             ...approvedMemories.map((memory) => `- ${memory}`),
           ]
         : []),
-    ].join("\\n");
+    ].join("\n");
 
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
