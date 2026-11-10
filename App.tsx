@@ -236,6 +236,7 @@ export default function App() {
   const voiceRetryCountRef = useRef(0);
   const [ttsVoices, setTtsVoices] = useState<{ identifier: string; name: string; language: string; quality?: string }[]>([]);
   const [selectedTtsVoice, setSelectedTtsVoice] = useState<string | null>(null);
+  const [selectedEnglishTtsVoice, setSelectedEnglishTtsVoice] = useState<string | null>(null);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const [chatLoading, setChatLoading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -518,7 +519,7 @@ export default function App() {
   );
 
   useEffect(() => {
-    AsyncStorage.multiGet(['ezra:autoSpeak', 'ezra:speechRate', 'ezra:recognitionLanguage', 'ezra:autoListen', 'ezra:ttsVoice', 'ezra:speechPitch', 'ezra:backgroundWake']).then(values => {
+    AsyncStorage.multiGet(['ezra:autoSpeak', 'ezra:speechRate', 'ezra:recognitionLanguage', 'ezra:autoListen', 'ezra:ttsVoice', 'ezra:speechPitch', 'ezra:backgroundWake', 'ezra:ttsEnglishVoice']).then(values => {
       const savedAutoSpeak = values[0]?.[1];
       const savedRate = values[1]?.[1];
       const savedLanguage = values[2]?.[1];
@@ -527,6 +528,8 @@ export default function App() {
       if (savedTtsVoice) setSelectedTtsVoice(savedTtsVoice);
       const savedPitch = Number(values[5]?.[1]);
       const savedBackgroundWake = values[6]?.[1];
+      const savedEnglishTtsVoice = values[7]?.[1];
+      if (savedEnglishTtsVoice) setSelectedEnglishTtsVoice(savedEnglishTtsVoice);
       if (savedBackgroundWake !== null) setBackgroundWakeEnabled(savedBackgroundWake === 'true');
       if (Number.isFinite(savedPitch) && savedPitch >= 0.75 && savedPitch <= 1.1) {
         // Migrate the former factory pitch to EZRA's agreed deeper default.
@@ -1781,7 +1784,8 @@ export default function App() {
     const matchingVoice = ttsVoices
       .filter(voice => voice.language.toLowerCase().startsWith(speechLanguage))
       .sort((a, b) => Number(b.quality === 'Enhanced') - Number(a.quality === 'Enhanced'))[0];
-    const preferredVoice = ttsVoices.find(voice => voice.identifier === selectedTtsVoice && voice.language.toLowerCase().startsWith(speechLanguage)) || matchingVoice;
+    const selectedVoiceForLanguage = speechLanguage === 'en' ? selectedEnglishTtsVoice : selectedTtsVoice;
+    const preferredVoice = ttsVoices.find(voice => voice.identifier === selectedVoiceForLanguage && voice.language.toLowerCase().startsWith(speechLanguage)) || matchingVoice;
     Speech.speak(text, {
       language: speechLanguage,
       ...(preferredVoice ? { voice: preferredVoice.identifier } : {}),
@@ -2064,6 +2068,39 @@ export default function App() {
                     <Text style={styles.settingTitle}>الصوت العربي</Text>
                     <Text style={styles.settingHint}>{ttsVoices.find(voice => voice.identifier === selectedTtsVoice)?.name || 'تلقائي · أفضل صوت محسّن متاح'}</Text>
                   </View>
+                                <View style={styles.settingRow}>
+                  <View style={styles.settingCopy}>
+                    <Text style={styles.settingTitle}>الصوت الإنجليزي</Text>
+                    <Text style={styles.settingHint}>{ttsVoices.find(voice => voice.identifier === selectedEnglishTtsVoice)?.name || 'تلقائي · أفضل صوت إنجليزي متاح'}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.voiceTopButton}
+                    onPress={() => {
+                      const englishVoices = ttsVoices
+                        .filter(voice => voice.language.toLowerCase().startsWith('en'))
+                        .sort((a, b) => Number(b.quality === 'Enhanced') - Number(a.quality === 'Enhanced'));
+                      Alert.alert('اختيار الصوت الإنجليزي', englishVoices.length
+                        ? 'اختر صوتًا من الأصوات المثبتة على هاتفك واستمع إلى العينة. نوع الصوت (رجالي أو نسائي) يعتمد على المحرك المثبت.'
+                        : 'لا يوجد صوت إنجليزي مثبت حاليًا. أضف صوتًا إنجليزيًا من إعدادات تحويل النص إلى كلام في Android ثم أعد فتح EZRA.', [
+                        { text: 'تلقائي · الأفضل', onPress: () => { setSelectedEnglishTtsVoice(null); AsyncStorage.removeItem('ezra:ttsEnglishVoice').catch(() => {}); } },
+                        ...englishVoices.slice(0, 8).map(voice => ({
+                          text: `${voice.name}${voice.quality === 'Enhanced' ? ' · محسّن' : ''} · تجربة`,
+                          onPress: () => {
+                            setSelectedEnglishTtsVoice(voice.identifier);
+                            AsyncStorage.setItem('ezra:ttsEnglishVoice', voice.identifier).catch(() => {});
+                            Speech.stop();
+                            Speech.speak('Hello, I am EZRA. It is a pleasure to talk with you. How can I help you today?', {
+                              language: 'en', voice: voice.identifier, rate: speechRate, pitch: speechPitch, volume: 1,
+                            });
+                          },
+                        })),
+                        { text: 'إغلاق', style: 'cancel' as const },
+                      ]);
+                    }}
+                  >
+                    <Text style={styles.voiceTopButtonText}>اختيار</Text>
+                  </TouchableOpacity>
+                </View>
                   <TouchableOpacity
                     style={styles.voiceTopButton}
                     onPress={() => {
