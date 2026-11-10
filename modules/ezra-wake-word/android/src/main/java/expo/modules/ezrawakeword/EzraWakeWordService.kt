@@ -30,6 +30,7 @@ class EzraWakeWordService : Service(), RecognitionListener {
   private var recognizer: SpeechRecognizer? = null
   private var stopping = false
   private var wakeTriggered = false
+  private var recognitionActive = false
   private var wakeLock: PowerManager.WakeLock? = null
 
   override fun onCreate() {
@@ -46,8 +47,7 @@ class EzraWakeWordService : Service(), RecognitionListener {
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     stopping = false
-    wakeTriggered = false
-    startRecognition()
+    if (!wakeTriggered && !recognitionActive) startRecognition()
     return START_STICKY
   }
 
@@ -116,7 +116,7 @@ class EzraWakeWordService : Service(), RecognitionListener {
   }
 
   private fun startRecognition() {
-    if (stopping || wakeTriggered) return
+    if (stopping || wakeTriggered || recognitionActive) return
     if (!SpeechRecognizer.isRecognitionAvailable(this)) {
       scheduleRetry(2500)
       return
@@ -134,13 +134,16 @@ class EzraWakeWordService : Service(), RecognitionListener {
         putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
         putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
       }
+      recognitionActive = true
       recognizer?.startListening(request)
     } catch (_: Exception) {
+      recognitionActive = false
       scheduleRetry(1800)
     }
   }
 
   private fun scheduleRetry(delayMs: Long) {
+    recognitionActive = false
     if (!stopping && !wakeTriggered) {
       handler.removeCallbacksAndMessages(null)
       handler.postDelayed({ startRecognition() }, delayMs)
@@ -155,7 +158,7 @@ class EzraWakeWordService : Service(), RecognitionListener {
     val normalized = recognized.lowercase(Locale.ROOT)
       .replace(Regex("[\\u064B-\\u065F\\u0670]"), "")
       .replace('إ', 'ا').replace('أ', 'ا').replace('آ', 'ا')
-    val wakePhrases = listOf("يا ازرا", "يا عذرا", "يا ezra", "ازرا", "ezra")
+    val wakePhrases = listOf("يا ازرا", "يا ايزرا", "يا عذرا", "يا ezra", "ازرا", "ايزرا", "ezra")
     if (wakePhrases.none { normalized.contains(it) }) return
 
     wakeTriggered = true
@@ -185,11 +188,24 @@ class EzraWakeWordService : Service(), RecognitionListener {
   override fun onBufferReceived(buffer: ByteArray?) {}
   override fun onEndOfSpeech() {}
   override fun onError(error: Int) {
-    if (!stopping && !wakeTriggered) scheduleRetry(if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) 1600 else 700)
+    recognitionActive = false
+    if (stopping || wakeTriggered) return
+    if (error == SpeechRecognizer.ERROR_CLIENT || error == SpeechRecognizer.ERROR_SERVER) {
+      handler.post {
+        recognizer?.setRecognitionListener(null)
+        recognizer?.cancel()
+        recognizer?.destroy()
+        recognizer = null
+        scheduleRetry(900)
+      }
+    } else {
+      scheduleRetry(if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) 1600 else 700)
+    }
   }
   override fun onResults(results: android.os.Bundle?) {
+    recognitionActive = false
     inspectResults(results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION))
-    if (!wakeTriggered) scheduleRetry(350)
+    if (!wakeTriggered) scheduleRetry(450)
   }
   override fun onPartialResults(partialResults: android.os.Bundle?) {
     // Wait for final recognition so the command after the wake phrase is not cut off.
