@@ -87,19 +87,26 @@ void main() {
   float broadSpecular = pow(max(dot(reflect(-lightDirection, normal), viewDirection), 0.0), 12.0);
   float fresnel = pow(1.0 - max(dot(normal, viewDirection), 0.0), 2.35);
 
-  float flowA = sin(surface.x * 7.0 + surface.y * 5.0 - surface.z * 6.0 + uTime * 0.42);
-  float flowB = sin(surface.z * 10.0 - surface.x * 4.0 + uTime * 0.25);
-  float fluidVein = smoothstep(0.18, 0.92, 0.5 + 0.25 * flowA + 0.25 * flowB);
-  float cloud = 0.5 + 0.5 * sin(surface.x * 5.0 - surface.y * 8.0 + surface.z * 4.0 + uTime * 0.18);
+  // Layered flowing filaments create the impression of energy moving under glass.
+  float flowA = sin(surface.x * 8.0 + surface.y * 5.5 - surface.z * 7.0 + uTime * 0.52);
+  float flowB = sin(surface.z * 12.0 - surface.x * 5.0 + surface.y * 3.0 + uTime * 0.31);
+  float flowC = sin(surface.y * 14.0 + surface.x * 4.0 - uTime * 0.22);
+  float turbulence = flowA * 0.42 + flowB * 0.34 + flowC * 0.24;
+  float fluidVein = 1.0 - smoothstep(0.015, 0.12, abs(turbulence));
+  float cloud = 0.5 + 0.5 * sin(surface.x * 5.5 - surface.y * 8.5 + surface.z * 4.5 + uTime * 0.20);
+  float innerCurrent = 0.5 + 0.5 * sin(surface.x * 3.0 + surface.z * 5.0 - uTime * 0.34);
 
-  vec3 body = mix(uBaseColor, uAccentColor, fluidVein * 0.48 + cloud * 0.13);
-  vec3 color = body * (0.22 + diffuse * 0.92);
-  color += uGlowColor * (fresnel * 0.78 + fluidVein * 0.10);
-  color += vec3(1.0, 0.76, 0.94) * specular * 0.92;
-  color += uAccentColor * broadSpecular * 0.19;
+  vec3 body = mix(uBaseColor, uAccentColor, 0.16 + fluidVein * 0.58 + cloud * 0.14);
+  body = mix(body, uGlowColor, innerCurrent * 0.16);
+  vec3 color = body * (0.18 + diffuse * 1.02);
+  color += uGlowColor * (fresnel * 0.96 + fluidVein * (0.12 + uEnergy * 0.18));
+  color += vec3(1.0, 0.80, 0.96) * specular * 1.12;
+  color += uAccentColor * broadSpecular * 0.24;
 
-  float core = exp(-dot(position.xy, position.xy) * 5.8) * (0.10 + uEnergy * 0.12);
+  // A soft illuminated heart responds to microphone energy without flattening the sphere.
+  float core = exp(-dot(position.xy, position.xy) * 5.2) * (0.12 + uEnergy * 0.24);
   color += uAccentColor * core;
+  color += uGlowColor * exp(-dot(position.xy, position.xy) * 2.2) * (0.035 + uPulse * 0.035);
   color = pow(max(color, 0.0), vec3(0.88));
 
   gl_FragColor = vec4(color, 1.0);
@@ -139,9 +146,9 @@ const palettes: Record<'idle' | 'listening' | 'thinking' | 'speaking', Palette> 
 };
 
 function getState(status: string): keyof typeof palettes {
-  if (status.includes('يستمع')) return 'listening';
+  if (status.includes('يستمع') || status.includes('أستمع')) return 'listening';
   if (status.includes('أفكر')) return 'thinking';
-  if (status.includes('يتحدث')) return 'speaking';
+  if (status.includes('يتحدث') || status.includes('أتحدث')) return 'speaking';
   return 'idle';
 }
 
@@ -237,19 +244,32 @@ export default function EzraOrb3D({ status, level = 0 }: OrbStatus) {
       gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
       gl.uniform2f(resolutionLocation, gl.drawingBufferWidth, gl.drawingBufferHeight);
 
+      const currentPalette: Palette = {
+        base: [...palettes.idle.base],
+        accent: [...palettes.idle.accent],
+        glow: [...palettes.idle.glow],
+      };
       const render = (timestamp: number) => {
         if (!alive) return;
         if (timestamp - lastFrame < 33) {
           frameHandle = requestAnimationFrame(render);
           return;
         }
+        const deltaSeconds = lastFrame ? Math.min((timestamp - lastFrame) / 1000, 0.1) : 1 / 30;
         lastFrame = timestamp;
         if (!startTime) startTime = timestamp;
         const state = getState(statusRef.current);
-        const palette = palettes[state];
-        const pulse = state === 'listening' ? 0.82 : state === 'speaking' ? 1 : state === 'thinking' ? 0.48 : 0.18;
-        const time = reducedMotionRef.current ? 0 : (timestamp - startTime) / 1000;
+        const targetPalette = palettes[state];
+        const blend = reducedMotionRef.current ? 1 : 1 - Math.exp(-deltaSeconds * 4.8);
+        for (let channel = 0; channel < 3; channel += 1) {
+          currentPalette.base[channel] += (targetPalette.base[channel] - currentPalette.base[channel]) * blend;
+          currentPalette.accent[channel] += (targetPalette.accent[channel] - currentPalette.accent[channel]) * blend;
+          currentPalette.glow[channel] += (targetPalette.glow[channel] - currentPalette.glow[channel]) * blend;
+        }
+        const statePulse = state === 'listening' ? 0.82 : state === 'speaking' ? 1 : state === 'thinking' ? 0.48 : 0.18;
         const energy = Math.max(0, Math.min(1, levelRef.current));
+        const pulse = Math.min(1, statePulse + energy * (state === 'listening' ? 0.48 : 0.12));
+        const time = reducedMotionRef.current ? 0 : (timestamp - startTime) / 1000;
 
         gl.clearColor(0.018, 0.009, 0.025, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);
@@ -257,9 +277,9 @@ export default function EzraOrb3D({ status, level = 0 }: OrbStatus) {
         gl.uniform1f(timeLocation, time);
         gl.uniform1f(energyLocation, energy);
         gl.uniform1f(pulseLocation, pulse);
-        gl.uniform3f(baseLocation, ...palette.base);
-        gl.uniform3f(accentLocation, ...palette.accent);
-        gl.uniform3f(glowLocation, ...palette.glow);
+        gl.uniform3f(baseLocation, ...currentPalette.base);
+        gl.uniform3f(accentLocation, ...currentPalette.accent);
+        gl.uniform3f(glowLocation, ...currentPalette.glow);
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         gl.endFrameEXP();
         frameHandle = requestAnimationFrame(render);
