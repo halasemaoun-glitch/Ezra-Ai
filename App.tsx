@@ -2814,3 +2814,6 @@ const styles = StyleSheet.create({
   },
   languageButtonActive: { backgroundColor: '#875477', borderWidth: 1, borderColor: '#E6A0D0' },
 });
+
+
+// CI: rebuild the current integrated Android test APK.
