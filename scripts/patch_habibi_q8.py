@@ -1,20 +1,17 @@
 #!/usr/bin/env python3
-"""Apply conservative Android RAM optimizations to upstream Habibi F5-TTS.
+"""Apply low-memory Android optimizations to the pinned audio.cpp v0.9.4 F5 runtime.
 
-Build revision: sequential CFG + Q8_0, validated against the pinned v0.9.4 source layout.
-
-1) Store 2-D Linear weights as Q8_0; biases, embeddings, convolutions and norms stay F32.
-2) Evaluate classifier-free guidance in two sequential single-batch passes instead of one
-   batched two-branch graph. This preserves the CFG equation while avoiding the larger
-   two-branch graph pool on low-memory Android devices.
+- Q8_0 for 2-D DiT linear matrices; non-linear tensors remain F32.
+- Sequential classifier-free guidance; same CFG equation, one branch graph at a time.
+- Smaller single-batch CPU graph arena, paired with a 128-frame synthesis budget.
 """
 from pathlib import Path
 import sys
 
-if len(sys.argv) != 3:
-    raise SystemExit("usage: patch_habibi_q8.py <audio.cpp>/src/community_models/f5_tts/weights.cpp <audio.cpp>/src/community_models/f5_tts/synthesize.cpp")
+if len(sys.argv) != 4:
+    raise SystemExit("usage: patch_habibi_q8.py <weights.cpp> <synthesize.cpp> <runtime.cpp>")
 
-weights_path, synthesize_path = map(Path, sys.argv[1:])
+weights_path, synthesize_path, runtime_path = map(Path, sys.argv[1:])
 
 source = weights_path.read_text()
 old = 'lw.weight = tensor(n + ".weight", {out_f, in_f});'
@@ -39,11 +36,23 @@ new = """        const auto v_cond = f5_dit_forward(
         const auto v_null = f5_dit_forward(
             model_path, y, cond, chunk_ids, t, duration, arch,
             true, true, nullptr, &dev);"""
-if source.count(old) != 1 or "f5_dit_forward_cfg(" not in source:
+if source.count(old) != 1:
     raise SystemExit("Unexpected F5 CFG synthesis call; refusing to patch an unknown source version.")
 synthesize_path.write_text(source.replace(old, new, 1))
-patched = synthesize_path.read_text()
-if new not in patched or old in patched:
+if new not in synthesize_path.read_text():
     raise SystemExit("Sequential CFG patch verification failed")
 
-print("Applied Q8_0 Linear weights and sequential single-batch CFG inference.")
+source = runtime_path.read_text()
+old = """        const size_t ctx_bytes = std::min<size_t>(
+            std::max<size_t>(1536ULL << 20, static_cast<size_t>(N) * (6ULL << 20)),
+            6144ULL << 20);"""
+new = """        const size_t ctx_bytes = std::min<size_t>(
+            std::max<size_t>(768ULL << 20, static_cast<size_t>(N) * (6ULL << 20)),
+            3072ULL << 20);"""
+if source.count(old) != 1:
+    raise SystemExit("Unexpected single-batch DiT arena sizing; refusing to patch an unknown source version.")
+runtime_path.write_text(source.replace(old, new, 1))
+if new not in runtime_path.read_text():
+    raise SystemExit("Reduced DiT arena patch verification failed")
+
+print("Applied Q8_0 DiT weights, sequential CFG, and a 768 MiB minimum single-batch graph arena.")
