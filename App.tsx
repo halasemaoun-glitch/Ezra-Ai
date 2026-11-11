@@ -18,6 +18,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -148,6 +149,8 @@ const createConversationId = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replac
 });
 
 function EzraOrb({ status, voiceLevel = 0 }: { status: string; voiceLevel?: number }) {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const stageSize = Math.max(260, Math.min(344, screenWidth - 64, screenHeight - 440));
   const waveform = useRef(Array.from({ length: 9 }, () => new Animated.Value(0.18))).current;
   const listening = status.includes('يستمع');
   const thinking = status.includes('أفكر');
@@ -177,7 +180,7 @@ function EzraOrb({ status, voiceLevel = 0 }: { status: string; voiceLevel?: numb
   const caption = listening ? 'أنا أسمعك… خذ وقتك' : thinking ? 'أرتّب أفكاري لأجيبك' : speaking ? 'أنا معك، ويمكنك مقاطعتي' : 'أنا هنا عندما تحتاجني';
   return (
     <View style={styles.orbSection}>
-      <View style={styles.orbStage}>
+      <View style={[styles.orbStage, { width: stageSize, height: stageSize }]}>
         <EzraOrb3D status={status} level={listening ? voiceLevel : 0} />
       </View>
       <View style={[styles.orbStatusPill, active && styles.orbStatusPillActive]}>
@@ -2590,7 +2593,7 @@ export default function App() {
 
 const styles = StyleSheet.create({
   orbSection: { alignItems: 'center', paddingTop: 0, paddingBottom: 10 },
-  orbStage: { width: 344, height: 344, maxWidth: '100%', alignItems: 'center', justifyContent: 'center' },
+  orbStage: { maxWidth: '100%', alignItems: 'center', justifyContent: 'center' },
   orbRipple: { position: 'absolute', width: 252, height: 252, borderRadius: 126, borderWidth: 1, borderColor: 'rgba(239,133,203,0.46)' },
   orbHalo: { position: 'absolute', width: 224, height: 224, borderRadius: 112, backgroundColor: '#8E3B78', shadowColor: '#E34BB5', shadowOpacity: 0.9, shadowRadius: 32, shadowOffset: { width: 0, height: 0 }, elevation: 18 },
   orbAura: { position: 'absolute', width: 278, height: 278, borderRadius: 139, borderWidth: 1, borderColor: 'rgba(191,92,164,0.22)' },
@@ -2645,7 +2648,7 @@ const styles = StyleSheet.create({
   rateButton: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#38263A', alignItems: 'center', justifyContent: 'center' },
   rateButtonText: { color: '#F0C9E4', fontSize: 21 },
   settingsFootnote: { color: '#827684', fontSize: 10, textAlign: 'right', marginTop: 18, lineHeight: 17 },
-  voiceHome: { flex: 1, alignItems: 'center', justifyContent: 'space-between', paddingTop: 34, paddingBottom: 8, paddingHorizontal: 24, backgroundColor: '#08070D' },
+  voiceHome: { flex: 1, alignItems: 'center', justifyContent: 'space-between', paddingTop: 24, paddingBottom: 8, paddingHorizontal: 20, backgroundColor: '#08070D' },
   mainTabBar: { width: '100%', minHeight: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', borderTopWidth: 1, borderTopColor: 'rgba(137,76,119,0.28)', backgroundColor: 'rgba(18,12,22,0.96)', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 7, marginTop: 8 },
   mainTab: { flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', gap: 3, borderRadius: 14 },
   mainTabActive: { backgroundColor: 'rgba(173,75,143,0.16)', borderWidth: 1, borderColor: 'rgba(210,112,178,0.28)' },
