@@ -105,19 +105,23 @@ void main() {
   float broadSpecular = pow(max(dot(reflect(-lightDirection, normal), viewDirection), 0.0), 12.0);
   float fresnel = pow(1.0 - max(dot(normal, viewDirection), 0.0), 2.35);
 
-  // Layered flowing filaments create the impression of energy moving under glass.
-  float warp = sin(surface.x * 3.2 + surface.z * 2.7 + uTime * 0.12) * 0.11;
+  // Surface currents use a different tempo for each state: calm at rest,
+  // responsive while listening, deliberate while thinking, and vivid in speech.
+  float surfaceRate = uMode > 2.5 ? 0.58 : uMode > 1.5 ? 0.105 : uMode > 0.5 ? 0.28 + uEnergy * 0.42 : 0.19;
+  float surfaceTime = uTime * surfaceRate;
+  float surfaceWarp = uMode > 2.5 ? 1.22 : uMode > 1.5 ? 0.72 : uMode > 0.5 ? 0.92 + uEnergy * 0.34 : 0.78;
+  float warp = sin(surface.x * 3.2 + surface.z * 2.7 + surfaceTime * 0.12) * 0.11 * surfaceWarp;
   vec3 fluid = surface + vec3(warp, warp * 0.7, -warp);
-  float flowA = sin(fluid.x * 8.0 + fluid.y * 5.5 - fluid.z * 7.0 + uTime * 0.34);
-  float flowB = sin(fluid.z * 12.0 - fluid.x * 5.0 + fluid.y * 3.0 + uTime * 0.23);
-  float flowC = sin(fluid.y * 14.0 + fluid.x * 4.0 - uTime * 0.16);
-  float flowD = sin(fluid.x * 18.0 + fluid.z * 13.0 + fluid.y * 9.0 + uTime * 0.19);
+  float flowA = sin(fluid.x * 8.0 + fluid.y * 5.5 - fluid.z * 7.0 + surfaceTime * 0.34);
+  float flowB = sin(fluid.z * 12.0 - fluid.x * 5.0 + fluid.y * 3.0 + surfaceTime * 0.23);
+  float flowC = sin(fluid.y * 14.0 + fluid.x * 4.0 - surfaceTime * 0.16);
+  float flowD = sin(fluid.x * 18.0 + fluid.z * 13.0 + fluid.y * 9.0 + surfaceTime * 0.19);
   float turbulence = flowA * 0.34 + flowB * 0.29 + flowC * 0.21 + flowD * 0.16;
   float fluidVein = 1.0 - smoothstep(0.018, 0.145, abs(turbulence));
-  float cloudA = 0.5 + 0.5 * sin(fluid.x * 5.5 - fluid.y * 8.5 + fluid.z * 4.5 + uTime * 0.15);
-  float cloudB = 0.5 + 0.5 * sin(fluid.z * 3.6 + fluid.x * 4.2 - fluid.y * 5.1 - uTime * 0.11);
+  float cloudA = 0.5 + 0.5 * sin(fluid.x * 5.5 - fluid.y * 8.5 + fluid.z * 4.5 + surfaceTime * 0.15);
+  float cloudB = 0.5 + 0.5 * sin(fluid.z * 3.6 + fluid.x * 4.2 - fluid.y * 5.1 - surfaceTime * 0.11);
   float cloud = cloudA * 0.62 + cloudB * 0.38;
-  float innerCurrent = 0.5 + 0.5 * sin(fluid.x * 3.0 + fluid.z * 5.0 - uTime * 0.24);
+  float innerCurrent = 0.5 + 0.5 * sin(fluid.x * 3.0 + fluid.z * 5.0 - surfaceTime * 0.24);
 
   vec3 body = mix(uBaseColor, uAccentColor, 0.12 + fluidVein * 0.54 + cloud * 0.18);
   body = mix(body, uGlowColor, innerCurrent * 0.22);
