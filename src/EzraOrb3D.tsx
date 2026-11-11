@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { GLView } from 'expo-gl';
 
 type OrbStatus = { status: string; level?: number };
@@ -159,6 +159,8 @@ function compileShader(gl: any, type: number, source: string) {
 }
 
 export default function EzraOrb3D({ status, level = 0 }: OrbStatus) {
+  const { width: screenWidth } = useWindowDimensions();
+  const stageSize = Math.max(260, Math.min(344, screenWidth - 40));
   const statusRef = useRef(status);
   const levelRef = useRef(level);
   const reducedMotionRef = useRef(false);
@@ -278,7 +280,7 @@ export default function EzraOrb3D({ status, level = 0 }: OrbStatus) {
   }, []);
 
   return (
-    <View style={styles.stage}>
+    <View style={[styles.stage, { width: stageSize, height: stageSize }]}>
       {rendererFailed ? (
         <View style={styles.fallback}>
           <View style={styles.fallbackAura} />
@@ -296,8 +298,6 @@ export default function EzraOrb3D({ status, level = 0 }: OrbStatus) {
 
 const styles = StyleSheet.create({
   stage: {
-    width: '100%',
-    height: 344,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
