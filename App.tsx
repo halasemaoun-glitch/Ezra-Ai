@@ -238,6 +238,7 @@ export default function App() {
   const voiceTranscriptRef = useRef('');
   const voiceTurnInProgressRef = useRef(false);
   const voiceRequestStartedRef = useRef(false);
+  const interruptVoiceFramesRef = useRef(0);
   const voiceRetryCountRef = useRef(0);
   const [ttsVoices, setTtsVoices] = useState<{ identifier: string; name: string; language: string; quality?: string }[]>([]);
   const [selectedTtsVoice, setSelectedTtsVoice] = useState<string | null>(null);
@@ -946,6 +947,25 @@ export default function App() {
   useSpeechRecognitionEvent('volumechange', event => {
     const normalized = event.value <= 0 ? 0 : Math.min(1, event.value / 10);
     setVoiceLevel(previous => previous * 0.58 + normalized * 0.42);
+
+    // During EZRA playback, require several consecutive strong mic-energy frames
+    // before treating input as an interruption. The recognition session stays open
+    // so the user's words continue into the transcript after playback stops.
+    if (speakingMessageId && voiceHome && autoListenRef.current && appIsActiveRef.current) {
+      interruptVoiceFramesRef.current = normalized >= 0.58
+        ? interruptVoiceFramesRef.current + 1
+        : Math.max(0, interruptVoiceFramesRef.current - 1);
+      if (interruptVoiceFramesRef.current >= 4) {
+        interruptVoiceFramesRef.current = 0;
+        Speech.stop();
+        EzraHabibiTts?.stopAudio().catch(() => {});
+        activeHabibiSpeechRef.current = null;
+        setSpeakingMessageId(null);
+        setVoiceLevel(0);
+      }
+    } else {
+      interruptVoiceFramesRef.current = 0;
+    }
   });
   useSpeechRecognitionEvent('soundend', () => {
     setVoiceLevel(0);
@@ -1020,6 +1040,13 @@ export default function App() {
     }
     setVoiceLevel(0);
   }, [voiceHome, isListening, speakingMessageId]);
+
+  useEffect(() => {
+    if (!voicePrefsLoaded || !appIsActive || !session || !voiceHome || !autoListen || backgroundWakeEnabled || !speakingMessageId || isListening || sending || chatLoading) return;
+    interruptVoiceFramesRef.current = 0;
+    const timer = setTimeout(() => beginListening(true), 180);
+    return () => clearTimeout(timer);
+  }, [voicePrefsLoaded, appIsActive, session?.user.id, voiceHome, autoListen, backgroundWakeEnabled, speakingMessageId, isListening, sending, chatLoading]);
 
   useEffect(() => {
     // Wait until persisted voice preferences are restored before opening the microphone.
