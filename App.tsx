@@ -1022,10 +1022,12 @@ export default function App() {
   }, [voiceHome, isListening, speakingMessageId]);
 
   useEffect(() => {
-    if (!appIsActive || !session || !voiceHome || !autoListen || backgroundWakeEnabled || isListening || sending || speakingMessageId || chatLoading) return;
+    // Wait until persisted voice preferences are restored before opening the microphone.
+    // This prevents the default-on state from briefly overriding a user's saved opt-out.
+    if (!voicePrefsLoaded || !appIsActive || !session || !voiceHome || !autoListen || backgroundWakeEnabled || isListening || sending || speakingMessageId || chatLoading) return;
     const timer = setTimeout(() => beginListening(), voiceRetrying ? 900 : 500);
     return () => clearTimeout(timer);
-  }, [appIsActive, session?.user.id, voiceHome, autoListen, backgroundWakeEnabled, responseLanguage, isListening, sending, speakingMessageId, chatLoading, voiceRetrying]);
+  }, [voicePrefsLoaded, appIsActive, session?.user.id, voiceHome, autoListen, backgroundWakeEnabled, responseLanguage, isListening, sending, speakingMessageId, chatLoading, voiceRetrying]);
 
   useEffect(() => {
     if (!appIsActive || !voiceHome || !autoListen || backgroundWakeEnabled || !voiceTurnInProgressRef.current || !voiceRequestStartedRef.current || sending || speakingMessageId || isListening) return;
