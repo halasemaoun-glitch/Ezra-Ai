@@ -41,6 +41,8 @@ Deno.serve(async (req: Request) => {
     });
   }
 
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const supabasePublicKey = getSupabasePublishableKey();
   const authorization = req.headers.get("Authorization") ?? "";
   const authResult = await verifySupabaseUser(
     authorization,
