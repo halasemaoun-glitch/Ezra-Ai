@@ -187,7 +187,7 @@ Java_expo_modules_ezrahabibitts_EzraHabibiTtsModule_nativeInitialize(
     releaseEngine();
     return env->NewStringUTF("Could not allocate Habibi session options.");
   }
-  status = audiocpp_options_set(sessionOptions, "frame_budget", "256");
+  status = audiocpp_options_set(sessionOptions, "frame_budget", "128");
   if (status == AUDIOCPP_OK) {
     status = audiocpp_session_create(g_model, "tts", "offline", &backend, sessionOptions, &g_session);
   }
