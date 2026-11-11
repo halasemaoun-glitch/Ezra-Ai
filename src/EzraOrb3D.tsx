@@ -106,7 +106,9 @@ void main() {
   float normalWaveB = sin(surface.y * 11.0 - surface.x * 5.0 - uTime * 0.18);
   float normalWaveC = sin(surface.z * 15.0 + surface.y * 7.0 + uTime * 0.14);
   float heightField = normalWaveA * 0.46 + normalWaveB * 0.34 + normalWaveC * 0.20;
-  vec3 tangentX = normalize(vec3(1.0, 0.0, 0.0) - geometricNormal * geometricNormal.x);
+  vec3 referenceAxis = abs(geometricNormal.y) < 0.95
+    ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+  vec3 tangentX = normalize(cross(referenceAxis, geometricNormal));
   vec3 tangentY = normalize(cross(geometricNormal, tangentX));
   vec3 normal = normalize(geometricNormal - tangentX * (normalWaveA - normalWaveB) * 0.026
     - tangentY * (normalWaveC - normalWaveB) * 0.022);
