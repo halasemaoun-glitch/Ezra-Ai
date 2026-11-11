@@ -1964,11 +1964,29 @@ export default function App() {
       ? 'إزرا يستمع'
       : voiceRetrying
         ? (voiceRetryMessage || 'أعيد الاتصال بالصوت…')
-      : speakingMessageId
-        ? 'إزرا يتحدث'
-        : (sending || chatLoading)
-          ? 'لحظة، أفكر…'
-          : 'أنا هنا';
+        : speakingMessageId
+          ? 'إزرا يتحدث'
+          : (sending || chatLoading)
+            ? 'لحظة، أفكر…'
+            : 'أنا هنا';
+    const voiceStatusEnglish = isListening
+      ? 'Ezra is Listening'
+      : voiceRetrying
+        ? 'Reconnecting…'
+        : speakingMessageId
+          ? 'Ezra is Speaking'
+          : (sending || chatLoading)
+            ? 'One moment, I’m thinking…'
+            : 'Ready when you are';
+    const voiceStatusArabic = isListening
+      ? 'إزرا يستمع'
+      : voiceRetrying
+        ? 'أعيد الاتصال بالصوت…'
+        : speakingMessageId
+          ? 'إزرا يتحدث'
+          : (sending || chatLoading)
+            ? 'لحظة واحدة، أنا أفكر…'
+            : 'إزرا جاهز';
     return (
       <SafeAreaView style={styles.voiceSafe}>
         <StatusBar style="light" />
@@ -1987,19 +2005,25 @@ export default function App() {
           <View style={styles.voiceOrbWrap}>
             <EzraOrb status={voiceStatus} voiceLevel={voiceLevel} />
           </View>
+          <View style={styles.voiceStateBlock} accessibilityLiveRegion="polite">
+            <Text style={styles.voiceStateEnglish}>{voiceStatusEnglish}</Text>
+            <Text style={styles.voiceStateArabic}>{voiceStatusArabic}</Text>
+          </View>
           <View style={styles.voiceMicWrap}>
             <Animated.View
               pointerEvents="none"
-              style={[styles.voiceMicHalo, { opacity: isListening || speakingMessageId || sending ? 0.72 : 0.24, transform: [{ scale: micPulse }] }]}
+              style={[styles.voiceMicHalo, { opacity: isListening || speakingMessageId || sending ? 0.82 : 0.38, transform: [{ scale: micPulse }] }]}
             />
             <TouchableOpacity
               style={[styles.voiceMic, isListening && styles.voiceMicActive, !!speakingMessageId && styles.voiceMicSpeaking]}
               onPress={startListening}
+              activeOpacity={0.82}
               accessibilityRole="button"
               accessibilityLabel={speakingMessageId ? 'مقاطعة إزرا والتحدث الآن' : isListening ? 'إيقاف الاستماع' : 'ابدأ التحدث مع إزرا'}
               accessibilityHint={speakingMessageId ? 'سيوقف صوت إزرا ويبدأ الاستماع إليك' : isListening ? 'اضغط لإيقاف التقاط صوتك' : 'اضغط لبدء المحادثة الصوتية'}
             >
-              <Text style={styles.voiceMicIcon}>{speakingMessageId ? 'Ⅱ' : isListening ? '■' : '⌁'}</Text>
+              <Text style={styles.voiceMicIcon}>{speakingMessageId ? 'Ⅱ' : isListening ? '■' : '♩'}</Text>
+              <Text style={styles.voiceMicActionLabel}>{speakingMessageId ? 'تحدث الآن' : isListening ? 'إيقاف' : 'تحدث'}</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.mainTabBar} accessibilityRole="tablist">
@@ -2662,13 +2686,17 @@ const styles = StyleSheet.create({
   mainTabLabelActive: { color: '#F0C5E2', fontWeight: '700' },
 
   voiceOrbWrap: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center' },
+  voiceStateBlock: { width: '100%', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 8, paddingTop: 2, paddingBottom: 10 },
+  voiceStateEnglish: { color: '#FFF0FA', fontSize: 25, lineHeight: 32, fontWeight: '800', letterSpacing: 0.15, textAlign: 'center' },
+  voiceStateArabic: { color: '#D8C2D5', fontSize: 20, lineHeight: 28, fontWeight: '500', textAlign: 'center' },
 
-  voiceMicWrap: { width: 96, height: 96, alignItems: 'center', justifyContent: 'center' },
-  voiceMicHalo: { position: 'absolute', width: 84, height: 84, borderRadius: 42, borderWidth: 1, borderColor: '#D98AC4', backgroundColor: 'rgba(173,65,139,0.12)' },
-  voiceMic: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', backgroundColor: '#35182F', borderWidth: 1, borderColor: '#C46BA9', shadowColor: '#D64BAF', shadowOpacity: 0.55, shadowRadius: 22, shadowOffset: { width: 0, height: 0 }, elevation: 12 },
-  voiceMicActive: { backgroundColor: '#7A285F', borderColor: '#F0B5DE' },
-  voiceMicSpeaking: { backgroundColor: '#4A285D', borderColor: '#C5A5F5' },
-  voiceMicIcon: { color: '#F7D8ED', fontSize: 30, fontWeight: '600' },
+  voiceMicWrap: { width: 132, height: 132, alignItems: 'center', justifyContent: 'center' },
+  voiceMicHalo: { position: 'absolute', width: 126, height: 126, borderRadius: 63, borderWidth: 1, borderColor: '#F09ACD', backgroundColor: 'rgba(204,75,145,0.18)', shadowColor: '#E34DAB', shadowOpacity: 0.72, shadowRadius: 30, shadowOffset: { width: 0, height: 0 }, elevation: 16 },
+  voiceMic: { width: 112, height: 112, borderRadius: 56, alignItems: 'center', justifyContent: 'center', gap: 2, backgroundColor: '#57213F', borderWidth: 1.5, borderColor: '#E58ABF', shadowColor: '#E65AAE', shadowOpacity: 0.72, shadowRadius: 26, shadowOffset: { width: 0, height: 0 }, elevation: 18 },
+  voiceMicActive: { backgroundColor: '#8A2D67', borderColor: '#FFC0E3' },
+  voiceMicSpeaking: { backgroundColor: '#59336F', borderColor: '#D4B5FF' },
+  voiceMicIcon: { color: '#FFF1FA', fontSize: 34, lineHeight: 42, fontWeight: '500' },
+  voiceMicActionLabel: { color: '#FFEAF6', fontSize: 15, lineHeight: 21, fontWeight: '700', letterSpacing: 0.2 },
   voiceMicHint: { color: '#8F7B91', fontSize: 11, letterSpacing: 0.25, marginTop: -8, marginBottom: 2 },
   voiceTranscriptCard: { width: '100%', maxWidth: 360, padding: 14, borderRadius: 18, backgroundColor: '#19131F', borderWidth: 1, borderColor: '#57364F', marginBottom: 12 },
   voiceTranscriptLabel: { color: '#C58BB7', textAlign: 'right', fontSize: 10, marginBottom: 6, letterSpacing: 0.3 },
