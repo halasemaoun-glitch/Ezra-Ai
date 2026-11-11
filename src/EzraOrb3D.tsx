@@ -33,14 +33,6 @@ void main() {
   float radial = length(p);
   vec3 background = vec3(0.018, 0.009, 0.025);
 
-  float auraFalloff = max(radial - 0.58, 0.0);
-  float outerAura = exp(-pow(auraFalloff * 3.15, 2.0));
-  float innerAura = exp(-pow(radial * 1.48, 2.0));
-  float haloBloom = exp(-pow((radial - 0.91) * 5.2, 2.0));
-  background += uGlowColor * outerAura * 0.24;
-  background += uAccentColor * innerAura * 0.045;
-  background += uGlowColor * haloBloom * (0.045 + uPulse * 0.035);
-
   // Each state has its own rhythm: quiet breathing, listening response,
   // slow thought cycles, and a lively speaking cadence.
   float speakingBeat = 0.5 + 0.5 * sin(uTime * 5.4);
@@ -49,6 +41,25 @@ void main() {
     : uMode > 1.5 ? 0.30 + thinkingWave * 0.30
     : uMode > 0.5 ? uPulse
     : 0.18 + 0.08 * sin(uTime * 0.72);
+
+  // Layered volumetric halo: a broad atmospheric haze, a soft corona,
+  // and a narrow luminous rim that gently breathes with each interaction state.
+  float auraActivity = 0.78 + stateActivity * 0.42;
+  float innerAura = exp(-pow(radial * 1.42, 2.0));
+  float outerHaze = exp(-pow(max(radial - 0.54, 0.0) * 2.75, 2.0));
+  float midHaze = exp(-pow((radial - 0.82) * 3.15, 2.0));
+  float corona = exp(-pow((radial - 0.895) * 17.0, 2.0));
+  float farBloom = exp(-pow((radial - 1.035) * 4.6, 2.0));
+  float haloBreath = 0.94 + 0.06 * sin(uTime * (uMode > 2.5 ? 4.0 : uMode > 1.5 ? 0.7 : 1.25));
+  float auraAngle = atan(p.y, p.x);
+  float lightRays = 0.5 + 0.5 * sin(auraAngle * 9.0 + uTime * 0.24);
+  float rayMask = exp(-pow((radial - 0.99) * 2.4, 2.0));
+  background += uGlowColor * outerHaze * (0.16 + auraActivity * 0.11) * haloBreath;
+  background += uAccentColor * midHaze * (0.035 + auraActivity * 0.045);
+  background += uGlowColor * corona * (0.075 + auraActivity * 0.075);
+  background += uAccentColor * farBloom * (0.018 + auraActivity * 0.026);
+  background += uAccentColor * innerAura * 0.035;
+  background += uGlowColor * rayMask * lightRays * (0.012 + stateActivity * 0.018);
   // Keep all three energy rings inside the square GL viewport so they remain
   // continuous on phone screens instead of being clipped at the canvas edges.
   float ringTravel = uMode > 1.5 ? 0.009 : 0.016;
