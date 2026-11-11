@@ -1446,9 +1446,9 @@ export default function App() {
         const userInput = [text, attachmentPrompt].filter(Boolean).join('\n\n');
         const recentContext = messages
           .filter(item => item.id !== 'welcome' && !!item.text.trim())
-          .slice(-24)
+          .slice(-16)
           .map(item => `${item.sender === 'user' ? 'User' : 'EZRA'}: ${item.text}`)
-          .join('\n').slice(-8000);
+          .join('\n').slice(-6000);
         const conversationInput = recentContext
           ? `Continue this conversation naturally. Use the previous messages as context.\n\n${recentContext}\nUser: ${userInput}`
           : userInput;
