@@ -8,8 +8,11 @@
 export const DEFAULT_EZRA_VOICE = {
   engine: 'habibi-tts' as const,
   style: 'male-warm-deep' as const,
-  rate: 0.92,
-  pitch: 0.82,
+  // Slightly slower pacing and a lower fallback pitch create a calmer,
+  // warmer masculine presentation on Android system TTS voices.
+  // Habibi-TTS timbre itself is conditioned by the selected male WAV reference.
+  rate: 0.88,
+  pitch: 0.78,
   languages: ['ar', 'en'] as const,
   dialects: ['Levantine Arabic', 'Algerian Arabic', 'Saudi Arabic'] as const,
   automaticOutputLanguage: true,
