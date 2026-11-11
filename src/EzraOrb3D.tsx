@@ -262,6 +262,8 @@ export default function EzraOrb3D({ status, level = 0 }: OrbStatus) {
         accent: [...palettes.idle.accent],
         glow: [...palettes.idle.glow],
       };
+      let smoothedEnergy = 0;
+      let smoothedPulse = 0.18;
       const render = (timestamp: number) => {
         if (!alive) return;
         if (timestamp - lastFrame < 33) {
@@ -279,9 +281,15 @@ export default function EzraOrb3D({ status, level = 0 }: OrbStatus) {
           currentPalette.accent[channel] += (targetPalette.accent[channel] - currentPalette.accent[channel]) * blend;
           currentPalette.glow[channel] += (targetPalette.glow[channel] - currentPalette.glow[channel]) * blend;
         }
-        const statePulse = state === 'listening' ? 0.82 : state === 'speaking' ? 1 : state === 'thinking' ? 0.48 : 0.18;
-        const energy = Math.max(0, Math.min(1, levelRef.current));
-        const pulse = Math.min(1, statePulse + energy * (state === 'listening' ? 0.48 : 0.12));
+        const statePulse = state === 'listening' ? 0.78 : state === 'speaking' ? 0.86 : state === 'thinking' ? 0.42 : 0.16;
+        const targetEnergy = state === 'listening' ? Math.max(0, Math.min(1, levelRef.current)) : 0;
+        const energyBlend = 1 - Math.exp(-deltaSeconds * (targetEnergy > smoothedEnergy ? 12 : 5));
+        smoothedEnergy += (targetEnergy - smoothedEnergy) * energyBlend;
+        const targetPulse = Math.min(1, statePulse + smoothedEnergy * (state === 'listening' ? 0.48 : 0.10));
+        const pulseBlend = 1 - Math.exp(-deltaSeconds * 4.2);
+        smoothedPulse += (targetPulse - smoothedPulse) * pulseBlend;
+        const energy = smoothedEnergy;
+        const pulse = smoothedPulse;
         const time = reducedMotionRef.current ? 0 : (timestamp - startTime) / 1000;
 
         gl.clearColor(0.018, 0.009, 0.025, 1);
