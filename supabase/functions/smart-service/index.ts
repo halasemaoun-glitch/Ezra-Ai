@@ -102,10 +102,12 @@ Deno.serve(async (req: Request) => {
       memoryUrl.searchParams.set("owner_id", `eq.${userId}`);
       memoryUrl.searchParams.set("approval_status", "eq.approved");
       memoryUrl.searchParams.set("order", "created_at.desc");
-      memoryUrl.searchParams.set("limit", "12");
+      memoryUrl.searchParams.set("limit", "8");
 
       const memoryResponse = await fetch(memoryUrl, {
         headers: { apikey: supabasePublicKey, Authorization: authorization },
+        // Memory is optional context; cap its lookup time so a slow database cannot stall voice replies.
+        signal: AbortSignal.timeout(1200),
       });
       if (memoryResponse.ok) {
         const rows = await memoryResponse.json();
