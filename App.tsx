@@ -150,7 +150,7 @@ const createConversationId = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replac
 
 function EzraOrb({ status, voiceLevel = 0 }: { status: string; voiceLevel?: number }) {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  const stageSize = Math.max(260, Math.min(344, screenWidth - 64, screenHeight - 440));
+  const stageSize = Math.min(344, Math.max(220, Math.min(screenWidth - 40, screenHeight - 420)));
   const waveform = useRef(Array.from({ length: 9 }, () => new Animated.Value(0.18))).current;
   const listening = status.includes('يستمع') || status.includes('أستمع');
   const thinking = status.includes('أفكر');
