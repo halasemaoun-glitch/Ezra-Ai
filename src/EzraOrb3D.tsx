@@ -60,8 +60,7 @@ void main() {
   background += uAccentColor * farBloom * (0.018 + auraActivity * 0.026);
   background += uAccentColor * innerAura * 0.035;
   background += uGlowColor * rayMask * lightRays * (0.012 + stateActivity * 0.018);
-  // Keep all three energy rings inside the square GL viewport so they remain
-  // continuous on phone screens instead of being clipped at the canvas edges.
+  // Three close energy rings shimmer around the orb without leaving the mobile viewport.
   float ringTravel = uMode > 1.5 ? 0.009 : 0.016;
   float ringPhase = radial - (0.895 + ringTravel * sin(uTime * (uMode > 2.5 ? 3.1 : 2.0)));
   float ringOne = exp(-pow(ringPhase * 48.0, 2.0));
@@ -70,17 +69,35 @@ void main() {
   float ringStrength = (0.018 + stateActivity * 0.112) * (0.72 + 0.28 * sin(uTime * (uMode > 2.5 ? 5.4 : 2.2)));
   background += uAccentColor * (ringOne * ringStrength + ringTwo * ringStrength * 0.72 + ringThree * ringStrength * 0.48);
 
-  // Small luminous particles orbit around the orb at different depths and speeds.
-  for (int i = 0; i < 12; i++) {
+  // Two travelling wave fronts create a gentle outward energy ripple.
+  float wavePhaseA = fract(uTime * (uMode > 2.5 ? 0.22 : 0.105));
+  float wavePhaseB = fract(wavePhaseA + 0.5);
+  float waveRadiusA = 0.91 + wavePhaseA * 0.145;
+  float waveRadiusB = 0.91 + wavePhaseB * 0.145;
+  float waveFadeA = 1.0 - wavePhaseA;
+  float waveFadeB = 1.0 - wavePhaseB;
+  float waveA = exp(-pow((radial - waveRadiusA) * 105.0, 2.0)) * waveFadeA;
+  float waveB = exp(-pow((radial - waveRadiusB) * 105.0, 2.0)) * waveFadeB;
+  float waveStrength = 0.025 + stateActivity * 0.055;
+  background += uGlowColor * (waveA + waveB) * waveStrength;
+
+  // Fourteen orbiting sparks use offset elliptical paths, subtle trails and individual twinkles.
+  for (int i = 0; i < 14; i++) {
     float fi = float(i);
     float orbitSpeed = uMode > 2.5 ? 0.145 : uMode > 1.5 ? 0.052 : 0.085;
-    float angle = fi * 0.5236 + uTime * (orbitSpeed + fi * 0.004);
-    float orbit = 0.915 + 0.065 * sin(fi * 1.91 + uTime * (uMode > 1.5 ? 0.18 : 0.31));
-    vec2 particle = vec2(cos(angle), sin(angle)) * orbit;
-    float particleSize = 0.0065 + 0.0045 * mod(fi, 3.0);
-    float particleGlow = exp(-pow(length(p - particle) / particleSize, 2.0));
+    float angle = fi * 0.4488 + uTime * (orbitSpeed + fi * 0.0035);
+    float orbit = 0.925 + 0.052 * sin(fi * 1.91 + uTime * (uMode > 1.5 ? 0.18 : 0.31));
+    vec2 orbitPoint = vec2(cos(angle) * orbit, sin(angle) * orbit * (0.88 + 0.08 * sin(fi)));
+    vec2 tangent = normalize(vec2(-sin(angle), cos(angle)));
+    vec2 trailStart = orbitPoint - tangent * (0.018 + 0.009 * mod(fi, 3.0));
+    float trailAlong = clamp(dot(p - trailStart, orbitPoint - trailStart) / max(dot(orbitPoint - trailStart, orbitPoint - trailStart), 0.00001), 0.0, 1.0);
+    vec2 trailPoint = mix(trailStart, orbitPoint, trailAlong);
+    float particleSize = 0.0055 + 0.0038 * mod(fi, 3.0);
+    float particleGlow = exp(-pow(length(p - orbitPoint) / particleSize, 2.0));
+    float trailGlow = exp(-pow(length(p - trailPoint) / (particleSize * 0.48), 2.0)) * (1.0 - trailAlong) * 0.48;
+    float twinkle = 0.72 + 0.28 * sin(uTime * (2.1 + mod(fi, 4.0)) + fi * 2.3);
     vec3 particleColor = mod(fi, 2.0) < 1.0 ? uAccentColor : uGlowColor;
-    background += particleColor * particleGlow * (0.22 + uPulse * 0.36);
+    background += particleColor * (particleGlow + trailGlow) * twinkle * (0.20 + stateActivity * 0.34);
   }
 
   vec3 rayOrigin = vec3(0.0, 0.0, 2.75);
