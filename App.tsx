@@ -2690,11 +2690,16 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#101014' },
   container: { flex: 1, backgroundColor: '#101014' },
   header: {
-    height: 76,
+    minHeight: 76,
+    height: 'auto',
     paddingHorizontal: 22,
+    paddingVertical: 10,
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
+    alignContent: 'center',
     justifyContent: 'space-between',
+    rowGap: 8,
   },
   brand: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   avatar: {
@@ -2712,7 +2717,7 @@ const styles = StyleSheet.create({
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
   onlineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#9EBD9D' },
   status: { color: '#96919D', fontSize: 9, letterSpacing: 0.6 },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  headerActions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: 6 },
   historyButton: { paddingHorizontal: 8, paddingVertical: 7, borderRadius: 10, backgroundColor: '#211F27', borderWidth: 1, borderColor: '#493849' },
   newChatButton: {
     paddingHorizontal: 10,
