@@ -8,24 +8,37 @@ export type GroqRequestOptions = {
   approvedMemories: string[];
 };
 
-export function buildGroqChatPayload(options: GroqRequestOptions) {
+type GroqUserContent = string | Array<
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } }
+>;
+
+export type GroqChatPayload = {
+  model: string;
+  messages: [
+    { role: "system"; content: string },
+    { role: "user"; content: GroqUserContent },
+  ];
+  temperature: number;
+  max_completion_tokens: number;
+};
+
+export function buildGroqChatPayload(options: GroqRequestOptions): GroqChatPayload {
   const { input, imageDataUrl, voiceMode, responseLanguage, approvedMemories } = options;
+  const userContent: GroqUserContent = imageDataUrl
+    ? [
+        { type: "text", text: input },
+        { type: "image_url", image_url: { url: imageDataUrl } },
+      ]
+    : input;
   return {
     model: imageDataUrl ? "qwen/qwen3.8-27b" : "openai/gpt-oss-120b",
     messages: [
       {
-        role: "system" as const,
+        role: "system",
         content: buildEzraSystemPrompt({ responseLanguage, voiceMode, approvedMemories }),
       },
-      {
-        role: "user" as const,
-        content: imageDataUrl
-          ? [
-              { type: "text" as const, text: input },
-              { type: "image_url" as const, image_url: { url: imageDataUrl } },
-            ]
-          : input,
-      },
+      { role: "user", content: userContent },
     ],
     temperature: voiceMode ? 0.65 : 0.7,
     max_completion_tokens: voiceMode ? 420 : 1200,
