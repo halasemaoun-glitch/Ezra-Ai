@@ -2612,13 +2612,13 @@ export default function App() {
           </TouchableOpacity>
         </View>
         <View style={styles.mainTabBar} accessibilityRole="tablist">
-          <TouchableOpacity style={styles.mainTab} accessibilityRole="tab" accessibilityState={{ selected: false }} onPress={() => setVoiceHome(true)}>
+          <TouchableOpacity style={styles.mainTab} accessibilityRole="tab" accessibilityState={{ selected: false }} accessibilityLabel="الرئيسية" onPress={() => setVoiceHome(true)}>
             <Text style={styles.mainTabIcon}>⌂</Text><Text style={styles.mainTabLabel}>الرئيسية</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.mainTab, styles.mainTabActive]} accessibilityRole="tab" accessibilityState={{ selected: true }}>
+          <TouchableOpacity style={[styles.mainTab, styles.mainTabActive]} accessibilityRole="tab" accessibilityState={{ selected: true }} accessibilityLabel="المحادثة">
             <Text style={[styles.mainTabIcon, styles.mainTabIconActive]}>◌</Text><Text style={[styles.mainTabLabel, styles.mainTabLabelActive]}>المحادثة</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.mainTab} accessibilityRole="tab" accessibilityState={{ selected: false }} onPress={() => setSettingsVisible(true)}>
+          <TouchableOpacity style={styles.mainTab} accessibilityRole="tab" accessibilityState={{ selected: false }} accessibilityLabel="الإعدادات" onPress={() => { setVoiceHome(true); setSettingsVisible(true); }}>
             <Text style={styles.mainTabIcon}>⚙</Text><Text style={styles.mainTabLabel}>الإعدادات</Text>
           </TouchableOpacity>
         </View>
