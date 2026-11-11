@@ -32,10 +32,13 @@ void main() {
   float radial = length(p);
   vec3 background = vec3(0.018, 0.009, 0.025);
 
-  float outerAura = exp(-pow(max(radial - 0.72, 0.0) * 3.8, 2.0));
-  float innerAura = exp(-pow(radial * 1.65, 2.0));
-  background += uGlowColor * outerAura * 0.20;
-  background += uAccentColor * innerAura * 0.035;
+  float auraFalloff = max(radial - 0.58, 0.0);
+  float outerAura = exp(-pow(auraFalloff * 3.15, 2.0));
+  float innerAura = exp(-pow(radial * 1.48, 2.0));
+  float haloBloom = exp(-pow((radial - 0.91) * 5.2, 2.0));
+  background += uGlowColor * outerAura * 0.24;
+  background += uAccentColor * innerAura * 0.045;
+  background += uGlowColor * haloBloom * (0.045 + uPulse * 0.035);
 
   // Soft concentric audio rings that expand with listening/speaking activity.
   float ringPhase = radial - (0.98 + 0.035 * sin(uTime * 2.0));
@@ -46,19 +49,21 @@ void main() {
   background += uAccentColor * (ringOne * ringStrength + ringTwo * ringStrength * 0.72 + ringThree * ringStrength * 0.48);
 
   // Small luminous particles orbit around the orb at different depths and speeds.
-  for (int i = 0; i < 9; i++) {
+  for (int i = 0; i < 12; i++) {
     float fi = float(i);
-    float angle = fi * 0.698 + uTime * (0.12 + fi * 0.006);
-    float orbit = 1.02 + 0.17 * sin(fi * 2.13 + uTime * 0.42);
+    float angle = fi * 0.5236 + uTime * (0.085 + fi * 0.004);
+    float orbit = 1.035 + 0.145 * sin(fi * 1.91 + uTime * 0.31);
     vec2 particle = vec2(cos(angle), sin(angle)) * orbit;
-    float particleSize = 0.009 + 0.006 * mod(fi, 3.0);
+    float particleSize = 0.0065 + 0.0045 * mod(fi, 3.0);
     float particleGlow = exp(-pow(length(p - particle) / particleSize, 2.0));
-    background += mix(uAccentColor, uGlowColor, mod(fi, 2.0)) * particleGlow * (0.28 + uPulse * 0.42);
+    vec3 particleColor = mod(fi, 2.0) < 1.0 ? uAccentColor : uGlowColor;
+    background += particleColor * particleGlow * (0.22 + uPulse * 0.36);
   }
 
   vec3 rayOrigin = vec3(0.0, 0.0, 2.75);
   vec3 rayDirection = normalize(vec3(p * 1.02, -2.45));
-  float radius = 0.865 + sin(uTime * 1.15) * (0.006 + uEnergy * 0.012);
+  float breath = sin(uTime * 0.72) * (0.007 + uPulse * 0.004);
+  float radius = 0.865 + breath + uEnergy * 0.006;
   float b = dot(rayOrigin, rayDirection);
   float c = dot(rayOrigin, rayOrigin) - radius * radius;
   float discriminant = b * b - c;
@@ -88,25 +93,33 @@ void main() {
   float fresnel = pow(1.0 - max(dot(normal, viewDirection), 0.0), 2.35);
 
   // Layered flowing filaments create the impression of energy moving under glass.
-  float flowA = sin(surface.x * 8.0 + surface.y * 5.5 - surface.z * 7.0 + uTime * 0.52);
-  float flowB = sin(surface.z * 12.0 - surface.x * 5.0 + surface.y * 3.0 + uTime * 0.31);
-  float flowC = sin(surface.y * 14.0 + surface.x * 4.0 - uTime * 0.22);
-  float turbulence = flowA * 0.42 + flowB * 0.34 + flowC * 0.24;
-  float fluidVein = 1.0 - smoothstep(0.015, 0.12, abs(turbulence));
-  float cloud = 0.5 + 0.5 * sin(surface.x * 5.5 - surface.y * 8.5 + surface.z * 4.5 + uTime * 0.20);
-  float innerCurrent = 0.5 + 0.5 * sin(surface.x * 3.0 + surface.z * 5.0 - uTime * 0.34);
+  float warp = sin(surface.x * 3.2 + surface.z * 2.7 + uTime * 0.12) * 0.11;
+  vec3 fluid = surface + vec3(warp, warp * 0.7, -warp);
+  float flowA = sin(fluid.x * 8.0 + fluid.y * 5.5 - fluid.z * 7.0 + uTime * 0.34);
+  float flowB = sin(fluid.z * 12.0 - fluid.x * 5.0 + fluid.y * 3.0 + uTime * 0.23);
+  float flowC = sin(fluid.y * 14.0 + fluid.x * 4.0 - uTime * 0.16);
+  float flowD = sin(fluid.x * 18.0 + fluid.z * 13.0 + fluid.y * 9.0 + uTime * 0.19);
+  float turbulence = flowA * 0.34 + flowB * 0.29 + flowC * 0.21 + flowD * 0.16;
+  float fluidVein = 1.0 - smoothstep(0.018, 0.145, abs(turbulence));
+  float cloudA = 0.5 + 0.5 * sin(fluid.x * 5.5 - fluid.y * 8.5 + fluid.z * 4.5 + uTime * 0.15);
+  float cloudB = 0.5 + 0.5 * sin(fluid.z * 3.6 + fluid.x * 4.2 - fluid.y * 5.1 - uTime * 0.11);
+  float cloud = cloudA * 0.62 + cloudB * 0.38;
+  float innerCurrent = 0.5 + 0.5 * sin(fluid.x * 3.0 + fluid.z * 5.0 - uTime * 0.24);
 
-  vec3 body = mix(uBaseColor, uAccentColor, 0.16 + fluidVein * 0.58 + cloud * 0.14);
-  body = mix(body, uGlowColor, innerCurrent * 0.16);
-  vec3 color = body * (0.18 + diffuse * 1.02);
-  color += uGlowColor * (fresnel * 0.96 + fluidVein * (0.12 + uEnergy * 0.18));
-  color += vec3(1.0, 0.80, 0.96) * specular * 1.12;
-  color += uAccentColor * broadSpecular * 0.24;
+  vec3 body = mix(uBaseColor, uAccentColor, 0.12 + fluidVein * 0.54 + cloud * 0.18);
+  body = mix(body, uGlowColor, innerCurrent * 0.22);
+  vec3 color = body * (0.16 + diffuse * 1.08);
+  float rimLight = pow(1.0 - max(dot(normal, viewDirection), 0.0), 3.1);
+  color += uGlowColor * (fresnel * 0.82 + rimLight * 0.34 + fluidVein * (0.13 + uEnergy * 0.20));
+  color += vec3(1.0, 0.82, 0.97) * specular * 1.18;
+  color += uAccentColor * broadSpecular * 0.28;
+  color += mix(uAccentColor, uGlowColor, cloud) * cloud * 0.12;
 
-  // A soft illuminated heart responds to microphone energy without flattening the sphere.
-  float core = exp(-dot(position.xy, position.xy) * 5.2) * (0.12 + uEnergy * 0.24);
+  // A layered inner glow gives the sphere depth; microphone energy gently lifts its core.
+  float coreFalloff = exp(-dot(position.xy, position.xy) * 4.6);
+  float core = coreFalloff * (0.10 + uEnergy * 0.30 + uPulse * 0.035);
   color += uAccentColor * core;
-  color += uGlowColor * exp(-dot(position.xy, position.xy) * 2.2) * (0.035 + uPulse * 0.035);
+  color += uGlowColor * exp(-dot(position.xy, position.xy) * 1.85) * (0.045 + uPulse * 0.045);
   color = pow(max(color, 0.0), vec3(0.88));
 
   gl_FragColor = vec4(color, 1.0);
