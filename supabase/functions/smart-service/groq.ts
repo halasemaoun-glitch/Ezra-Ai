@@ -41,7 +41,7 @@ export function buildGroqChatPayload(options: GroqRequestOptions): GroqChatPaylo
       { role: "user", content: userContent },
     ],
     temperature: voiceMode ? 0.65 : 0.7,
-    max_completion_tokens: voiceMode ? 420 : 1200,
+    max_completion_tokens: voiceMode ? 280 : 1200,
   };
 }
 
