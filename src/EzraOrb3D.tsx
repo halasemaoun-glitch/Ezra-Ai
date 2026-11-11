@@ -244,7 +244,7 @@ function compileShader(gl: any, type: number, source: string) {
 
 export default function EzraOrb3D({ status, level = 0 }: OrbStatus) {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  const stageSize = Math.max(260, Math.min(344, screenWidth - 64, screenHeight - 440));
+  const stageSize = Math.min(344, Math.max(220, Math.min(screenWidth - 40, screenHeight - 420)));
   const statusRef = useRef(status);
   const levelRef = useRef(level);
   const reducedMotionRef = useRef(false);
