@@ -227,6 +227,7 @@ export default function App() {
   const [responseLanguage, setResponseLanguage] = useState<'ar' | 'en'>('ar');
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const chatScrollRef = useRef<ScrollView | null>(null);
+  const chatShouldAutoScrollRef = useRef(true);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [attachment, setAttachment] = useState<Attachment | null>(null);
   const [isListening, setIsListening] = useState(false);
@@ -1410,6 +1411,7 @@ export default function App() {
   const sendMessage = async (voiceReply = false, voiceText?: string) => {
     const text = (voiceText ?? message).trim();
     if ((!text && !attachment) || !session || !conversationId || sending) return;
+    chatShouldAutoScrollRef.current = true;
     if (voiceText !== undefined) voiceRequestStartedRef.current = true;
     if (await handleMemorySaveCommand(text, voiceReply)) return;
     if (await handleFlashCommand(text, voiceReply)) return;
@@ -2549,7 +2551,17 @@ export default function App() {
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           style={styles.chat}
           contentContainerStyle={styles.chatContent}
-          onContentSizeChange={() => chatScrollRef.current?.scrollToEnd({ animated: true })}
+          onContentSizeChange={() => {
+            if (chatShouldAutoScrollRef.current) {
+              chatScrollRef.current?.scrollToEnd({ animated: true });
+            }
+          }}
+          onScroll={event => {
+            const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+            const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height);
+            chatShouldAutoScrollRef.current = distanceFromBottom < 120;
+          }}
+          scrollEventThrottle={100}
           showsVerticalScrollIndicator={false}
         >
           {messages.map(item => (
