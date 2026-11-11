@@ -30,7 +30,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import EzraOrb3D from './src/EzraOrb3D';
 import { supabase } from './src/lib/supabase';
-import { DEFAULT_EZRA_VOICE, detectEzraSpeechLanguage } from './src/voice/voiceProfile';
+import { DEFAULT_EZRA_VOICE } from './src/voice/voiceProfile';
 import { requireNativeModule } from 'expo-modules-core';
 
 type EzraWakeWordNative = {
@@ -217,13 +217,7 @@ export default function App() {
   const [autoSpeak, setAutoSpeak] = useState(true);
   const [speechRate, setSpeechRate] = useState(DEFAULT_EZRA_VOICE.rate);
   const [speechPitch, setSpeechPitch] = useState(DEFAULT_EZRA_VOICE.pitch);
-  const [recognitionLocale, setRecognitionLocale] = useState(() => {
-    try {
-      return Intl.DateTimeFormat().resolvedOptions().locale || 'ar-DZ';
-    } catch {
-      return 'ar-DZ';
-    }
-  });
+  const [responseLanguage, setResponseLanguage] = useState<'ar' | 'en'>('ar');
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [attachment, setAttachment] = useState<Attachment | null>(null);
@@ -566,7 +560,7 @@ export default function App() {
   );
 
   useEffect(() => {
-    AsyncStorage.multiGet(['ezra:autoSpeak', 'ezra:speechRate', 'ezra:recognitionLanguage', 'ezra:autoListen', 'ezra:ttsVoice', 'ezra:speechPitch', 'ezra:backgroundWake', 'ezra:ttsEnglishVoice']).then(values => {
+    AsyncStorage.multiGet(['ezra:autoSpeak', 'ezra:speechRate', 'ezra:recognitionLanguage', 'ezra:autoListen', 'ezra:ttsVoice', 'ezra:speechPitch', 'ezra:backgroundWake', 'ezra:ttsEnglishVoice', 'ezra:responseLanguage']).then(values => {
       const savedAutoSpeak = values[0]?.[1];
       const savedRate = values[1]?.[1];
       const savedAutoListen = values[3]?.[1];
@@ -585,6 +579,8 @@ export default function App() {
           AsyncStorage.setItem('ezra:speechPitch', String(restoredPitch)).catch(() => {});
         }
       }
+      const savedResponseLanguage = values[8]?.[1] === 'en' ? 'en' : 'ar';
+      setResponseLanguage(savedResponseLanguage);
       AsyncStorage.removeItem('ezra:recognitionLanguage').catch(() => {});
       if (savedAutoListen !== null) {
         const enabled = savedAutoListen === 'true';
@@ -947,10 +943,6 @@ export default function App() {
     const normalized = event.value <= 0 ? 0 : Math.min(1, event.value / 10);
     setVoiceLevel(previous => previous * 0.58 + normalized * 0.42);
   });
-  useSpeechRecognitionEvent('languagedetection', event => {
-    const detected = typeof event.detectedLanguage === 'string' ? event.detectedLanguage.trim() : '';
-    if (detected && (event.confidence ?? 0) >= 0.55) setRecognitionLocale(detected);
-  });
   useSpeechRecognitionEvent('soundend', () => {
     setVoiceLevel(0);
   });
@@ -1029,7 +1021,7 @@ export default function App() {
     if (!appIsActive || !session || !voiceHome || !autoListen || backgroundWakeEnabled || isListening || sending || speakingMessageId || chatLoading) return;
     const timer = setTimeout(() => beginListening(), voiceRetrying ? 900 : 500);
     return () => clearTimeout(timer);
-  }, [appIsActive, session?.user.id, voiceHome, autoListen, backgroundWakeEnabled, recognitionLocale, isListening, sending, speakingMessageId, chatLoading, voiceRetrying]);
+  }, [appIsActive, session?.user.id, voiceHome, autoListen, backgroundWakeEnabled, responseLanguage, isListening, sending, speakingMessageId, chatLoading, voiceRetrying]);
 
   useEffect(() => {
     if (!appIsActive || !voiceHome || !autoListen || backgroundWakeEnabled || !voiceTurnInProgressRef.current || !voiceRequestStartedRef.current || sending || speakingMessageId || isListening) return;
@@ -1434,6 +1426,7 @@ export default function App() {
             body: {
               input: conversationInput,
               voiceMode: voiceReply,
+              responseLanguage,
               ...(attachment?.kind === 'image' && attachment.base64
                 ? { imageDataUrl: `data:${attachment.mimeType || 'image/jpeg'};base64,${attachment.base64}` }
                 : {}),
@@ -1637,17 +1630,9 @@ export default function App() {
         return;
       }
       voiceTranscriptRef.current = '';
-      // Android 14+ Google on-device recognition can detect and switch installed speech locales; older versions use the device locale.
-      const supportsNativeLanguageSwitch = Platform.OS === 'android' && Number(Platform.Version) >= 34;
+      // Use the language explicitly selected by the user; do not auto-switch recognition locales.
       ExpoSpeechRecognitionModule.start({
-        lang: recognitionLocale,
-        ...(supportsNativeLanguageSwitch ? {
-          androidRecognitionServicePackage: 'com.google.android.as',
-          androidIntentOptions: {
-            EXTRA_ENABLE_LANGUAGE_DETECTION: true,
-            EXTRA_ENABLE_LANGUAGE_SWITCH: 'balanced',
-          },
-        } : {}),
+        lang: responseLanguage === 'en' ? 'en-US' : 'ar-DZ',
         interimResults: true,
         continuous: false,
         volumeChangeEventOptions: { enabled: true, intervalMillis: 90 },
@@ -1824,7 +1809,7 @@ export default function App() {
     await EzraHabibiTts?.stopAudio().catch(() => {});
     activeHabibiSpeechRef.current = null;
     setSpeakingMessageId(messageId);
-    const speechLanguage = detectEzraSpeechLanguage(text, recognitionLocale);
+    const speechLanguage = responseLanguage;
 
     if (speechLanguage === 'ar' && habibiEngineReady && EzraHabibiTts && Platform.OS === 'android') {
       activeHabibiSpeechRef.current = {
@@ -2021,10 +2006,36 @@ export default function App() {
                   <Text style={styles.historyTitle}>إعدادات الصوت</Text>                  <TouchableOpacity style={styles.historyClose} onPress={() => setSettingsVisible(false)}><Text style={styles.historyCloseText}>×</Text></TouchableOpacity>
                 </View>
                 <ScrollView style={styles.settingsScroll} contentContainerStyle={styles.settingsScrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                <View style={[styles.settingRow, { flexDirection: 'column', alignItems: 'stretch', gap: 10 }]}>
+                  <View style={styles.settingCopy}>
+                    <Text style={styles.settingTitle}>لغة EZRA</Text>
+                    <Text style={styles.settingHint}>اختاري لغة الرد والصوت والاستماع؛ لن يبدّلها التطبيق تلقائياً.</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: responseLanguage === 'ar' }}
+                      style={[styles.rateButton, responseLanguage === 'ar' && styles.languageButtonActive, { flex: 1, alignItems: 'center', paddingVertical: 12 }]}
+                      onPress={() => {
+                        setResponseLanguage('ar');
+                        AsyncStorage.setItem('ezra:responseLanguage', 'ar').catch(() => {});
+                      }}
+                    ><Text style={styles.rateButtonText}>العربية</Text></TouchableOpacity>
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: responseLanguage === 'en' }}
+                      style={[styles.rateButton, responseLanguage === 'en' && styles.languageButtonActive, { flex: 1, alignItems: 'center', paddingVertical: 12 }]}
+                      onPress={() => {
+                        setResponseLanguage('en');
+                        AsyncStorage.setItem('ezra:responseLanguage', 'en').catch(() => {});
+                      }}
+                    ><Text style={styles.rateButtonText}>English</Text></TouchableOpacity>
+                  </View>
+                </View>
                 <View style={styles.settingRow}>
                   <View style={styles.settingCopy}>
                     <Text style={styles.settingTitle}>ملف صوت EZRA المعتمد</Text>
-                    <Text style={styles.settingHint}>صوت رجالي دافئ وعميق · اكتشاف تلقائي للعربية والإنجليزية</Text>
+                    <Text style={styles.settingHint}>صوت رجالي دافئ وعميق · اللغة تختارينها يدوياً</Text>
                     <Text style={styles.settingHint}>Habibi-TTS هو المحرك العربي الأساسي بعد تنزيل النموذج واعتماد عينة صوت؛ صوت الهاتف احتياطي عند عدم جاهزيته.</Text>
                     <Text style={styles.settingHint}>تنبيه الذاكرة: تفعيل Habibi يتطلب 3.5 GB RAM متاحة على الأقل قبل بدء التحميل إلى الذاكرة؛ هذا شرط أمان وليس ضمانًا للتشغيل على كل هاتف.</Text>
                     <Text style={styles.settingHint}>الصوت العربي: اللهجة الجزائرية عبر Habibi ALG · الإنجليزية: محرك النظام</Text>
