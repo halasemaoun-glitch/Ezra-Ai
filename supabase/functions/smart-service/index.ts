@@ -1,4 +1,4 @@
-// EZRA AI — Groq free-tier chat service
+// EZRA AI — authenticated Groq chat service
 // Keep GROQ_API_KEY in Supabase Edge Function secrets. Never place it in the mobile app.
 
 const corsHeaders = {
@@ -9,12 +9,97 @@ const corsHeaders = {
 
 const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
 
+function getSupabasePublishableKey(): string | null {
+  const direct =
+    Deno.env.get("SUPABASE_PUBLISHABLE_KEY") ??
+    Deno.env.get("SUPABASE_ANON_KEY");
+  if (direct) return direct;
+
+  const namedKeys = Deno.env.get("SUPABASE_PUBLISHABLE_KEYS");
+  if (!namedKeys) return null;
+
+  try {
+    const parsed = JSON.parse(namedKeys);
+    if (typeof parsed?.default === "string") return parsed.default;
+    const firstKey = Object.values(parsed).find(
+      (value): value is string => typeof value === "string",
+    );
+    return firstKey ?? null;
+  } catch {
+    return null;
+  }
+}
+
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
 
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
-      status: 405, headers: jsonHeaders,
+      status: 405,
+      headers: jsonHeaders,
+    });
+  }
+
+  // Require a real signed-in user's access token. A publishable key alone is not authentication.
+  const authorization = req.headers.get("Authorization") ?? "";
+  const bearerToken = authorization.match(/^Bearer\s+(.+)$/i)?.[1];
+  if (!bearerToken) {
+    return new Response(JSON.stringify({ error: "Sign in to use EZRA." }), {
+      status: 401,
+      headers: jsonHeaders,
+    });
+  }
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const supabasePublicKey = getSupabasePublishableKey();
+  if (!supabaseUrl || !supabasePublicKey || supabasePublicKey.startsWith("sb_secret_")) {
+    console.error("Supabase user verification is not configured with a publishable key.");
+    return new Response(JSON.stringify({ error: "Authentication service is not configured." }), {
+      status: 503,
+      headers: jsonHeaders,
+    });
+  }
+
+  // Verify the token against Supabase Auth; never trust a user ID from the request body.
+  let userId: string;
+  try {
+    const userResponse = await fetch(`${supabaseUrl}/auth/v1/user`, {
+      headers: {
+        apikey: supabasePublicKey,
+        Authorization: authorization,
+      },
+    });
+
+    if (userResponse.status === 401 || userResponse.status === 403) {
+      return new Response(JSON.stringify({ error: "Your session is invalid or expired. Please sign in again." }), {
+        status: 401,
+        headers: jsonHeaders,
+      });
+    }
+
+    if (!userResponse.ok) {
+      console.error("Supabase user verification failed:", userResponse.status);
+      return new Response(JSON.stringify({ error: "Could not verify your session. Please try again." }), {
+        status: 503,
+        headers: jsonHeaders,
+      });
+    }
+
+    const user = await userResponse.json();
+    if (typeof user?.id !== "string") {
+      return new Response(JSON.stringify({ error: "A valid signed-in account is required." }), {
+        status: 401,
+        headers: jsonHeaders,
+      });
+    }
+    userId = user.id;
+  } catch (authError) {
+    console.error("Supabase user verification failed:", authError);
+    return new Response(JSON.stringify({ error: "Could not verify your session. Please try again." }), {
+      status: 503,
+      headers: jsonHeaders,
     });
   }
 
@@ -29,67 +114,30 @@ Deno.serve(async (req: Request) => {
   try {
     const body = await req.json();
     const input = typeof body?.input === "string" ? body.input.trim() : "";
+    const imageDataUrl = typeof body?.imageDataUrl === "string" ? body.imageDataUrl : "";
+    const voiceMode = body?.voiceMode === true;
+
+    if (imageDataUrl && (!/^data:image\/(jpeg|png|webp);base64,/i.test(imageDataUrl) || imageDataUrl.length > 4 * 1024 * 1024)) {
+      return new Response(JSON.stringify({ error: "The image format is unsupported or the image is too large." }), {
+        status: 400,
+        headers: jsonHeaders,
+      });
+    }
 
     if (!input) {
       return new Response(JSON.stringify({ error: "A non-empty input is required." }), {
-        status: 400, headers: jsonHeaders,
+        status: 400,
+        headers: jsonHeaders,
       });
     }
     if (input.length > 16000) {
       return new Response(JSON.stringify({ error: "The message is too long. Please shorten it and try again." }), {
-        status: 413, headers: jsonHeaders,
+        status: 413,
+        headers: jsonHeaders,
       });
     }
 
-    // Require a real Supabase user access token for every chat request.
-    // A publishable/anon key by itself is not an authenticated user session.
-    const authorization = req.headers.get("Authorization") ?? "";
-    const bearerToken = authorization.match(/^Bearer\s+(.+)$/i)?.[1];
-    if (!bearerToken) {
-      return new Response(JSON.stringify({ error: "Sign in to use EZRA." }), {
-        status: 401, headers: jsonHeaders,
-      });
-    }
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabasePublicKey =
-      Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
-    if (!supabaseUrl || !supabasePublicKey) {
-      return new Response(JSON.stringify({ error: "Authentication service is not configured." }), {
-        status: 503, headers: jsonHeaders,
-      });
-    }
-
-    let userId: string;
-    try {
-      const userResponse = await fetch(`${supabaseUrl}/auth/v1/user`, {
-        headers: { "apikey": supabasePublicKey, "Authorization": authorization },
-      });
-      if (userResponse.status === 401 || userResponse.status === 403) {
-        return new Response(JSON.stringify({ error: "Your session is invalid or expired. Please sign in again." }), {
-          status: 401, headers: jsonHeaders,
-        });
-      }
-      if (!userResponse.ok) {
-        console.error("Supabase user verification failed:", userResponse.status);
-        return new Response(JSON.stringify({ error: "Could not verify your session. Please try again." }), {
-          status: 503, headers: jsonHeaders,
-        });
-      }
-      const user = await userResponse.json();
-      if (typeof user?.id !== "string") {
-        return new Response(JSON.stringify({ error: "A valid signed-in account is required." }), {
-          status: 401, headers: jsonHeaders,
-        });
-      }
-      userId = user.id;
-    } catch (authError) {
-      console.error("Supabase user verification failed:", authError);
-      return new Response(JSON.stringify({ error: "Could not verify your session. Please try again." }), {
-        status: 503, headers: jsonHeaders,
-      });
-    }
-
+    // Load only this authenticated user's approved memories. RLS is also enforced by the user's token.
     let approvedMemories: string[] = [];
     try {
       const memoryUrl = new URL(`${supabaseUrl}/rest/v1/memories`);
@@ -100,7 +148,10 @@ Deno.serve(async (req: Request) => {
       memoryUrl.searchParams.set("limit", "12");
 
       const memoryResponse = await fetch(memoryUrl, {
-        headers: { "apikey": supabasePublicKey, "Authorization": authorization },
+        headers: {
+          apikey: supabasePublicKey,
+          Authorization: authorization,
+        },
       });
       if (memoryResponse.ok) {
         const rows = await memoryResponse.json();
@@ -120,10 +171,12 @@ Deno.serve(async (req: Request) => {
 
     const systemPrompt = [
       "You are EZRA, a premium personal AI companion.",
-      "Speak naturally, warmly, intelligently, and respectfully. Be personable without pretending to be human.",
-      "Reply in the same language as the user. When the user writes Arabic, use clear, natural Arabic and understand colloquial dialects; use a friendly Levantine/Jordanian style when appropriate.",
-      "Be concise by default, but give detailed explanations when requested. Preserve relevant conversation context included in the input.",
-      "Never claim to have performed actions on the user's device unless an available integration actually confirms it.",
+      "Your persona is EZRA: a warm, confident, masculine-voiced companion with a charming, witty, playful personality. Sound relaxed and emotionally attentive, like a familiar trusted companion, while never claiming to be human or to have real-world experiences.",
+      "Reply in the same language as the user. For Arabic, use natural spoken Arabic, masculine self-reference, and understand colloquial dialects; prefer a friendly Levantine/Syrian-Jordanian tone when it fits the user. Avoid stiff textbook phrasing and robotic stock openings.",
+      "Use light, clever humor and gentle playful teasing when appropriate, but never force jokes during serious, sad, urgent, or sensitive conversations. Be kind, respectful, reassuring, and never flirt unless the user clearly invites that tone.",
+      "Be concise by default, but give detailed explanations when requested. Preserve relevant conversation context included in the input, remember details already shared in the current conversation, and use approved long-term memories when relevant without repeatedly announcing that you remember them.",
+      ...(voiceMode ? ["This is a spoken conversation: answer in short, natural phrases that sound good aloud, usually one to three sentences. Avoid markdown, lists, headings, emoji clutter, and long preambles unless the user asks for detail. Finish naturally so the assistant can listen again."] : []),
+      "Do not claim to save a long-term memory unless the memory system confirms it. Do not claim to perform device actions unless an available integration actually confirms it.",
       "For medical or dental topics, provide general educational information, avoid definitive diagnosis or treatment claims, and recommend a qualified clinician for individual care or urgent symptoms.",
       ...(approvedMemories.length
         ? [
@@ -137,16 +190,24 @@ Deno.serve(async (req: Request) => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "openai/gpt-oss-120b",
+        model: imageDataUrl ? "qwen/qwen3.8-27b" : "openai/gpt-oss-120b",
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: input },
+          {
+            role: "user",
+            content: imageDataUrl
+              ? [
+                  { type: "text", text: input },
+                  { type: "image_url", image_url: { url: imageDataUrl } },
+                ]
+              : input,
+          },
         ],
         temperature: 0.7,
-        max_completion_tokens: 1200,
+        max_completion_tokens: voiceMode ? 420 : 1200,
       }),
     });
 
@@ -164,7 +225,8 @@ Deno.serve(async (req: Request) => {
     const reply = result?.choices?.[0]?.message?.content?.trim();
     if (!reply) {
       return new Response(JSON.stringify({ error: "The AI returned an empty response. Please try again." }), {
-        status: 502, headers: jsonHeaders,
+        status: 502,
+        headers: jsonHeaders,
       });
     }
 
@@ -172,7 +234,8 @@ Deno.serve(async (req: Request) => {
   } catch (error) {
     console.error("EZRA smart-service error:", error);
     return new Response(JSON.stringify({ error: "Something went wrong. Please try again." }), {
-      status: 500, headers: jsonHeaders,
+      status: 500,
+      headers: jsonHeaders,
     });
   }
 });
