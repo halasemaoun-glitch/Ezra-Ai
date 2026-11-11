@@ -1,32 +1,47 @@
 #!/usr/bin/env python3
-"""Apply EZRA's conservative Q8_0 weight-storage optimization to upstream Habibi F5-TTS.
+"""Apply conservative Android RAM optimizations to upstream Habibi F5-TTS.
 
-For the Android arm64 build, only 2-D Linear weight matrices are stored as Q8_0. Biases, embeddings, convolution
-kernels, normalization parameters, and all other tensors retain upstream F32 storage.
-BackendWeightStore automatically keeps tensors as F32 when a row is not block-aligned.
+1) Store 2-D Linear weights as Q8_0; biases, embeddings, convolutions and norms stay F32.
+2) Evaluate classifier-free guidance in two sequential single-batch passes instead of one
+   batched two-branch graph. This preserves the CFG equation while avoiding the larger
+   two-branch graph pool on low-memory Android devices.
 """
 from pathlib import Path
 import sys
 
-if len(sys.argv) != 2:
-    raise SystemExit("usage: patch_habibi_q8.py <audio.cpp>/src/community_models/f5_tts/weights.cpp")
+if len(sys.argv) != 3:
+    raise SystemExit("usage: patch_habibi_q8.py <audio.cpp>/src/community_models/f5_tts/weights.cpp <audio.cpp>/src/community_models/f5_tts/synthesize.cpp")
 
-path = Path(sys.argv[1])
-source = path.read_text()
+weights_path, synthesize_path = map(Path, sys.argv[1:])
+
+source = weights_path.read_text()
 old = 'lw.weight = tensor(n + ".weight", {out_f, in_f});'
 new = (
     'lw.weight = w.store->load_tensor(source, n + ".weight", '
     'assets::TensorStorageType::Q8_0, {out_f, in_f});'
 )
-if source.count(old) != 1:
-    raise SystemExit(
-        f"Expected exactly one upstream Linear weight loader in {path}; "
-        f"found {source.count(old)}. Refusing to patch an unknown source version."
-    )
-if "assets::TensorStorageType::Q8_0" in source:
-    raise SystemExit(f"Q8_0 optimization is already present in {path}")
-path.write_text(source.replace(old, new, 1))
-patched = path.read_text()
-if new not in patched:
+if source.count(old) != 1 or "assets::TensorStorageType::Q8_0" in source:
+    raise SystemExit("Unexpected F5 Linear loader; refusing to patch an unknown source version.")
+weights_path.write_text(source.replace(old, new, 1))
+if new not in weights_path.read_text():
     raise SystemExit("Q8_0 patch verification failed")
-print("Applied Q8_0 to F5-TTS Linear weight matrices; non-matrix tensors remain F32.")
+
+source = synthesize_path.read_text()
+old = """        const auto pair = f5_dit_forward_cfg(
+            model_path, y, cond, chunk_ids, t, duration, arch, &dev);
+        const auto & v_cond = pair.first;
+        const auto & v_null = pair.second;"""
+new = """        const auto v_cond = f5_dit_forward(
+            model_path, y, cond, chunk_ids, t, duration, arch,
+            false, false, nullptr, &dev);
+        const auto v_null = f5_dit_forward(
+            model_path, y, cond, chunk_ids, t, duration, arch,
+            true, true, nullptr, &dev);"""
+if source.count(old) != 1 or "f5_dit_forward_cfg(" not in source:
+    raise SystemExit("Unexpected F5 CFG synthesis call; refusing to patch an unknown source version.")
+synthesize_path.write_text(source.replace(old, new, 1))
+patched = synthesize_path.read_text()
+if new not in patched or old in patched:
+    raise SystemExit("Sequential CFG patch verification failed")
+
+print("Applied Q8_0 Linear weights and sequential single-batch CFG inference.")
