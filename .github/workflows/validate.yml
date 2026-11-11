@@ -30,6 +30,8 @@ jobs:
         run: deno check supabase/functions/smart-service/index.ts
       - name: Test EZRA Supabase session security
         run: deno test supabase/functions/smart-service/auth_test.ts
+      - name: Test EZRA personality contract
+        run: deno test supabase/functions/smart-service/persona_test.ts
       - name: Check Expo configuration and dependencies
         run: npx expo-doctor
       - name: Set up Java 17
