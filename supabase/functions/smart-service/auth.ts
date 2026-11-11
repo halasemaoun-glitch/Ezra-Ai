@@ -8,7 +8,7 @@ export async function verifySupabaseUser(
   supabasePublicKey: string | null,
   fetcher: typeof fetch = fetch,
 ): Promise<AuthResult> {
-  const bearerToken = authorization.match(/^Bearer\\s+(.+)$/i)?.[1];
+  const bearerToken = authorization.match(/^Bearer\s+(.+)$/i)?.[1];
   if (!bearerToken) {
     return { ok: false, status: 401, error: "Sign in to use EZRA." };
   }
