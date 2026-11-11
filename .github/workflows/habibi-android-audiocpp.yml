@@ -48,8 +48,8 @@ jobs:
         run: |
           git clone --depth 1 --branch v0.9.4 --recurse-submodules https://github.com/0xShug0/audio.cpp.git audio-cpp
 
-      - name: Apply conservative Q8_0 weight storage for mobile RAM
-        run: python3 scripts/patch_habibi_q8.py audio-cpp/src/community_models/f5_tts/weights.cpp
+      - name: Apply conservative Q8_0 and sequential-CFG RAM optimizations
+        run: python3 scripts/patch_habibi_q8.py audio-cpp/src/community_models/f5_tts/weights.cpp audio-cpp/src/community_models/f5_tts/synthesize.cpp
 
       - name: Configure Habibi runtime for Android arm64
         run: |
