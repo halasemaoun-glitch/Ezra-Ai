@@ -23,6 +23,7 @@ uniform vec2 uResolution;
 uniform float uTime;
 uniform float uEnergy;
 uniform float uPulse;
+uniform float uMode;
 uniform vec3 uBaseColor;
 uniform vec3 uAccentColor;
 uniform vec3 uGlowColor;
@@ -40,19 +41,28 @@ void main() {
   background += uAccentColor * innerAura * 0.045;
   background += uGlowColor * haloBloom * (0.045 + uPulse * 0.035);
 
-  // Soft concentric audio rings that expand with listening/speaking activity.
-  float ringPhase = radial - (0.98 + 0.035 * sin(uTime * 2.0));
+  // Each state has its own rhythm: quiet breathing, listening response,
+  // slow thought cycles, and a lively speaking cadence.
+  float speakingBeat = 0.5 + 0.5 * sin(uTime * 5.4);
+  float thinkingWave = 0.5 + 0.5 * sin(uTime * 1.15 + 0.7);
+  float stateActivity = uMode > 2.5 ? 0.34 + speakingBeat * 0.66
+    : uMode > 1.5 ? 0.30 + thinkingWave * 0.30
+    : uMode > 0.5 ? uPulse
+    : 0.18 + 0.08 * sin(uTime * 0.72);
+  float ringTravel = uMode > 1.5 ? 0.018 : 0.035;
+  float ringPhase = radial - (0.98 + ringTravel * sin(uTime * (uMode > 2.5 ? 3.1 : 2.0)));
   float ringOne = exp(-pow(ringPhase * 34.0, 2.0));
-  float ringTwo = exp(-pow((radial - 1.105 - 0.045 * sin(uTime * 1.55 + 1.2)) * 27.0, 2.0));
-  float ringThree = exp(-pow((radial - 1.235 - 0.055 * sin(uTime * 1.25 + 2.1)) * 23.0, 2.0));
-  float ringStrength = (0.025 + uPulse * 0.105) * (0.65 + 0.35 * sin(uTime * 3.0));
+  float ringTwo = exp(-pow((radial - 1.105 - ringTravel * 1.28 * sin(uTime * 1.55 + 1.2)) * 27.0, 2.0));
+  float ringThree = exp(-pow((radial - 1.235 - ringTravel * 1.57 * sin(uTime * 1.25 + 2.1)) * 23.0, 2.0));
+  float ringStrength = (0.018 + stateActivity * 0.112) * (0.72 + 0.28 * sin(uTime * (uMode > 2.5 ? 5.4 : 2.2)));
   background += uAccentColor * (ringOne * ringStrength + ringTwo * ringStrength * 0.72 + ringThree * ringStrength * 0.48);
 
   // Small luminous particles orbit around the orb at different depths and speeds.
   for (int i = 0; i < 12; i++) {
     float fi = float(i);
-    float angle = fi * 0.5236 + uTime * (0.085 + fi * 0.004);
-    float orbit = 1.035 + 0.145 * sin(fi * 1.91 + uTime * 0.31);
+    float orbitSpeed = uMode > 2.5 ? 0.145 : uMode > 1.5 ? 0.052 : 0.085;
+    float angle = fi * 0.5236 + uTime * (orbitSpeed + fi * 0.004);
+    float orbit = 1.035 + 0.145 * sin(fi * 1.91 + uTime * (uMode > 1.5 ? 0.18 : 0.31));
     vec2 particle = vec2(cos(angle), sin(angle)) * orbit;
     float particleSize = 0.0065 + 0.0045 * mod(fi, 3.0);
     float particleGlow = exp(-pow(length(p - particle) / particleSize, 2.0));
@@ -62,8 +72,9 @@ void main() {
 
   vec3 rayOrigin = vec3(0.0, 0.0, 2.75);
   vec3 rayDirection = normalize(vec3(p * 1.02, -2.45));
-  float breath = sin(uTime * 0.72) * (0.007 + uPulse * 0.004);
-  float radius = 0.865 + breath + uEnergy * 0.006;
+  float breathRate = uMode > 2.5 ? 2.7 : uMode > 1.5 ? 0.48 : 0.72;
+  float breath = sin(uTime * breathRate) * (0.006 + stateActivity * 0.006);
+  float radius = 0.865 + breath + uEnergy * 0.009;
   float b = dot(rayOrigin, rayDirection);
   float c = dot(rayOrigin, rayOrigin) - radius * radius;
   float discriminant = b * b - c;
@@ -248,6 +259,7 @@ export default function EzraOrb3D({ status, level = 0 }: OrbStatus) {
       const accentLocation = gl.getUniformLocation(program, 'uAccentColor');
       const glowLocation = gl.getUniformLocation(program, 'uGlowColor');
       const pulseLocation = gl.getUniformLocation(program, 'uPulse');
+      const modeLocation = gl.getUniformLocation(program, 'uMode');
 
       gl.useProgram(program);
       gl.enableVertexAttribArray(positionLocation);
@@ -274,6 +286,7 @@ export default function EzraOrb3D({ status, level = 0 }: OrbStatus) {
         lastFrame = timestamp;
         if (!startTime) startTime = timestamp;
         const state = getState(statusRef.current);
+        const stateMode = state === 'listening' ? 1 : state === 'thinking' ? 2 : state === 'speaking' ? 3 : 0;
         const targetPalette = palettes[state];
         const blend = reducedMotionRef.current ? 1 : 1 - Math.exp(-deltaSeconds * 4.8);
         for (let channel = 0; channel < 3; channel += 1) {
@@ -298,6 +311,7 @@ export default function EzraOrb3D({ status, level = 0 }: OrbStatus) {
         gl.uniform1f(timeLocation, time);
         gl.uniform1f(energyLocation, energy);
         gl.uniform1f(pulseLocation, pulse);
+        gl.uniform1f(modeLocation, stateMode);
         gl.uniform3f(baseLocation, ...currentPalette.base);
         gl.uniform3f(accentLocation, ...currentPalette.accent);
         gl.uniform3f(glowLocation, ...currentPalette.glow);
