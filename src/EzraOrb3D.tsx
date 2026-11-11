@@ -88,18 +88,28 @@ void main() {
 
   float distanceToSphere = -b - sqrt(discriminant);
   vec3 position = rayOrigin + rayDirection * distanceToSphere;
-  vec3 normal = normalize(position);
+  vec3 geometricNormal = normalize(position);
+  vec3 viewDirection = normalize(-position);
   float rotation = uTime * 0.105;
   float cs = cos(rotation);
   float sn = sin(rotation);
   vec3 surface = vec3(
-    normal.x * cs - normal.z * sn,
-    normal.y,
-    normal.x * sn + normal.z * cs
+    geometricNormal.x * cs - geometricNormal.z * sn,
+    geometricNormal.y,
+    geometricNormal.x * sn + geometricNormal.z * cs
   );
 
   vec3 lightDirection = normalize(vec3(-0.85, 1.15, 2.4));
-  vec3 viewDirection = normalize(-position);
+  // Tiny animated height variations bend the lighting across the surface,
+  // giving the plasma currents a tactile, softly sculpted appearance.
+  float normalWaveA = sin(surface.x * 8.0 + surface.z * 6.0 + uTime * 0.26);
+  float normalWaveB = sin(surface.y * 11.0 - surface.x * 5.0 - uTime * 0.18);
+  float normalWaveC = sin(surface.z * 15.0 + surface.y * 7.0 + uTime * 0.14);
+  float heightField = normalWaveA * 0.46 + normalWaveB * 0.34 + normalWaveC * 0.20;
+  vec3 tangentX = normalize(vec3(1.0, 0.0, 0.0) - geometricNormal * geometricNormal.x);
+  vec3 tangentY = normalize(cross(geometricNormal, tangentX));
+  vec3 normal = normalize(geometricNormal - tangentX * (normalWaveA - normalWaveB) * 0.026
+    - tangentY * (normalWaveC - normalWaveB) * 0.022);
   float diffuse = max(dot(normal, lightDirection), 0.0);
   float specular = pow(max(dot(reflect(-lightDirection, normal), viewDirection), 0.0), 54.0);
   float broadSpecular = pow(max(dot(reflect(-lightDirection, normal), viewDirection), 0.0), 12.0);
@@ -130,6 +140,7 @@ void main() {
 
   vec3 body = mix(uBaseColor, uAccentColor, 0.12 + fluidVein * 0.54 + cloud * 0.18);
   body = mix(body, uGlowColor, innerCurrent * 0.22);
+  body += uGlowColor * abs(heightField) * 0.035;
   vec3 color = body * (0.16 + diffuse * 1.08 + fillDiffuse * 0.16);
   float rimLight = pow(1.0 - max(dot(normal, viewDirection), 0.0), 3.1);
   color += uGlowColor * (fresnel * 0.82 + rimLight * 0.34 + fluidVein * (0.13 + uEnergy * 0.20));
