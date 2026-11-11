@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, StyleSheet, View } from 'react-native';
 import { GLView } from 'expo-gl';
 
@@ -82,8 +82,6 @@ void main() {
   color += uAccentColor * core;
   color = pow(max(color, 0.0), vec3(0.88));
 
-  float edge = smoothstep(radius + 0.012, radius - 0.018, length(position));
-  color *= edge;
   gl_FragColor = vec4(color, 1.0);
 }
 `;
@@ -145,6 +143,7 @@ export default function EzraOrb3D({ status, level = 0 }: OrbStatus) {
   const levelRef = useRef(level);
   const reducedMotionRef = useRef(false);
   const disposeRef = useRef<(() => void) | null>(null);
+  const [rendererFailed, setRendererFailed] = useState(false);
 
   statusRef.current = status;
   levelRef.current = level;
@@ -238,6 +237,7 @@ export default function EzraOrb3D({ status, level = 0 }: OrbStatus) {
       frameHandle = requestAnimationFrame(render);
     } catch (error) {
       console.warn('EZRA orb renderer could not initialize:', error);
+      setRendererFailed(true);
     }
 
     disposeRef.current = () => {
@@ -250,7 +250,17 @@ export default function EzraOrb3D({ status, level = 0 }: OrbStatus) {
 
   return (
     <View style={styles.stage}>
-      <GLView style={styles.canvas} onContextCreate={onContextCreate} />
+      {rendererFailed ? (
+        <View style={styles.fallback}>
+          <View style={styles.fallbackAura} />
+          <View style={styles.fallbackSphere}>
+            <View style={styles.fallbackHighlight} />
+            <View style={styles.fallbackCore} />
+          </View>
+        </View>
+      ) : (
+        <GLView style={styles.canvas} onContextCreate={onContextCreate} />
+      )}
     </View>
   );
 }
@@ -268,4 +278,9 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  fallback: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
+  fallbackAura: { position: 'absolute', width: 270, height: 270, borderRadius: 135, backgroundColor: '#8E286F', opacity: 0.24, shadowColor: '#E65AB9', shadowOpacity: 1, shadowRadius: 50, elevation: 20 },
+  fallbackSphere: { width: 258, height: 258, borderRadius: 129, overflow: 'hidden', borderWidth: 2, borderColor: '#D65BAF', backgroundColor: '#350A2C', alignItems: 'center', justifyContent: 'center', shadowColor: '#D83D9E', shadowOpacity: 0.9, shadowRadius: 34, elevation: 24 },
+  fallbackHighlight: { position: 'absolute', width: 110, height: 58, top: 26, left: 40, borderRadius: 60, backgroundColor: 'rgba(255,225,247,0.22)', transform: [{ rotate: '-32deg' }] },
+  fallbackCore: { width: 90, height: 90, borderRadius: 45, backgroundColor: 'rgba(255,115,200,0.2)', borderWidth: 1, borderColor: 'rgba(255,191,231,0.35)' },
 });
