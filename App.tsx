@@ -152,9 +152,9 @@ function EzraOrb({ status, voiceLevel = 0 }: { status: string; voiceLevel?: numb
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const stageSize = Math.max(260, Math.min(344, screenWidth - 64, screenHeight - 440));
   const waveform = useRef(Array.from({ length: 9 }, () => new Animated.Value(0.18))).current;
-  const listening = status.includes('يستمع');
+  const listening = status.includes('يستمع') || status.includes('أستمع');
   const thinking = status.includes('أفكر');
-  const speaking = status.includes('يتحدث');
+  const speaking = status.includes('يتحدث') || status.includes('أتحدث');
   useEffect(() => {
     if (listening) {
       waveform.forEach((bar, index) => {
