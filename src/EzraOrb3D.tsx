@@ -49,11 +49,13 @@ void main() {
     : uMode > 1.5 ? 0.30 + thinkingWave * 0.30
     : uMode > 0.5 ? uPulse
     : 0.18 + 0.08 * sin(uTime * 0.72);
-  float ringTravel = uMode > 1.5 ? 0.018 : 0.035;
-  float ringPhase = radial - (0.98 + ringTravel * sin(uTime * (uMode > 2.5 ? 3.1 : 2.0)));
-  float ringOne = exp(-pow(ringPhase * 34.0, 2.0));
-  float ringTwo = exp(-pow((radial - 1.105 - ringTravel * 1.28 * sin(uTime * 1.55 + 1.2)) * 27.0, 2.0));
-  float ringThree = exp(-pow((radial - 1.235 - ringTravel * 1.57 * sin(uTime * 1.25 + 2.1)) * 23.0, 2.0));
+  // Keep all three energy rings inside the square GL viewport so they remain
+  // continuous on phone screens instead of being clipped at the canvas edges.
+  float ringTravel = uMode > 1.5 ? 0.009 : 0.016;
+  float ringPhase = radial - (0.895 + ringTravel * sin(uTime * (uMode > 2.5 ? 3.1 : 2.0)));
+  float ringOne = exp(-pow(ringPhase * 48.0, 2.0));
+  float ringTwo = exp(-pow((radial - 0.935 - ringTravel * 0.72 * sin(uTime * 1.55 + 1.2)) * 42.0, 2.0));
+  float ringThree = exp(-pow((radial - 0.975 - ringTravel * 0.48 * sin(uTime * 1.25 + 2.1)) * 36.0, 2.0));
   float ringStrength = (0.018 + stateActivity * 0.112) * (0.72 + 0.28 * sin(uTime * (uMode > 2.5 ? 5.4 : 2.2)));
   background += uAccentColor * (ringOne * ringStrength + ringTwo * ringStrength * 0.72 + ringThree * ringStrength * 0.48);
 
@@ -62,7 +64,7 @@ void main() {
     float fi = float(i);
     float orbitSpeed = uMode > 2.5 ? 0.145 : uMode > 1.5 ? 0.052 : 0.085;
     float angle = fi * 0.5236 + uTime * (orbitSpeed + fi * 0.004);
-    float orbit = 1.035 + 0.145 * sin(fi * 1.91 + uTime * (uMode > 1.5 ? 0.18 : 0.31));
+    float orbit = 0.915 + 0.065 * sin(fi * 1.91 + uTime * (uMode > 1.5 ? 0.18 : 0.31));
     vec2 particle = vec2(cos(angle), sin(angle)) * orbit;
     float particleSize = 0.0065 + 0.0045 * mod(fi, 3.0);
     float particleGlow = exp(-pow(length(p - particle) / particleSize, 2.0));
