@@ -222,6 +222,7 @@ export default function App() {
   const [speechPitch, setSpeechPitch] = useState(DEFAULT_EZRA_VOICE.pitch);
   const [responseLanguage, setResponseLanguage] = useState<'ar' | 'en'>('ar');
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
+  const chatScrollRef = useRef<ScrollView | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [attachment, setAttachment] = useState<Attachment | null>(null);
   const [isListening, setIsListening] = useState(false);
@@ -2252,7 +2253,7 @@ export default function App() {
       <StatusBar style="light" />
       <KeyboardAvoidingView
         style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <View style={styles.header}>
           <View style={styles.brand}>
@@ -2484,9 +2485,12 @@ export default function App() {
         <EzraOrb status={isListening ? 'أستمع إليك الآن' : speakingMessageId ? 'أتحدث إليك' : (sending || chatLoading) ? 'أفكر في كلامك…' : 'أنا معك'} />
 
         <ScrollView
+          ref={chatScrollRef}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           style={styles.chat}
           contentContainerStyle={styles.chatContent}
+          onContentSizeChange={() => chatScrollRef.current?.scrollToEnd({ animated: true })}
           showsVerticalScrollIndicator={false}
         >
           {messages.map(item => (
@@ -2848,7 +2852,7 @@ const styles = StyleSheet.create({
   },
   attachButton: { width: 29, alignItems: 'center' },
   attachText: { color: '#BBA7BB', fontSize: 25 },
-  input: { flex: 1, color: '#F5F0F5', fontSize: 14, maxHeight: 95, paddingVertical: 13, textAlign: 'right', writingDirection: 'rtl' },
+  input: { flex: 1, color: '#F5F0F5', fontSize: 14, minHeight: 44, maxHeight: 120, paddingTop: 11, paddingBottom: 9, textAlignVertical: 'top', textAlign: 'right', writingDirection: 'rtl' },
   voiceButton: { width: 32, height: 35, alignItems: 'center', justifyContent: 'center' },
   voiceButtonActive: { backgroundColor: '#493449', borderRadius: 10 },
   voiceIcon: { color: '#D5A9CC', fontSize: 21 },
