@@ -21,6 +21,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
+import * as Clipboard from 'expo-clipboard';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import * as Speech from 'expo-speech';
@@ -2319,49 +2320,23 @@ export default function App() {
       >
         <View style={styles.header}>
           <View style={styles.brand}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>E</Text>
-            </View>
-            <View>
-              <Text style={styles.name}>EZRA</Text>
-              <View style={styles.statusRow}>
-                <View style={styles.onlineDot} />
-                <Text style={styles.status}>مساعدك الشخصي</Text>
-              </View>
-            </View>
+            <View style={styles.avatar}><Text style={styles.avatarText}>✦</Text></View>
+            <Text style={styles.name}>EZRA</Text>
           </View>
           <View style={styles.headerActions}>
-            <TouchableOpacity
-              style={styles.historyButton}
-              onPress={returnToVoiceHome}
-              accessibilityLabel="العودة إلى الشاشة الصوتية"
-            >
-              <Text style={styles.newChatText}>◉ الصوت</Text>
+            <TouchableOpacity style={styles.historyButton} onPress={openConversationHistory} accessibilityRole="button" accessibilityLabel="سجل المحادثات">
+              <Text style={styles.headerActionText}>السجل  ◷</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.historyButton}
-              onPress={openConversationHistory}
-              accessibilityLabel="سجل المحادثات"
-            >
-              <Text style={styles.newChatText}>☷ المحادثات</Text>
+            <TouchableOpacity style={styles.newChatButton} onPress={startNewConversation} accessibilityRole="button" accessibilityLabel="بدء محادثة جديدة">
+              <Text style={styles.headerActionText}>محادثة جديدة  ＋</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.newChatButton}
-              onPress={startNewConversation}
-              accessibilityLabel="بدء محادثة جديدة"
-            >
-              <Text style={styles.newChatText}>＋ جديدة</Text>
-            </TouchableOpacity>
-          </View>
-          <TouchableOpacity
-            style={styles.privateTag}
-            onPress={() => Alert.alert('تسجيل الخروج', 'هل تريد تسجيل الخروج من حساب EZRA؟', [
+            <TouchableOpacity style={styles.logoutIconButton} onPress={() => Alert.alert('تسجيل الخروج', 'هل تريد تسجيل الخروج من حساب EZRA؟', [
               { text: 'إلغاء', style: 'cancel' },
               { text: 'تسجيل الخروج', style: 'destructive', onPress: () => { supabase.auth.signOut(); } },
-            ])}
-          >
-            <Text style={styles.privateText}>تسجيل الخروج</Text>
-          </TouchableOpacity>
+            ])} accessibilityLabel="تسجيل الخروج">
+              <Text style={styles.logoutIconText}>⋯</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <Modal
@@ -2538,14 +2513,6 @@ export default function App() {
 
         <View style={styles.line} />
 
-        <View style={styles.welcome}>
-          <Text style={styles.welcomeSmall}>مساحة صُممت لأجلك</Text>
-          <Text style={styles.welcomeTitle}>أهلًا بعودتك.</Text>
-          <Text style={styles.welcomeSubtitle}>أنا هنا لأستمع إليك وأساعدك.</Text>
-        </View>
-
-        <EzraOrb status={isListening ? 'أستمع إليك الآن' : speakingMessageId ? 'أتحدث إليك' : (sending || chatLoading) ? 'أفكر في كلامك…' : 'أنا معك'} />
-
         <ScrollView
           ref={chatScrollRef}
           keyboardShouldPersistTaps="handled"
@@ -2585,30 +2552,21 @@ export default function App() {
                   )}
                 </View>
                 {item.sender === 'ezra' && !!item.text && (
-                  <TouchableOpacity
-                    style={styles.speakButton}
-                    onPress={() => speak(item.text, item.id)}
-                    accessibilityLabel={speakingMessageId === item.id ? 'إيقاف قراءة الرد' : 'استمع إلى الرد'}
-                  >
-                    <Text style={styles.speakText}>{speakingMessageId === item.id ? '■  إيقاف' : '▶  استمع'}</Text>
-                  </TouchableOpacity>
+                  <View style={styles.messageTools}>
+                    <TouchableOpacity style={styles.speakButton} onPress={() => speak(item.text, item.id)} accessibilityLabel={speakingMessageId === item.id ? 'إيقاف قراءة الرد' : 'استمع إلى الرد'}>
+                      <Text style={styles.speakText}>{speakingMessageId === item.id ? '■ إيقاف' : '▶ استمع'}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.copyButton} onPress={() => Clipboard.setStringAsync(item.text).then(() => Alert.alert('تم النسخ', 'نُسخت رسالة EZRA إلى الحافظة.')).catch(() => Alert.alert('تعذّر النسخ', 'حاول مرة أخرى.'))} accessibilityRole="button" accessibilityLabel="نسخ رد إزرا">
+                      <Text style={styles.copyButtonText}>▢ نسخ</Text>
+                    </TouchableOpacity>
+                  </View>
                 )}
               </View>
             </View>
           ))}
         </ScrollView>
 
-        <View style={styles.quickActions}>
-          <TouchableOpacity style={styles.quickButton} onPress={() => setMessage('مرحبًا إزرا، أريد أن نتحدث.')}>
-            <Text style={styles.quickText}>✧  لنتحدث</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.quickButton} onPress={() => setMessage('ساعدني في تنظيم يومي.')}>
-            <Text style={styles.quickText}>◷  يومي</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.quickButton} onPress={openMemoryCenter}>
-            <Text style={styles.quickText}>♡  الذكريات</Text>
-          </TouchableOpacity>
-        </View>
+
 
         {attachment && (
           <View style={styles.pendingAttachment}>
@@ -2621,36 +2579,49 @@ export default function App() {
           </View>
         )}
 
+        {(sending || chatLoading) && (
+          <View style={styles.typingRow} accessibilityLiveRegion="polite">
+            <View style={styles.miniAvatar}><Text style={styles.miniAvatarText}>✦</Text></View>
+            <View style={styles.typingBubble}><Text style={styles.typingText}>{chatLoading ? 'جارٍ تحميل المحادثة…' : 'EZRA يكتب لك…  • • •'}</Text></View>
+          </View>
+        )}
         <View style={styles.composer}>
-          <TouchableOpacity
-            style={styles.attachButton}
-            onPress={chooseAttachment}
-            accessibilityLabel="إرفاق صورة أو ملف"
-          >
-            <Text style={styles.attachText}>＋</Text>
+          <TouchableOpacity style={styles.sendButton} onPress={() => sendMessage()} disabled={sending || chatLoading || (!message.trim() && !attachment)} accessibilityRole="button" accessibilityLabel="إرسال الرسالة">
+            <Text style={styles.sendIcon}>➤</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.voiceButton, isListening && styles.voiceButtonActive]} onPress={startListening} accessibilityLabel={isListening ? 'إيقاف الإدخال الصوتي' : 'بدء الإدخال الصوتي'}>
+            <Text style={styles.voiceIcon}>{isListening ? '■' : '♩'}</Text>
           </TouchableOpacity>
           <TextInput
             style={styles.input}
             textAlign="right"
-            placeholder="اكتب رسالتك إلى إزرا…"
-            placeholderTextColor="#777680"
+            placeholder="اكتب رسالتك…"
+            placeholderTextColor="#A18A9B"
             value={message}
             onChangeText={setMessage}
             multiline
             maxLength={3000}
+            textAlignVertical="center"
+            accessibilityLabel="نص الرسالة"
           />
-          <TouchableOpacity
-            style={[styles.voiceButton, isListening && styles.voiceButtonActive]}
-            onPress={startListening}
-            accessibilityLabel={isListening ? 'إيقاف الإدخال الصوتي' : 'بدء الإدخال الصوتي'}
-          >
-            <Text style={styles.voiceIcon}>{isListening ? '■' : '⌁'}</Text>
+          <TouchableOpacity style={styles.attachButton} onPress={chooseAttachment} accessibilityLabel="إرفاق صورة أو ملف">
+            <Text style={styles.attachText}>⌁</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.sendButton} onPress={() => sendMessage()} disabled={sending || chatLoading}>
-            <Text style={styles.sendIcon}>↑</Text>
+          <TouchableOpacity style={styles.attachButton} onPress={pickImage} accessibilityLabel="إرفاق صورة">
+            <Text style={styles.attachText}>▧</Text>
           </TouchableOpacity>
         </View>
-
+        <View style={styles.mainTabBar} accessibilityRole="tablist">
+          <TouchableOpacity style={styles.mainTab} accessibilityRole="tab" accessibilityState={{ selected: false }} onPress={() => setVoiceHome(true)}>
+            <Text style={styles.mainTabIcon}>⌂</Text><Text style={styles.mainTabLabel}>الرئيسية</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.mainTab, styles.mainTabActive]} accessibilityRole="tab" accessibilityState={{ selected: true }}>
+            <Text style={[styles.mainTabIcon, styles.mainTabIconActive]}>◌</Text><Text style={[styles.mainTabLabel, styles.mainTabLabelActive]}>المحادثة</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.mainTab} accessibilityRole="tab" accessibilityState={{ selected: false }} onPress={() => setSettingsVisible(true)}>
+            <Text style={styles.mainTabIcon}>⚙</Text><Text style={styles.mainTabLabel}>الإعدادات</Text>
+          </TouchableOpacity>
+        </View>
         <Text style={styles.footer}>{chatLoading ? 'جارٍ تحميل محادثتك…' : 'محادثتك محفوظة بخصوصية'}</Text>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -2760,18 +2731,18 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#101014' },
   container: { flex: 1, backgroundColor: '#101014' },
   header: {
-    minHeight: 76,
-    height: 'auto',
-    paddingHorizontal: 22,
-    paddingVertical: 10,
+    minHeight: 88,
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    paddingBottom: 14,
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    alignContent: 'center',
     justifyContent: 'space-between',
-    rowGap: 8,
+    rowGap: 10,
+    backgroundColor: 'rgba(14,5,12,0.72)',
   },
-  brand: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   avatar: {
     width: 43,
     height: 43,
@@ -2783,19 +2754,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarText: { color: '#E7B9D8', fontSize: 23, fontWeight: '600' },
-  name: { color: '#F5F0F5', fontSize: 17, letterSpacing: 4, fontWeight: '700' },
+  name: { color: '#D96B98', fontSize: 25, letterSpacing: 4, fontWeight: '700' },
+  headerActionText: { color: '#E7C7D8', fontSize: 11, fontWeight: '600' },
+  logoutIconButton: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(65,35,53,0.72)', borderWidth: 1, borderColor: '#70445D' },
+  logoutIconText: { color: '#E7B9D8', fontSize: 20, lineHeight: 22 },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
   onlineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#9EBD9D' },
   status: { color: '#96919D', fontSize: 9, letterSpacing: 0.6 },
   headerActions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: 6 },
-  historyButton: { paddingHorizontal: 8, paddingVertical: 7, borderRadius: 10, backgroundColor: '#211F27', borderWidth: 1, borderColor: '#493849' },
+  historyButton: { paddingHorizontal: 13, paddingVertical: 10, borderRadius: 22, backgroundColor: 'rgba(54,31,45,0.76)', borderWidth: 1, borderColor: '#654052' },
   newChatButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 10,
-    backgroundColor: '#29212B',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 22,
+    backgroundColor: 'rgba(75,35,58,0.86)',
     borderWidth: 1,
-    borderColor: '#6E4D69',
+    borderColor: '#9B587A',
   },
   newChatText: { color: '#E7B9D8', fontSize: 9, letterSpacing: 0.8 },
   privateTag: {
@@ -2851,8 +2825,8 @@ const styles = StyleSheet.create({
   welcomeSmall: { color: '#B58DAE', fontSize: 10, marginBottom: 10, textAlign: 'right' },
   welcomeTitle: { color: '#F5F0F5', fontSize: 27, fontWeight: '600', textAlign: 'right' },
   welcomeSubtitle: { color: '#918B98', fontSize: 13, marginTop: 7, textAlign: 'right' },
-  chat: { flex: 1 },
-  chatContent: { paddingHorizontal: 19, paddingBottom: 20, gap: 17 },
+  chat: { flex: 1, backgroundColor: '#0B050A' },
+  chatContent: { paddingHorizontal: 18, paddingTop: 24, paddingBottom: 24, gap: 20, flexGrow: 1 },
   messageRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 9 },
   userRow: { justifyContent: 'flex-end' },
   miniAvatar: {
@@ -2864,13 +2838,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   miniAvatarText: { color: '#E6B8D8', fontWeight: '700', fontSize: 13 },
-  messageColumn: { maxWidth: '86%', gap: 5 },
-  messageBubble: { maxWidth: '100%', paddingHorizontal: 15, paddingVertical: 12, borderRadius: 17 },
-  ezraBubble: { backgroundColor: '#201E26', borderBottomLeftRadius: 5 },
-  userBubble: { backgroundColor: '#493449', borderBottomRightRadius: 5 },
-  messageText: { color: '#F1ECF2', fontSize: 14, lineHeight: 22, textAlign: 'right', writingDirection: 'rtl' },
-  speakButton: { alignSelf: 'flex-start', paddingHorizontal: 7, paddingVertical: 3 },
-  speakText: { color: '#B58DAE', fontSize: 10 },
+  messageColumn: { maxWidth: '86%', gap: 6 },
+  messageBubble: { maxWidth: '100%', paddingHorizontal: 17, paddingVertical: 14, borderRadius: 21, borderWidth: 1 },
+  ezraBubble: { backgroundColor: 'rgba(24,19,25,0.96)', borderColor: '#45313F', borderBottomLeftRadius: 6 },
+  userBubble: { backgroundColor: 'rgba(91,43,65,0.88)', borderColor: '#874C68', borderBottomRightRadius: 6 },
+  messageText: { color: '#F7EAF2', fontSize: 16, lineHeight: 27, textAlign: 'right', writingDirection: 'rtl' },
+  messageTools: { flexDirection: 'row', alignItems: 'center', gap: 10, alignSelf: 'flex-start' },
+  speakButton: { paddingHorizontal: 7, paddingVertical: 4 },
+  speakText: { color: '#C68BAA', fontSize: 10 },
+  copyButton: { paddingHorizontal: 8, paddingVertical: 4 },
+  copyButtonText: { color: '#C68BAA', fontSize: 10 },
   attachmentChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2905,17 +2882,23 @@ const styles = StyleSheet.create({
   pendingText: { color: '#D5C5D5', fontSize: 11, flex: 1 },
   removeAttachment: { color: '#E7B9D8', fontSize: 21, paddingHorizontal: 6 },
   composer: {
-    marginHorizontal: 14,
-    minHeight: 57,
-    paddingHorizontal: 9,
+    marginHorizontal: 15,
+    marginTop: 8,
+    marginBottom: 10,
+    minHeight: 62,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#211F27',
+    backgroundColor: 'rgba(43,22,36,0.96)',
     borderWidth: 1,
-    borderColor: '#39323D',
-    borderRadius: 18,
-    gap: 7,
+    borderColor: '#70435D',
+    borderRadius: 32,
+    gap: 8,
   },
+  typingRow: { flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: 18, paddingVertical: 8 },
+  typingBubble: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18, backgroundColor: '#201720', borderWidth: 1, borderColor: '#50364A' },
+  typingText: { color: '#D8A7C2', fontSize: 12 },
   attachButton: { width: 29, alignItems: 'center' },
   attachText: { color: '#BBA7BB', fontSize: 25 },
   input: { flex: 1, color: '#F5F0F5', fontSize: 14, minHeight: 44, maxHeight: 120, paddingTop: 11, paddingBottom: 9, textAlignVertical: 'top', textAlign: 'right', writingDirection: 'rtl' },
@@ -2923,14 +2906,16 @@ const styles = StyleSheet.create({
   voiceButtonActive: { backgroundColor: '#493449', borderRadius: 10 },
   voiceIcon: { color: '#D5A9CC', fontSize: 21 },
   sendButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
-    backgroundColor: '#B58DAE',
+    width: 43,
+    height: 43,
+    borderRadius: 22,
+    backgroundColor: '#D45E91',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#F4A6CA',
   },
-  sendIcon: { color: '#171219', fontSize: 22, fontWeight: '700' },
+  sendIcon: { color: '#FFF4FA', fontSize: 22, fontWeight: '700' },
   footer: {
     color: '#68636E',
     fontSize: 8,
