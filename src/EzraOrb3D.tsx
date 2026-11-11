@@ -22,6 +22,7 @@ precision highp float;
 uniform vec2 uResolution;
 uniform float uTime;
 uniform float uEnergy;
+uniform float uPulse;
 uniform vec3 uBaseColor;
 uniform vec3 uAccentColor;
 uniform vec3 uGlowColor;
@@ -35,6 +36,25 @@ void main() {
   float innerAura = exp(-pow(radial * 1.65, 2.0));
   background += uGlowColor * outerAura * 0.20;
   background += uAccentColor * innerAura * 0.035;
+
+  // Soft concentric audio rings that expand with listening/speaking activity.
+  float ringPhase = radial - (0.98 + 0.035 * sin(uTime * 2.0));
+  float ringOne = exp(-pow(ringPhase * 34.0, 2.0));
+  float ringTwo = exp(-pow((radial - 1.105 - 0.045 * sin(uTime * 1.55 + 1.2)) * 27.0, 2.0));
+  float ringThree = exp(-pow((radial - 1.235 - 0.055 * sin(uTime * 1.25 + 2.1)) * 23.0, 2.0));
+  float ringStrength = (0.025 + uPulse * 0.105) * (0.65 + 0.35 * sin(uTime * 3.0));
+  background += uAccentColor * (ringOne * ringStrength + ringTwo * ringStrength * 0.72 + ringThree * ringStrength * 0.48);
+
+  // Small luminous particles orbit around the orb at different depths and speeds.
+  for (int i = 0; i < 9; i++) {
+    float fi = float(i);
+    float angle = fi * 0.698 + uTime * (0.12 + fi * 0.006);
+    float orbit = 1.02 + 0.17 * sin(fi * 2.13 + uTime * 0.42);
+    vec2 particle = vec2(cos(angle), sin(angle)) * orbit;
+    float particleSize = 0.009 + 0.006 * mod(fi, 3.0);
+    float particleGlow = exp(-pow(length(p - particle) / particleSize, 2.0));
+    background += mix(uAccentColor, uGlowColor, mod(fi, 2.0)) * particleGlow * (0.28 + uPulse * 0.42);
+  }
 
   vec3 rayOrigin = vec3(0.0, 0.0, 2.75);
   vec3 rayDirection = normalize(vec3(p * 1.02, -2.45));
@@ -172,6 +192,7 @@ export default function EzraOrb3D({ status, level = 0 }: OrbStatus) {
     let alive = true;
     let frameHandle = 0;
     let startTime = 0;
+    let lastFrame = 0;
     let program: any;
     let buffer: any;
 
@@ -204,6 +225,7 @@ export default function EzraOrb3D({ status, level = 0 }: OrbStatus) {
       const baseLocation = gl.getUniformLocation(program, 'uBaseColor');
       const accentLocation = gl.getUniformLocation(program, 'uAccentColor');
       const glowLocation = gl.getUniformLocation(program, 'uGlowColor');
+      const pulseLocation = gl.getUniformLocation(program, 'uPulse');
 
       gl.useProgram(program);
       gl.enableVertexAttribArray(positionLocation);
@@ -215,9 +237,15 @@ export default function EzraOrb3D({ status, level = 0 }: OrbStatus) {
 
       const render = (timestamp: number) => {
         if (!alive) return;
+        if (timestamp - lastFrame < 33) {
+          frameHandle = requestAnimationFrame(render);
+          return;
+        }
+        lastFrame = timestamp;
         if (!startTime) startTime = timestamp;
         const state = getState(statusRef.current);
         const palette = palettes[state];
+        const pulse = state === 'listening' ? 0.82 : state === 'speaking' ? 1 : state === 'thinking' ? 0.48 : 0.18;
         const time = reducedMotionRef.current ? 0 : (timestamp - startTime) / 1000;
         const energy = Math.max(0, Math.min(1, levelRef.current));
 
@@ -226,6 +254,7 @@ export default function EzraOrb3D({ status, level = 0 }: OrbStatus) {
         gl.useProgram(program);
         gl.uniform1f(timeLocation, time);
         gl.uniform1f(energyLocation, energy);
+        gl.uniform1f(pulseLocation, pulse);
         gl.uniform3f(baseLocation, ...palette.base);
         gl.uniform3f(accentLocation, ...palette.accent);
         gl.uniform3f(glowLocation, ...palette.glow);
