@@ -1384,6 +1384,19 @@ export default function App() {
     return false;
   };
 
+  const revealEzraReply = async (id: string, fullText: string) => {
+    const characters = Array.from(fullText);
+    setMessages(previous => [...previous, { id, sender: 'ezra', text: '' }]);
+    const chunkSize = 10;
+    for (let index = 0; index < characters.length; index += chunkSize) {
+      const visibleText = characters.slice(0, index + chunkSize).join('');
+      setMessages(previous => previous.map(item =>
+        item.id === id ? { ...item, text: visibleText } : item
+      ));
+      await new Promise<void>(resolve => setTimeout(resolve, 22));
+    }
+  };
+
   const sendMessage = async (voiceReply = false, voiceText?: string) => {
     const text = (voiceText ?? message).trim();
     if ((!text && !attachment) || !session || !conversationId || sending) return;
@@ -1532,16 +1545,10 @@ export default function App() {
 
         if (saveReplyError || !savedReply) {
           console.error('Could not save EZRA reply:', saveReplyError);
-          setMessages(previous => [
-            ...previous,
-            { id: playbackMessageId, sender: 'ezra', text: reply },
-          ]);
+          await revealEzraReply(playbackMessageId, reply);
           Alert.alert('لم يُحفظ الرد', 'إزرا أجاب، لكن تعذّر حفظ الرد في سجل المحادثة.');
         } else {
-          setMessages(previous => [
-            ...previous,
-            { id: savedReply.id, sender: 'ezra', text: reply },
-          ]);
+          await revealEzraReply(savedReply.id, reply);
         }
       }
     } catch (error) {
