@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Apply EZRA's conservative Q8_0 weight-storage optimization to upstream Habibi F5-TTS.
 
-Only 2-D Linear weight matrices are stored as Q8_0. Biases, embeddings, convolution
+For the Android arm64 build, only 2-D Linear weight matrices are stored as Q8_0. Biases, embeddings, convolution
 kernels, normalization parameters, and all other tensors retain upstream F32 storage.
 BackendWeightStore automatically keeps tensors as F32 when a row is not block-aligned.
 """
