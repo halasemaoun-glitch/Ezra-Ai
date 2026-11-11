@@ -245,6 +245,7 @@ export default function App() {
   const [selectedTtsVoice, setSelectedTtsVoice] = useState<string | null>(null);
   const [selectedEnglishTtsVoice, setSelectedEnglishTtsVoice] = useState<string | null>(null);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [chatLoading, setChatLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [isRevealingReply, setIsRevealingReply] = useState(false);
@@ -1853,6 +1854,18 @@ export default function App() {
     }
   };
 
+  const copyMessage = async (text: string, messageId: string) => {
+    try {
+      await Clipboard.setStringAsync(text);
+      setCopiedMessageId(messageId);
+      setTimeout(() => {
+        setCopiedMessageId(current => current === messageId ? null : current);
+      }, 1800);
+    } catch {
+      Alert.alert('تعذّر النسخ', 'حاول مرة أخرى.');
+    }
+  };
+
   const speak = async (text: string, messageId: string) => {
     if (speakingMessageId === messageId) {
       Speech.stop();
@@ -2569,11 +2582,11 @@ export default function App() {
                 </View>
                 {item.sender === 'ezra' && !!item.text && (
                   <View style={styles.messageTools}>
-                    <TouchableOpacity style={styles.speakButton} onPress={() => speak(item.text, item.id)} accessibilityLabel={speakingMessageId === item.id ? 'إيقاف قراءة الرد' : 'استمع إلى الرد'}>
+                    <TouchableOpacity style={styles.speakButton} onPress={() => speak(item.text, item.id)} accessibilityRole="button" accessibilityLabel={speakingMessageId === item.id ? 'إيقاف قراءة الرد' : 'استمع إلى الرد'} accessibilityState={{ selected: speakingMessageId === item.id }} hitSlop={8}>
                       <Text style={styles.speakText}>{speakingMessageId === item.id ? '■ إيقاف' : '▶ استمع'}</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.copyButton} onPress={() => Clipboard.setStringAsync(item.text).then(() => Alert.alert('تم النسخ', 'نُسخت رسالة EZRA إلى الحافظة.')).catch(() => Alert.alert('تعذّر النسخ', 'حاول مرة أخرى.'))} accessibilityRole="button" accessibilityLabel="نسخ رد إزرا">
-                      <Text style={styles.copyButtonText}>▢ نسخ</Text>
+                    <TouchableOpacity style={styles.copyButton} onPress={() => copyMessage(item.text, item.id)} accessibilityRole="button" accessibilityLabel="نسخ رد إزرا" accessibilityState={{ selected: copiedMessageId === item.id }} hitSlop={8}>
+                      <Text style={styles.copyButtonText}>{copiedMessageId === item.id ? '✓ تم النسخ' : '▢ نسخ'}</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -2855,21 +2868,21 @@ const styles = StyleSheet.create({
   miniAvatarText: { color: '#F0B6DD', fontWeight: '800', fontSize: 14 },
   userAvatar: { backgroundColor: '#51263F', borderColor: '#B96891' },
   userAvatarText: { color: '#FFE8F4', fontWeight: '800', fontSize: 13 },
-  messageColumn: { maxWidth: '84%', gap: 6 },
+  messageColumn: { maxWidth: '84%', minWidth: 0, flexShrink: 1, gap: 6 },
   messageSenderLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 1.15, marginBottom: 1 },
   ezraSenderLabel: { color: '#D28AB8', alignSelf: 'flex-start', paddingLeft: 3 },
   userSenderLabel: { color: '#E6A3C5', alignSelf: 'flex-end', paddingRight: 3 },
   messageBubble: { maxWidth: '100%', paddingHorizontal: 17, paddingVertical: 14, borderRadius: 21, borderWidth: 1 },
   ezraBubble: { backgroundColor: '#17121B', borderColor: '#65435F', borderBottomLeftRadius: 7, borderTopLeftRadius: 20 },
   userBubble: { backgroundColor: '#482238', borderColor: '#A6537C', borderBottomRightRadius: 7, borderTopRightRadius: 20 },
-  messageText: { color: '#F7EAF2', fontSize: 15, lineHeight: 26 },
+  messageText: { color: '#F7EAF2', fontSize: 15, lineHeight: 27, flexShrink: 1 },
   rtlMessageText: { textAlign: 'right', writingDirection: 'rtl' },
   ltrMessageText: { textAlign: 'left', writingDirection: 'ltr' },
-  messageTools: { flexDirection: 'row', alignItems: 'center', gap: 10, alignSelf: 'flex-start' },
-  speakButton: { paddingHorizontal: 7, paddingVertical: 4 },
-  speakText: { color: '#C68BAA', fontSize: 10 },
-  copyButton: { paddingHorizontal: 8, paddingVertical: 4 },
-  copyButtonText: { color: '#C68BAA', fontSize: 10 },
+  messageTools: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', flexWrap: 'wrap', marginTop: 1 },
+  speakButton: { minHeight: 32, justifyContent: 'center', paddingHorizontal: 11, paddingVertical: 6, borderRadius: 12, backgroundColor: 'rgba(198,139,170,0.09)', borderWidth: 1, borderColor: 'rgba(198,139,170,0.22)' },
+  speakText: { color: '#D9A4C2', fontSize: 11, fontWeight: '600' },
+  copyButton: { minHeight: 32, justifyContent: 'center', paddingHorizontal: 11, paddingVertical: 6, borderRadius: 12, backgroundColor: 'rgba(198,139,170,0.09)', borderWidth: 1, borderColor: 'rgba(198,139,170,0.22)' },
+  copyButtonText: { color: '#D9A4C2', fontSize: 11, fontWeight: '600' },
   attachmentChip: {
     flexDirection: 'row',
     alignItems: 'center',
