@@ -1998,7 +1998,38 @@ export default function App() {
               <Text style={styles.voiceMicIcon}>{speakingMessageId ? 'Ⅱ' : isListening ? '■' : '⌁'}</Text>
             </TouchableOpacity>
           </View>
-          {/* Keep the voice home focused on the orb and the single manual microphone control. */}
+          <View style={styles.mainTabBar} accessibilityRole="tablist">
+            <TouchableOpacity
+              style={[styles.mainTab, styles.mainTabActive]}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: true }}
+              accessibilityLabel="الرئيسية"
+              onPress={() => setVoiceHome(true)}
+            >
+              <Text style={[styles.mainTabIcon, styles.mainTabIconActive]}>✦</Text>
+              <Text style={[styles.mainTabLabel, styles.mainTabLabelActive]}>الرئيسية</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.mainTab}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: false }}
+              accessibilityLabel="المحادثة"
+              onPress={() => setVoiceHome(false)}
+            >
+              <Text style={styles.mainTabIcon}>◌</Text>
+              <Text style={styles.mainTabLabel}>المحادثة</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.mainTab}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: false }}
+              accessibilityLabel="الإعدادات"
+              onPress={() => setSettingsVisible(true)}
+            >
+              <Text style={styles.mainTabIcon}>⚙</Text>
+              <Text style={styles.mainTabLabel}>الإعدادات</Text>
+            </TouchableOpacity>
+          </View>
           <Modal visible={settingsVisible} transparent animationType="slide" onRequestClose={() => setSettingsVisible(false)}>
             <View style={styles.settingsBackdrop}>
               <View style={styles.settingsPanel}>
@@ -2614,7 +2645,14 @@ const styles = StyleSheet.create({
   rateButton: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#38263A', alignItems: 'center', justifyContent: 'center' },
   rateButtonText: { color: '#F0C9E4', fontSize: 21 },
   settingsFootnote: { color: '#827684', fontSize: 10, textAlign: 'right', marginTop: 18, lineHeight: 17 },
-  voiceHome: { flex: 1, alignItems: 'center', justifyContent: 'space-between', paddingTop: 34, paddingBottom: 24, paddingHorizontal: 24, backgroundColor: '#08070D' },
+  voiceHome: { flex: 1, alignItems: 'center', justifyContent: 'space-between', paddingTop: 34, paddingBottom: 8, paddingHorizontal: 24, backgroundColor: '#08070D' },
+  mainTabBar: { width: '100%', minHeight: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', borderTopWidth: 1, borderTopColor: 'rgba(137,76,119,0.28)', backgroundColor: 'rgba(18,12,22,0.96)', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 7, marginTop: 8 },
+  mainTab: { flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', gap: 3, borderRadius: 14 },
+  mainTabActive: { backgroundColor: 'rgba(173,75,143,0.16)', borderWidth: 1, borderColor: 'rgba(210,112,178,0.28)' },
+  mainTabIcon: { color: '#897888', fontSize: 19, lineHeight: 22 },
+  mainTabIconActive: { color: '#F0A5D4' },
+  mainTabLabel: { color: '#8E7D8E', fontSize: 10, fontWeight: '500' },
+  mainTabLabelActive: { color: '#F0C5E2', fontWeight: '700' },
 
   voiceOrbWrap: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center' },
 
