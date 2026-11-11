@@ -6,6 +6,7 @@ import {
   AppState,
   BackHandler,
   Easing,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -115,6 +116,7 @@ type Attachment = {
   mimeType?: string;
   base64?: string;
   textContent?: string;
+  sizeBytes?: number;
 };
 
 type ConversationSummary = {
@@ -1758,6 +1760,7 @@ export default function App() {
         kind: 'image',
         mimeType,
         base64: asset.base64,
+        sizeBytes: asset.fileSize,
       });
     } catch {
       Alert.alert('الصورة غير متاحة', 'تعذّر فتح معرض الصور.');
@@ -1792,7 +1795,7 @@ export default function App() {
         Alert.alert('الملف كبير جدًا', 'اختر ملفًا نصيًا أصغر من 1 ميغابايت.');
         return;
       }
-      setAttachment({ uri: file.uri, name: file.name, kind: 'file', mimeType: file.mimeType, textContent });
+      setAttachment({ uri: file.uri, name: file.name, kind: 'file', mimeType: file.mimeType, textContent, sizeBytes: file.size });
     } catch {
       Alert.alert('تعذّر فتح الملفات', 'حاول مرة أخرى.');
     }
@@ -2570,13 +2573,28 @@ export default function App() {
                 >
                   {!!item.text && <Text selectable style={[styles.messageText, /[\u0590-\u08FF]/.test(item.text) ? styles.rtlMessageText : styles.ltrMessageText]}>{item.text}</Text>}
                   {item.attachment && (
-                    <View style={styles.attachmentChip}>
-                      <Text style={styles.attachmentIcon}>
-                        {item.attachment.kind === 'image' ? '▧' : '▤'}
-                      </Text>
-                      <Text style={styles.attachmentName} numberOfLines={1}>
-                        {item.attachment.name}
-                      </Text>
+                    <View style={styles.messageAttachment}>
+                      {item.attachment.kind === 'image' && !!item.attachment.uri && (
+                        <Image
+                          source={{ uri: item.attachment.uri }}
+                          style={styles.messageImagePreview}
+                          resizeMode="cover"
+                          accessibilityLabel="الصورة المرفقة"
+                        />
+                      )}
+                      <View style={styles.attachmentChip}>
+                        <Text style={styles.attachmentIcon}>
+                          {item.attachment.kind === 'image' ? '▧' : '▤'}
+                        </Text>
+                        <View style={styles.attachmentDetails}>
+                          <Text style={styles.attachmentName} numberOfLines={1}>
+                            {item.attachment.name}
+                          </Text>
+                          {!!item.attachment.sizeBytes && (
+                            <Text style={styles.attachmentSize}>{formatBytes(item.attachment.sizeBytes)}</Text>
+                          )}
+                        </View>
+                      </View>
                     </View>
                   )}
                 </View>
@@ -2604,10 +2622,22 @@ export default function App() {
 
         {attachment && (
           <View style={styles.pendingAttachment}>
-            <Text style={styles.pendingText} numberOfLines={1}>
-              {attachment.kind === 'image' ? 'صورة جاهزة للتحليل: ' : 'ملف جاهز للقراءة: '}{attachment.name}
-            </Text>
-            <TouchableOpacity onPress={() => setAttachment(null)}>
+            {attachment.kind === 'image' && (
+              <Image
+                source={{ uri: attachment.uri }}
+                style={styles.pendingImagePreview}
+                resizeMode="cover"
+                accessibilityLabel="معاينة الصورة قبل الإرسال"
+              />
+            )}
+            <View style={styles.pendingAttachmentDetails}>
+              <Text style={styles.pendingText} numberOfLines={1}>
+                {attachment.kind === 'image' ? 'صورة جاهزة للتحليل' : 'ملف جاهز للقراءة'}
+              </Text>
+              <Text style={styles.pendingFileName} numberOfLines={1}>{attachment.name}</Text>
+              {!!attachment.sizeBytes && <Text style={styles.attachmentSize}>{formatBytes(attachment.sizeBytes)}</Text>}
+            </View>
+            <TouchableOpacity style={styles.removeAttachmentButton} onPress={() => setAttachment(null)} accessibilityRole="button" accessibilityLabel="إزالة المرفق" hitSlop={8}>
               <Text style={styles.removeAttachment}>×</Text>
             </TouchableOpacity>
           </View>
@@ -2883,17 +2913,28 @@ const styles = StyleSheet.create({
   speakText: { color: '#D9A4C2', fontSize: 11, fontWeight: '600' },
   copyButton: { minHeight: 32, justifyContent: 'center', paddingHorizontal: 11, paddingVertical: 6, borderRadius: 12, backgroundColor: 'rgba(198,139,170,0.09)', borderWidth: 1, borderColor: 'rgba(198,139,170,0.22)' },
   copyButtonText: { color: '#D9A4C2', fontSize: 11, fontWeight: '600' },
+  messageAttachment: { gap: 7, marginTop: 9, maxWidth: '100%' },
+  messageImagePreview: { width: 184, height: 132, borderRadius: 12, backgroundColor: '#211923' },
   attachmentChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: 5,
     padding: 9,
     borderRadius: 10,
     backgroundColor: '#17151C',
+    maxWidth: '100%',
   },
+  attachmentDetails: { flex: 1, minWidth: 0, gap: 2 },
   attachmentIcon: { color: '#D5A9CC', fontSize: 17 },
   attachmentName: { color: '#E8DCE8', fontSize: 11, maxWidth: 190 },
+  attachmentSize: { color: '#A995A8', fontSize: 9 },
+  pendingAttachment: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, marginHorizontal: 14, marginBottom: 8, borderRadius: 14, backgroundColor: '#211923', borderWidth: 1, borderColor: '#69435D' },
+  pendingImagePreview: { width: 58, height: 58, borderRadius: 9, backgroundColor: '#302331' },
+  pendingAttachmentDetails: { flex: 1, minWidth: 0, gap: 3 },
+  pendingText: { color: '#DDA8CA', fontSize: 10, fontWeight: '700' },
+  pendingFileName: { color: '#F0E4EE', fontSize: 11 },
+  removeAttachmentButton: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#39232F' },
+  removeAttachment: { color: '#F0B4CF', fontSize: 23, lineHeight: 25 },
   quickActions: { flexDirection: 'row', paddingHorizontal: 15, gap: 7, paddingVertical: 12 },
   quickButton: {
     flex: 1,
