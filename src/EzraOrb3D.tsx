@@ -103,6 +103,11 @@ void main() {
   float diffuse = max(dot(normal, lightDirection), 0.0);
   float specular = pow(max(dot(reflect(-lightDirection, normal), viewDirection), 0.0), 54.0);
   float broadSpecular = pow(max(dot(reflect(-lightDirection, normal), viewDirection), 0.0), 12.0);
+  // A softer secondary light separates the sphere from its dark background
+  // and adds a second, restrained reflection across the glass-like surface.
+  vec3 fillDirection = normalize(vec3(1.25, -0.48, 1.7));
+  float fillDiffuse = max(dot(normal, fillDirection), 0.0);
+  float fillSpecular = pow(max(dot(reflect(-fillDirection, normal), viewDirection), 0.0), 38.0);
   float fresnel = pow(1.0 - max(dot(normal, viewDirection), 0.0), 2.35);
 
   // Surface currents use a different tempo for each state: calm at rest,
@@ -125,10 +130,11 @@ void main() {
 
   vec3 body = mix(uBaseColor, uAccentColor, 0.12 + fluidVein * 0.54 + cloud * 0.18);
   body = mix(body, uGlowColor, innerCurrent * 0.22);
-  vec3 color = body * (0.16 + diffuse * 1.08);
+  vec3 color = body * (0.16 + diffuse * 1.08 + fillDiffuse * 0.16);
   float rimLight = pow(1.0 - max(dot(normal, viewDirection), 0.0), 3.1);
   color += uGlowColor * (fresnel * 0.82 + rimLight * 0.34 + fluidVein * (0.13 + uEnergy * 0.20));
   color += vec3(1.0, 0.82, 0.97) * specular * 1.18;
+  color += vec3(1.0, 0.88, 1.0) * fillSpecular * 0.34;
   color += uAccentColor * broadSpecular * 0.28;
   color += mix(uAccentColor, uGlowColor, cloud) * cloud * 0.12;
 
