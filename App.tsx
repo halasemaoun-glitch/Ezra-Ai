@@ -1641,6 +1641,15 @@ export default function App() {
         lang: responseLanguage === 'en' ? 'en-US' : 'ar-DZ',
         interimResults: true,
         continuous: false,
+        // Shorten Android's end-of-utterance silence window so a completed thought
+        // is submitted sooner, while retaining a pause buffer to avoid cutting phrases.
+        // Some Android recognition providers may ignore these optional intent extras.
+        ...(Platform.OS === 'android' ? {
+          androidIntentOptions: {
+            EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS: 700,
+            EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 1300,
+          },
+        } : {}),
         volumeChangeEventOptions: { enabled: true, intervalMillis: 90 },
       });
     } catch {
