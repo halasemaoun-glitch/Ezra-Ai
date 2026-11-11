@@ -2528,18 +2528,21 @@ export default function App() {
               style={[styles.messageRow, item.sender === 'user' && styles.userRow]}
             >
               {item.sender === 'ezra' && (
-                <View style={styles.miniAvatar}>
+                <View style={[styles.miniAvatar, styles.ezraAvatar]}>
                   <Text style={styles.miniAvatarText}>E</Text>
                 </View>
               )}
               <View style={styles.messageColumn}>
+                <Text style={[styles.messageSenderLabel, item.sender === 'user' ? styles.userSenderLabel : styles.ezraSenderLabel]}>
+                  {item.sender === 'user' ? 'أنت' : 'EZRA'}
+                </Text>
                 <View
                   style={[
                     styles.messageBubble,
                     item.sender === 'user' ? styles.userBubble : styles.ezraBubble,
                   ]}
                 >
-                  {!!item.text && <Text style={[styles.messageText, /[\u0600-\u06FF]/.test(item.text) ? styles.rtlMessageText : styles.ltrMessageText]}>{item.text}</Text>}
+                  {!!item.text && <Text selectable style={[styles.messageText, /[\u0590-\u08FF]/.test(item.text) ? styles.rtlMessageText : styles.ltrMessageText]}>{item.text}</Text>}
                   {item.attachment && (
                     <View style={styles.attachmentChip}>
                       <Text style={styles.attachmentIcon}>
@@ -2562,6 +2565,11 @@ export default function App() {
                   </View>
                 )}
               </View>
+              {item.sender === 'user' && (
+                <View style={[styles.miniAvatar, styles.userAvatar]}>
+                  <Text style={styles.userAvatarText}>أ</Text>
+                </View>
+              )}
             </View>
           ))}
         </ScrollView>
@@ -2827,22 +2835,21 @@ const styles = StyleSheet.create({
   welcomeSubtitle: { color: '#918B98', fontSize: 13, marginTop: 7, textAlign: 'right' },
   chat: { flex: 1, backgroundColor: '#0B050A' },
   chatContent: { paddingHorizontal: 18, paddingTop: 24, paddingBottom: 24, gap: 20, flexGrow: 1 },
-  messageRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 9 },
+  messageRow: { width: '100%', flexDirection: 'row', alignItems: 'flex-end', gap: 9 },
   userRow: { justifyContent: 'flex-end' },
-  miniAvatar: {
-    width: 27,
-    height: 27,
-    borderRadius: 10,
-    backgroundColor: '#352735',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  miniAvatarText: { color: '#E6B8D8', fontWeight: '700', fontSize: 13 },
-  messageColumn: { maxWidth: '86%', gap: 6 },
+  miniAvatar: { width: 30, height: 30, borderRadius: 11, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  ezraAvatar: { backgroundColor: '#30202F', borderColor: '#A85C91' },
+  miniAvatarText: { color: '#F0B6DD', fontWeight: '800', fontSize: 14 },
+  userAvatar: { backgroundColor: '#51263F', borderColor: '#B96891' },
+  userAvatarText: { color: '#FFE8F4', fontWeight: '800', fontSize: 13 },
+  messageColumn: { maxWidth: '84%', gap: 6 },
+  messageSenderLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 1.15, marginBottom: 1 },
+  ezraSenderLabel: { color: '#D28AB8', alignSelf: 'flex-start', paddingLeft: 3 },
+  userSenderLabel: { color: '#E6A3C5', alignSelf: 'flex-end', paddingRight: 3 },
   messageBubble: { maxWidth: '100%', paddingHorizontal: 17, paddingVertical: 14, borderRadius: 21, borderWidth: 1 },
-  ezraBubble: { backgroundColor: 'rgba(24,19,25,0.96)', borderColor: '#45313F', borderBottomLeftRadius: 6 },
-  userBubble: { backgroundColor: 'rgba(91,43,65,0.88)', borderColor: '#874C68', borderBottomRightRadius: 6 },
-  messageText: { color: '#F7EAF2', fontSize: 16, lineHeight: 27 },
+  ezraBubble: { backgroundColor: '#17121B', borderColor: '#65435F', borderBottomLeftRadius: 7, borderTopLeftRadius: 20 },
+  userBubble: { backgroundColor: '#482238', borderColor: '#A6537C', borderBottomRightRadius: 7, borderTopRightRadius: 20 },
+  messageText: { color: '#F7EAF2', fontSize: 15, lineHeight: 26 },
   rtlMessageText: { textAlign: 'right', writingDirection: 'rtl' },
   ltrMessageText: { textAlign: 'left', writingDirection: 'ltr' },
   messageTools: { flexDirection: 'row', alignItems: 'center', gap: 10, alignSelf: 'flex-start' },
