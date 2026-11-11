@@ -2539,7 +2539,7 @@ export default function App() {
                     item.sender === 'user' ? styles.userBubble : styles.ezraBubble,
                   ]}
                 >
-                  {!!item.text && <Text style={styles.messageText}>{item.text}</Text>}
+                  {!!item.text && <Text style={[styles.messageText, /[\u0600-\u06FF]/.test(item.text) ? styles.rtlMessageText : styles.ltrMessageText]}>{item.text}</Text>}
                   {item.attachment && (
                     <View style={styles.attachmentChip}>
                       <Text style={styles.attachmentIcon}>
@@ -2593,8 +2593,8 @@ export default function App() {
             <Text style={styles.voiceIcon}>{isListening ? '■' : '♩'}</Text>
           </TouchableOpacity>
           <TextInput
-            style={styles.input}
-            textAlign="right"
+            style={[styles.input, /[\u0600-\u06FF]/.test(message) ? styles.rtlInput : styles.ltrInput]}
+            textAlign={/[\u0600-\u06FF]/.test(message) ? 'right' : 'left'}
             placeholder="اكتب رسالتك…"
             placeholderTextColor="#A18A9B"
             value={message}
@@ -2842,7 +2842,9 @@ const styles = StyleSheet.create({
   messageBubble: { maxWidth: '100%', paddingHorizontal: 17, paddingVertical: 14, borderRadius: 21, borderWidth: 1 },
   ezraBubble: { backgroundColor: 'rgba(24,19,25,0.96)', borderColor: '#45313F', borderBottomLeftRadius: 6 },
   userBubble: { backgroundColor: 'rgba(91,43,65,0.88)', borderColor: '#874C68', borderBottomRightRadius: 6 },
-  messageText: { color: '#F7EAF2', fontSize: 16, lineHeight: 27, textAlign: 'right', writingDirection: 'rtl' },
+  messageText: { color: '#F7EAF2', fontSize: 16, lineHeight: 27 },
+  rtlMessageText: { textAlign: 'right', writingDirection: 'rtl' },
+  ltrMessageText: { textAlign: 'left', writingDirection: 'ltr' },
   messageTools: { flexDirection: 'row', alignItems: 'center', gap: 10, alignSelf: 'flex-start' },
   speakButton: { paddingHorizontal: 7, paddingVertical: 4 },
   speakText: { color: '#C68BAA', fontSize: 10 },
@@ -2901,7 +2903,9 @@ const styles = StyleSheet.create({
   typingText: { color: '#D8A7C2', fontSize: 12 },
   attachButton: { width: 29, alignItems: 'center' },
   attachText: { color: '#BBA7BB', fontSize: 25 },
-  input: { flex: 1, color: '#F5F0F5', fontSize: 14, minHeight: 44, maxHeight: 120, paddingTop: 11, paddingBottom: 9, textAlignVertical: 'top', textAlign: 'right', writingDirection: 'rtl' },
+  input: { flex: 1, color: '#F5F0F5', fontSize: 14, minHeight: 44, maxHeight: 120, paddingTop: 11, paddingBottom: 9, textAlignVertical: 'center' },
+  rtlInput: { textAlign: 'right', writingDirection: 'rtl' },
+  ltrInput: { textAlign: 'left', writingDirection: 'ltr' },
   voiceButton: { width: 32, height: 35, alignItems: 'center', justifyContent: 'center' },
   voiceButtonActive: { backgroundColor: '#493449', borderRadius: 10 },
   voiceIcon: { color: '#D5A9CC', fontSize: 21 },
