@@ -59,3 +59,25 @@ Deno.test("fails closed when Supabase Auth is unavailable", async () => {
   assertEquals(result.ok, false);
   if (!result.ok) assertEquals(result.status, 503);
 });
+
+Deno.test("rejects a forbidden session", async () => {
+  const result = await verifySupabaseUser(
+    "Bearer revoked-token",
+    "https://example.supabase.co",
+    "sb_publishable_test",
+    async () => new Response(JSON.stringify({ message: "forbidden" }), { status: 403 }),
+  );
+  assertEquals(result.ok, false);
+  if (!result.ok) assertEquals(result.status, 401);
+});
+
+Deno.test("rejects an Auth response without a user ID", async () => {
+  const result = await verifySupabaseUser(
+    "Bearer malformed-session",
+    "https://example.supabase.co",
+    "sb_publishable_test",
+    async () => new Response(JSON.stringify({}), { status: 200 }),
+  );
+  assertEquals(result.ok, false);
+  if (!result.ok) assertEquals(result.status, 401);
+});
