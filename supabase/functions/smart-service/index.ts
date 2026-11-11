@@ -43,6 +43,11 @@ Deno.serve(async (req: Request) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const supabasePublicKey = getSupabasePublishableKey();
+  if (!supabaseUrl || !supabasePublicKey || supabasePublicKey.startsWith("sb_secret_")) {
+    return new Response(JSON.stringify({ error: "Authentication service is not configured." }), {
+      status: 503, headers: jsonHeaders,
+    });
+  }
   const authorization = req.headers.get("Authorization") ?? "";
   const authResult = await verifySupabaseUser(
     authorization,
