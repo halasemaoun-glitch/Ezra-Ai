@@ -9,6 +9,28 @@ const corsHeaders = {
 
 const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
 
+function getSupabasePublishableKey(): string | null {
+  const direct =
+    Deno.env.get("SUPABASE_PUBLISHABLE_KEY") ??
+    Deno.env.get("SUPABASE_ANON_KEY");
+  if (direct) return direct;
+
+  const namedKeys = Deno.env.get("SUPABASE_PUBLISHABLE_KEYS");
+  if (!namedKeys) return null;
+
+  try {
+    const parsed = JSON.parse(namedKeys);
+    if (typeof parsed?.default === "string") return parsed.default;
+    const firstKey = Object.values(parsed).find(
+      (value): value is string => typeof value === "string",
+    );
+    return firstKey ?? null;
+  } catch {
+    return null;
+  }
+}
+
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -17,6 +39,56 @@ Deno.serve(async (req: Request) => {
       status: 405, headers: jsonHeaders,
     });
   }
+
+  // Require a real signed-in user; a publishable key alone is not authentication.
+  const authorization = req.headers.get("Authorization") ?? "";
+  const bearerToken = authorization.match(/^Bearer\s+(.+)$/i)?.[1];
+  if (!bearerToken) {
+    return new Response(JSON.stringify({ error: "Sign in to use EZRA." }), {
+      status: 401, headers: jsonHeaders,
+    });
+  }
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const supabasePublicKey = getSupabasePublishableKey();
+  if (!supabaseUrl || !supabasePublicKey || supabasePublicKey.startsWith("sb_secret_")) {
+    console.error("Supabase user verification is not configured with a publishable key.");
+    return new Response(JSON.stringify({ error: "Authentication service is not configured." }), {
+      status: 503, headers: jsonHeaders,
+    });
+  }
+
+  // Verify the JWT with Supabase Auth. Never trust a user ID from the request body.
+  let userId: string;
+  try {
+    const userResponse = await fetch(`${supabaseUrl}/auth/v1/user`, {
+      headers: { apikey: supabasePublicKey, Authorization: authorization },
+    });
+    if (userResponse.status === 401 || userResponse.status === 403) {
+      return new Response(JSON.stringify({ error: "Your session is invalid or expired. Please sign in again." }), {
+        status: 401, headers: jsonHeaders,
+      });
+    }
+    if (!userResponse.ok) {
+      console.error("Supabase user verification failed:", userResponse.status);
+      return new Response(JSON.stringify({ error: "Could not verify your session. Please try again." }), {
+        status: 503, headers: jsonHeaders,
+      });
+    }
+    const user = await userResponse.json();
+    if (typeof user?.id !== "string") {
+      return new Response(JSON.stringify({ error: "A valid signed-in account is required." }), {
+        status: 401, headers: jsonHeaders,
+      });
+    }
+    userId = user.id;
+  } catch (authError) {
+    console.error("Supabase user verification failed:", authError);
+    return new Response(JSON.stringify({ error: "Could not verify your session. Please try again." }), {
+      status: 503, headers: jsonHeaders,
+    });
+  }
+
 
   const apiKey = Deno.env.get("GROQ_API_KEY");
   if (!apiKey) {
@@ -50,50 +122,35 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Resolve the caller from the verified Supabase access token. Never trust a user ID from the request body.
-    const authorization = req.headers.get("Authorization");
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    // Load only the authenticated user's approved memories; RLS also applies to this JWT.
     let approvedMemories: string[] = [];
+    try {
+      const memoryUrl = new URL(`${supabaseUrl}/rest/v1/memories`);
+      memoryUrl.searchParams.set("select", "content");
+      memoryUrl.searchParams.set("owner_id", `eq.${userId}`);
+      memoryUrl.searchParams.set("approval_status", "eq.approved");
+      memoryUrl.searchParams.set("order", "created_at.desc");
+      memoryUrl.searchParams.set("limit", "12");
 
-    if (authorization && supabaseUrl && supabaseAnonKey) {
-      try {
-        const userResponse = await fetch(`${supabaseUrl}/auth/v1/user`, {
-          headers: { "apikey": supabaseAnonKey, "Authorization": authorization },
-        });
-        if (userResponse.ok) {
-          const user = await userResponse.json();
-          if (typeof user?.id === "string") {
-            const memoryUrl = new URL(`${supabaseUrl}/rest/v1/memories`);
-            memoryUrl.searchParams.set("select", "content");
-            memoryUrl.searchParams.set("owner_id", `eq.${user.id}`);
-            memoryUrl.searchParams.set("approval_status", "eq.approved");
-            memoryUrl.searchParams.set("order", "created_at.desc");
-            memoryUrl.searchParams.set("limit", "12");
-
-            const memoryResponse = await fetch(memoryUrl, {
-              headers: { "apikey": supabaseAnonKey, "Authorization": authorization },
-            });
-            if (memoryResponse.ok) {
-              const rows = await memoryResponse.json();
-              approvedMemories = Array.isArray(rows)
-                ? rows
-                    .filter((row: any) => typeof row?.content === "string")
-                    .map((row: any) => row.content.trim().slice(0, 700))
-                    .filter((content: string) => !!content)
-                : [];
-            } else {
-              console.error("Could not load approved memories:", memoryResponse.status);
-            }
-          }
-        } else {
-          console.error("Could not resolve authenticated EZRA user:", userResponse.status);
-        }
-      } catch (memoryError) {
-        // Memory lookup is optional: a temporary database issue must not block chat.
-        console.error("EZRA memory lookup failed:", memoryError);
+      const memoryResponse = await fetch(memoryUrl, {
+        headers: { apikey: supabasePublicKey, Authorization: authorization },
+      });
+      if (memoryResponse.ok) {
+        const rows = await memoryResponse.json();
+        approvedMemories = Array.isArray(rows)
+          ? rows
+              .filter((row: any) => typeof row?.content === "string")
+              .map((row: any) => row.content.trim().slice(0, 700))
+              .filter((content: string) => !!content)
+          : [];
+      } else {
+        console.error("Could not load approved memories:", memoryResponse.status);
       }
+    } catch (memoryError) {
+      // Memory lookup is optional: a temporary database issue must not block chat.
+      console.error("EZRA memory lookup failed:", memoryError);
     }
+
 
     const systemPrompt = [
       "IDENTITY",
