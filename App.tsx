@@ -247,6 +247,7 @@ export default function App() {
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const [chatLoading, setChatLoading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [isRevealingReply, setIsRevealingReply] = useState(false);
   const [session, setSession] = useState<import('@supabase/supabase-js').Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [assistantConnection, setAssistantConnection] = useState<'unknown' | 'online' | 'offline'>('unknown');
@@ -1386,14 +1387,19 @@ export default function App() {
 
   const revealEzraReply = async (id: string, fullText: string) => {
     const characters = Array.from(fullText);
+    setIsRevealingReply(true);
     setMessages(previous => [...previous, { id, sender: 'ezra', text: '' }]);
-    const chunkSize = 10;
-    for (let index = 0; index < characters.length; index += chunkSize) {
-      const visibleText = characters.slice(0, index + chunkSize).join('');
-      setMessages(previous => previous.map(item =>
-        item.id === id ? { ...item, text: visibleText } : item
-      ));
-      await new Promise<void>(resolve => setTimeout(resolve, 22));
+    try {
+      const chunkSize = 10;
+      for (let index = 0; index < characters.length; index += chunkSize) {
+        const visibleText = characters.slice(0, index + chunkSize).join('');
+        setMessages(previous => previous.map(item =>
+          item.id === id ? { ...item, text: visibleText } : item
+        ));
+        await new Promise<void>(resolve => setTimeout(resolve, 22));
+      }
+    } finally {
+      setIsRevealingReply(false);
     }
   };
 
@@ -2594,7 +2600,7 @@ export default function App() {
           </View>
         )}
 
-        {(sending || chatLoading) && (
+        {(sending || chatLoading) && !isRevealingReply && (
           <View style={styles.typingRow} accessibilityLiveRegion="polite">
             <View style={styles.miniAvatar}><Text style={styles.miniAvatarText}>✦</Text></View>
             <View style={styles.typingBubble}><Text style={styles.typingText}>{chatLoading ? 'جارٍ تحميل المحادثة…' : 'EZRA يكتب لك…  • • •'}</Text></View>
