@@ -1,6 +1,6 @@
 // EZRA AI — Groq free-tier chat service
 import { verifySupabaseUser } from "./auth.ts";
-import { buildEzraSystemPrompt } from "./persona.ts";
+import { buildGroqChatPayload, extractGroqReply } from "./groq.ts";
 // Keep GROQ_API_KEY in Supabase Edge Function secrets. Never place it in the mobile app.
 
 const corsHeaders = {
@@ -124,7 +124,7 @@ Deno.serve(async (req: Request) => {
     }
 
 
-    const systemPrompt = buildEzraSystemPrompt({ responseLanguage, voiceMode, approvedMemories });
+    const groqPayload = buildGroqChatPayload({ input, imageDataUrl, voiceMode, responseLanguage, approvedMemories });
 
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
@@ -132,23 +132,7 @@ Deno.serve(async (req: Request) => {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({
-        model: imageDataUrl ? "qwen/qwen3.8-27b" : "openai/gpt-oss-120b",
-        messages: [
-          { role: "system", content: systemPrompt },
-          {
-            role: "user",
-            content: imageDataUrl
-              ? [
-                  { type: "text", text: input },
-                  { type: "image_url", image_url: { url: imageDataUrl } },
-                ]
-              : input,
-          },
-        ],
-        temperature: voiceMode ? 0.65 : 0.7,
-        max_completion_tokens: voiceMode ? 420 : 1200,
-      }),
+      body: JSON.stringify(groqPayload),
     });
 
     const result = await response.json();
@@ -162,7 +146,7 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ error: message }), { status, headers: jsonHeaders });
     }
 
-    const reply = result?.choices?.[0]?.message?.content?.trim();
+    const reply = extractGroqReply(result);
     if (!reply) {
       return new Response(JSON.stringify({ error: "The AI returned an empty response. Please try again." }), {
         status: 502, headers: jsonHeaders,
