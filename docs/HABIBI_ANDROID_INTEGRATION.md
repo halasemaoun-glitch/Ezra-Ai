@@ -63,3 +63,8 @@ The upstream audio.cpp C ABI has already compiled successfully for Android arm64
 - EZRA now downloads this specialized package rather than the Unified checkpoint, migrates away from any saved Unified model path, validates the selected checkpoint path, and fixes the request dialect to `ALG`.
 - The UI no longer offers dialects that would mismatch the specialized checkpoint. The JNI request uses default speed (1.0) instead of the previous slower 0.92 and explicitly enables diacritic stripping.
 - This improves model/dialect matching but does not prove voice quality, real-device memory fit, or successful synthesis. A separate, suitable male reference recording and on-device testing are still required.
+
+
+## Latest Android test build
+
+- Requested from the current EZRA development branch after personality integration validation. This documentation-only update triggers the existing free GitHub Actions Android build; it does not change application code or deploy Supabase.
