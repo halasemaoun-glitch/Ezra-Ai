@@ -2853,7 +2853,7 @@ export default function App() {
                   <View style={{ gap: 16, paddingBottom: 24 }}>
                     <View style={{ padding: 16, borderRadius: 18, backgroundColor: '#241625', borderWidth: 1, borderColor: '#68435F', gap: 7 }}>
                       <Text style={{ color: '#F5DDED', fontSize: 18, fontWeight: '800', textAlign: 'right' }}>خصصي طريقة استجابة EZRA</Text>
-                      <Text style={{ color: '#B9A6B6', fontSize: 12, lineHeight: 20, textAlign: 'right' }}>هذه التفضيلات تؤثر في تعليمات كل محادثة جديدة، وتُحفظ تلقائياً على هذا الجهاز.</Text>
+                      <Text style={{ color: '#B9A6B6', fontSize: 12, lineHeight: 20, textAlign: 'right' }}>هذه التفضيلات تؤثر في ردود EZRA القادمة، وتُحفظ تلقائياً على هذا الجهاز.</Text>
                       <Text style={{ color: aiPreferencesLoaded ? '#A9D7B9' : '#D9B77A', fontSize: 11, textAlign: 'right' }}>{aiPreferencesLoaded ? '✓ تم تحميل تفضيلات الذكاء الاصطناعي' : 'جارٍ تحميل التفضيلات…'}</Text>
                     </View>
                     <View style={{ gap: 10 }}>
