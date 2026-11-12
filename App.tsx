@@ -668,8 +668,6 @@ export default function App() {
       if (!active) return;
       setCompanionProfile(localSnapshot.profile);
       setCompanionProfileUpdatedAt(localSnapshot.updatedAt);
-      setCompanionProfileLoaded(true);
-      setCompanionProfileLoadedUserId(userId);
 
       try {
         const { data, error } = await supabase
@@ -687,6 +685,8 @@ export default function App() {
 
         setCompanionProfile(merged.profile);
         setCompanionProfileUpdatedAt(merged.updatedAt);
+        setCompanionProfileLoaded(true);
+        setCompanionProfileLoadedUserId(userId);
         await AsyncStorage.setItem(localKey, JSON.stringify(merged));
 
         if (!cloudSnapshot || Date.parse(merged.updatedAt) > Date.parse(cloudSnapshot.updatedAt)) {
@@ -698,7 +698,11 @@ export default function App() {
         if (active) setCompanionSyncStatus('synced');
       } catch (error) {
         console.warn('Could not synchronize EZRA companion profile:', error);
-        if (active) setCompanionSyncStatus('error');
+        if (active) {
+          setCompanionProfileLoaded(true);
+          setCompanionProfileLoadedUserId(userId);
+          setCompanionSyncStatus('error');
+        }
       }
     };
 
