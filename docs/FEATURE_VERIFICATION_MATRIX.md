@@ -25,7 +25,7 @@ This matrix separates implementation evidence from proof of behavior. A componen
 | Habibi TTS native engine | `modules/ezra-habibi-tts` | Module/config presence only | Verify model loading, synthesis, playback, stop/error events on Android |
 | Wake word and phone actions | `modules/ezra-wake-word`, config plugin | Module/config presence only | Verify foreground service, permission denial, command parsing and safe intents on Android |
 | Memory | `App.tsx`, Supabase tables/functions | Backend auth tests only | Verify approval states, user isolation, save/edit/reject and approved-only prompt injection |
-| Knowledge files | `App.tsx` local document handling/retrieval | No dedicated tests | Verify supported formats, size/count limits, persistence, ranking and prompt context |
+| Knowledge files and document extraction | `src/documents/documentExtractor.ts`, `src/documents/documentTextUtils.ts`, `App.tsx`, Ream parser | Deno tests for HTML-to-text cleanup, supported extensions, and relevant excerpt selection; current CI build pending | Exercise real PDF/DOCX/PPTX/XLSX fixtures, malformed/password-protected files, and signed-in persistence/retrieval |
 | Dentist/study modes and dental references | `assistantModes.ts`, `studyLibrary.ts`, `LearningToolsModal.tsx` | Source audit only | Verify mode switching, reference retrieval, card/quiz flows and progress restoration |
 | Clinical case simulator | `ClinicalCaseSimulator.tsx` | Source-level scenario checks only | Verify answer lock, feedback, completion callback and navigation |
 | Settings and phone controls | `App.tsx`, native wake-word module | No dedicated mobile tests | Verify each setting persists and each action handles unavailable/denied permissions |
@@ -34,7 +34,7 @@ This matrix separates implementation evidence from proof of behavior. A componen
 
 ## Baseline gaps
 
-1. The repository has dedicated Deno tests for the Supabase smart-service auth, persona, and Groq contracts.
+1. The repository has dedicated Deno tests for the Supabase smart-service auth, persona, Groq contracts, knowledge sync, and document text utilities.
 2. The React Native application currently has no dedicated component/integration test runner configured in `package.json`.
 3. Most client-side features live in the large `App.tsx` module. This makes isolated behavioral tests difficult and increases the risk of treating source inspection as proof.
 4. Native TTS and wake-word behavior requires Android runtime verification; compiling their Kotlin code alone cannot prove model inference, microphone lifecycle, or audio playback.
