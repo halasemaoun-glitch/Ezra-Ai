@@ -2,8 +2,9 @@
 
 Date: 2026-11-12
 Branch: `ezra/habibi-android-spike`
-Audited application revision: `1017ab85ac8304dcd0bef5dbc174d7f5a4747025`
+Audited application revision: `783f253bb2805fbef3b97c1abbe870d29e307494`
 Phone parser helper: `f6f274f2b0fa906d44978c3bee6aa3ef2a6ed602`
+Phase 7 attachment storage migration: `202611120001_chat_attachment_storage.sql`
 Phone parser tests: `03bfe6929e43745572a080a882576e814dd14932`
 Validation workflow test registration: `b07a50f511c71bd31260d9d21effce0537b985d8`
 
@@ -60,7 +61,7 @@ The most recent successful CI baseline before the memory-flow cleanup was `02940
 
 ## Known limitations and open verification items
 
-1. **Conversation attachments are metadata-only in history.** Image bytes and document contents are sent for the current request, but `chat_messages` stores attachment name/type only. Old attachments cannot be restored or reopened. A secure persistent-storage design and owner-scoped storage policies are still needed.
+1. **Attachment storage migration must be applied to Supabase.** The app now uploads chat attachments to a private owner-scoped bucket and restores them using short-lived signed URLs. Until migration `202611120001_chat_attachment_storage.sql` is applied to the Supabase project, the new runtime storage flow is not available. Previously stored metadata-only attachments cannot be restored.
 2. **Knowledge library is local-only.** The library is stored in device AsyncStorage and is not synchronized across devices.
 3. **File formats are limited.** Message attachments and knowledge files support TXT, MD, CSV, and JSON text extraction. PDF and Word extraction are not implemented.
 4. **Habibi inference is not runtime-verified.** Native compilation does not prove model compatibility, memory sufficiency, successful inference, or audio playback on the target device.
@@ -74,8 +75,19 @@ The last confirmed successful validation baseline is revision `0294013a0abe6129e
 - EZRA checks: success.
 - Habibi Android native engine cross-compile: success.
 
-The current application and workflow changes (`1017ab8` through `b07a50f`) are undergoing fresh GitHub Actions validation. Require success on the final branch head, including the new phone-parser Deno test, before marking these changes build-verified.
+The latest confirmed CI success was on `2ea0e8074ba88084c1985ef686766bc5fcf02186`. Phase 7 changes (`783f253` and the subsequent migration commit) require a fresh CI run on the new branch head before being marked build-verified.
 
 ## Acceptance rule
 
 A feature is marked **implemented** when its source integration exists. It is marked **automated/build-verified** only when a repeatable test or the relevant CI job passes on the audited revision. Runtime verification remains separate and must never be inferred from source inspection or CI compilation.
+
+
+## Phase 7 — persistent chat attachments (source implementation)
+
+- Chat image and supported text-file attachments are uploaded to the private `ezra-chat-attachments` bucket before the message is saved.
+- Storage paths are namespaced by authenticated user ID, conversation ID, and message ID.
+- The migration creates the private bucket, limits objects to 5 MiB and the supported MIME types, adds attachment metadata columns, and scopes Storage select/insert/delete policies to the authenticated user's first path segment.
+- Conversation restore requests one-hour signed URLs for stored attachments. The attachment chip opens the signed URL; image previews use the same private URL.
+- Deleting a conversation also attempts to remove its stored objects.
+- Upload failure prevents the message from being saved; a failed message insert triggers best-effort removal of the just-uploaded object.
+- **Deployment gate:** this migration is committed to the feature branch only. It has not been applied to Supabase. Do not claim runtime availability until the migration is applied and the storage flow is validated.
