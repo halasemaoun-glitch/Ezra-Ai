@@ -12,7 +12,7 @@ Validation workflow test registration: `b07a50f511c71bd31260d9d21effce0537b985d8
 
 This is a source-level integration review of the Expo/React Native application, Supabase Edge Function, Android native modules, and study/knowledge flows. A source-level finding is not a claim that the feature has been exercised on a physical Android device.
 
-The most recent successful CI baseline before the memory-flow cleanup was `0294013a0abe6129edc4bb6015edc9444c760b56`. The subsequent application and documentation commits require their own CI result before they can be treated as build-verified.
+The current application source revision `9d4bb15d80fe9fe2710d000c72351abc124cad60` has a successful EZRA CI run. Documentation-only commits after that source revision are not expected to change build behavior.
 
 ## Integrated flows confirmed in source
 
@@ -71,13 +71,15 @@ The most recent successful CI baseline before the memory-flow cleanup was `02940
 
 ## Validation status
 
-The last confirmed successful validation baseline is revision `0294013a0abe6129edc4bb6015edc9444c760b56`:
-- EZRA checks: success.
-- Habibi Android native engine cross-compile: success.
+Latest confirmed EZRA CI success is run `43307038966` on application source revision `9d4bb15d80fe9fe2710d000c72351abc124cad60`:
+- Knowledge-library synchronization regression tests: success.
+- Supabase Edge Function type-check and tests: success.
+- Expo configuration/dependency checks: success.
+- Android Kotlin compilation: success.
+- TypeScript check: success.
+- Android JS bundle export: success.
 
-The latest confirmed CI success is on `b7e09e5550f123e0efd50f3886829756af9bab22`:
-- EZRA checks run `43302448477`: success.
-- Habibi Android native engine cross-compile run `43302448470`: success, including `android-arm64-engine` and `android-app-build` jobs.
+This CI result verifies source tests and compilation/bundling, not authenticated app runtime behavior on a physical device.
 
 ## Acceptance rule
 
