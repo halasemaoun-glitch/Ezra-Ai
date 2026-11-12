@@ -50,29 +50,36 @@ export default function LearningToolsModal({ visible, mode, onClose, onAskEzra }
   const [answeredCount, setAnsweredCount] = useState(0);
   const [quizFinished, setQuizFinished] = useState(false);
   const [progress, setProgress] = useState<StudyProgress>(EMPTY_PROGRESS);
+  const [progressLoaded, setProgressLoaded] = useState(false);
 
   useEffect(() => {
     let active = true;
     AsyncStorage.getItem(STUDY_PROGRESS_KEY).then(raw => {
-      if (!active || !raw) return;
-      try {
-        const parsed = JSON.parse(raw) as Partial<StudyProgress>;
-        setProgress({
-          reviewedCardIds: Array.isArray(parsed.reviewedCardIds) ? parsed.reviewedCardIds.filter((id): id is string => typeof id === 'string') : [],
-          completedCaseIds: Array.isArray(parsed.completedCaseIds) ? parsed.completedCaseIds.filter((id): id is string => typeof id === 'string') : [],
-          quizAttempts: Number.isFinite(parsed.quizAttempts) ? Math.max(0, Number(parsed.quizAttempts)) : 0,
-          bestQuizScore: Number.isFinite(parsed.bestQuizScore) ? Math.max(0, Number(parsed.bestQuizScore)) : 0,
-          lastQuizScore: Number.isFinite(parsed.lastQuizScore) ? Math.max(0, Number(parsed.lastQuizScore)) : 0,
-        });
-      } catch { setProgress(EMPTY_PROGRESS); }
-    }).catch(() => undefined);
+      if (!active) return;
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as Partial<StudyProgress>;
+          setProgress({
+            reviewedCardIds: Array.isArray(parsed.reviewedCardIds) ? parsed.reviewedCardIds.filter((id): id is string => typeof id === 'string') : [],
+            completedCaseIds: Array.isArray(parsed.completedCaseIds) ? parsed.completedCaseIds.filter((id): id is string => typeof id === 'string') : [],
+            quizAttempts: Number.isFinite(parsed.quizAttempts) ? Math.max(0, Number(parsed.quizAttempts)) : 0,
+            bestQuizScore: Number.isFinite(parsed.bestQuizScore) ? Math.max(0, Number(parsed.bestQuizScore)) : 0,
+            lastQuizScore: Number.isFinite(parsed.lastQuizScore) ? Math.max(0, Number(parsed.lastQuizScore)) : 0,
+          });
+        } catch { setProgress(EMPTY_PROGRESS); }
+      }
+      setProgressLoaded(true);
+    }).catch(() => { if (active) setProgressLoaded(true); });
     return () => { active = false; };
   }, []);
 
+  useEffect(() => {
+    if (!progressLoaded) return;
+    AsyncStorage.setItem(STUDY_PROGRESS_KEY, JSON.stringify(progress)).catch(() => undefined);
+  }, [progress, progressLoaded]);
+
   const saveProgress = (patch: Partial<StudyProgress>) => {
-    const next = { ...progress, ...patch };
-    setProgress(next);
-    AsyncStorage.setItem(STUDY_PROGRESS_KEY, JSON.stringify(next)).catch(() => undefined);
+    setProgress(previous => ({ ...previous, ...patch }));
   };
 
   const selectedTopic = useMemo(
