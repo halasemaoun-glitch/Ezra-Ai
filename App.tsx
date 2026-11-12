@@ -1012,7 +1012,7 @@ export default function App() {
       .from('chat_messages')
       .select('conversation_id, role, content, created_at')
       .eq('owner_id', session.user.id)
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: false })
       .limit(500);
 
     if (error) {
@@ -1033,11 +1033,10 @@ export default function App() {
           title: row.role === 'user' && content ? content : 'محادثة جديدة',
           updatedAt: row.created_at,
         });
-      } else {
-        existing.updatedAt = row.created_at;
-        if (existing.title === 'محادثة جديدة' && row.role === 'user' && content) {
-          existing.title = content;
-        }
+      } else if (row.role === 'user' && content) {
+        // Results are newest-first; each older user message replaces the title,
+        // leaving the first message in the conversation as its final title.
+        existing.title = content;
       }
     });
 
@@ -3202,7 +3201,7 @@ export default function App() {
             <TouchableOpacity style={styles.historyButton} onPress={openConversationHistory} accessibilityRole="button" accessibilityLabel="سجل المحادثات">
               <Text style={styles.headerActionText}>السجل  ◷</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.newChatButton} onPress={startNewConversation} accessibilityRole="button" accessibilityLabel="بدء محادثة جديدة">
+            <TouchableOpacity style={styles.newChatButton} onPress={startNewConversation} disabled={sending} accessibilityRole="button" accessibilityLabel="بدء محادثة جديدة">
               <Text style={styles.headerActionText}>محادثة جديدة  ＋</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.logoutIconButton} onPress={() => Alert.alert('تسجيل الخروج', 'هل تريد تسجيل الخروج من حساب EZRA؟', [
@@ -3406,6 +3405,7 @@ export default function App() {
                       <TouchableOpacity
                         style={[styles.historyItem, styles.historyItemOpen, item.id === conversationId && styles.historyItemActive]}
                         onPress={() => selectConversation(item.id)}
+                        disabled={sending}
                       >
                         <Text style={styles.historyDate}>
                           {new Date(item.updatedAt).toLocaleDateString('ar-DZ')}
@@ -3416,6 +3416,7 @@ export default function App() {
                       <TouchableOpacity
                         style={styles.historyDeleteButton}
                         onPress={() => deleteConversation(item.id)}
+                        disabled={sending}
                         accessibilityLabel="حذف المحادثة"
                       >
                         <Text style={styles.historyDeleteText}>حذف</Text>
