@@ -87,6 +87,21 @@ module.exports = function withEzraWakeWord(config) {
       });
     }
 
+    application.receiver = application.receiver || [];
+    const accessibilityReceiverName = "expo.modules.ezrawakeword.EzraAccessibilityActionReceiver";
+    if (!application.receiver.some(item => item.$["android:name"] === accessibilityReceiverName)) {
+      application.receiver.push({
+        $: {
+          "android:name": accessibilityReceiverName,
+          "android:enabled": "true",
+          "android:exported": "false"
+        },
+        "intent-filter": [{
+          action: [{ $: { "android:name": "com.halasemaoun.ezra.CONFIRM_ACCESSIBILITY_ACTION" } }]
+        }]
+      });
+    }
+
     const captureServiceName = "expo.modules.ezrawakeword.EzraScreenCaptureService";
     if (!application.service.some(item => item.$["android:name"] === captureServiceName)) {
       application.service.push({
