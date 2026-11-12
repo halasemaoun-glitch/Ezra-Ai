@@ -23,19 +23,19 @@ export function parsePhoneActionCommand(command: string): PhoneActionCommand | n
   if (/^(?:(?:يا\s*)?(?:ازرا|ezra)\s*)?(?:افتح|اذهب الى|open)\s+(?:اعدادات\s+)?(?:الاشعارات|اشعارات الهاتف|notification settings)$/.test(value)) {
     return { kind: 'notification_settings' };
   }
-  if (/^(?:شغل|تشغيل|استانف|استانفي|كمل|اكمل|play|resume)(?:\s+(?:الموسيقى|الاغاني|الصوت|الوسائط|music|media))?$/.test(value)) {
+  if (/^(?:شغل|تشغيل|استانف|استانفي|كمل|اكمل|play|resume)(?:\s+(?:الموسيقي|الاغاني|الصوت|الوسائط|music|media))?$/.test(value)) {
     return { kind: 'media', action: 'play' };
   }
-  if (/^(?:وقف|اوقف|توقف|ايقاف|pause)(?:\s+(?:الموسيقى|الاغاني|الصوت|الوسائط|music|media))?$/.test(value)) {
+  if (/^(?:وقف|اوقف|توقف|ايقاف|pause)(?:\s+(?:الموسيقي|الاغاني|الصوت|الوسائط|music|media))?$/.test(value)) {
     return { kind: 'media', action: 'pause' };
   }
-  if (/^(?:انه|انهاء|اوقف نهائيا|stop)(?:\s+(?:الموسيقى|الاغاني|الوسائط|music|media))?$/.test(value)) {
+  if (/^(?:انه|انهاء|اوقف نهائيا|stop)(?:\s+(?:الموسيقي|الاغاني|الوسائط|music|media))?$/.test(value)) {
     return { kind: 'media', action: 'stop' };
   }
-  if (/^(?:التالي|تخطي|الاغنية التالية|next|skip)(?:\s+(?:الموسيقى|الاغنية|music|song))?$/.test(value)) {
+  if (/^(?:التالي|تخطي|الاغنيه التاليه|next|skip)(?:\s+(?:الموسيقي|الاغنيه|music|song))?$/.test(value)) {
     return { kind: 'media', action: 'next' };
   }
-  if (/^(?:السابق|الاغنية السابقة|previous)(?:\s+(?:الموسيقى|الاغنية|music|song))?$/.test(value)) {
+  if (/^(?:السابق|الاغنيه السابقة|previous)(?:\s+(?:الموسيقي|الاغنيه|music|song))?$/.test(value)) {
     return { kind: 'media', action: 'previous' };
   }
   return null;
