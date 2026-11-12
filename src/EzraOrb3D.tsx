@@ -105,7 +105,7 @@ void main() {
   vec3 rayDirection = normalize(vec3(p * 1.02, -2.45));
   float breathRate = uMode > 2.5 ? 2.7 : uMode > 1.5 ? 0.48 : 0.72;
   float breath = sin(uTime * breathRate) * (0.006 + stateActivity * 0.006);
-  float radius = 0.865 + breath + uEnergy * 0.009;
+  float radius = 0.91 + breath + uEnergy * 0.009;
   float b = dot(rayOrigin, rayDirection);
   float c = dot(rayOrigin, rayOrigin) - radius * radius;
   float discriminant = b * b - c;
@@ -168,6 +168,10 @@ void main() {
   float cloudB = 0.5 + 0.5 * sin(fluid.z * 3.6 + fluid.x * 4.2 - fluid.y * 5.1 - surfaceTime * 0.11);
   float cloud = cloudA * 0.62 + cloudB * 0.38;
   float innerCurrent = 0.5 + 0.5 * sin(fluid.x * 3.0 + fluid.z * 5.0 - surfaceTime * 0.24);
+  // Fine, silk-like filaments add a second scale of detail without turning the orb noisy.
+  float filamentA = sin(fluid.x * 25.0 + fluid.z * 17.0 - surfaceTime * 0.38);
+  float filamentB = sin(fluid.y * 21.0 - fluid.z * 15.0 + surfaceTime * 0.29);
+  float microFilament = pow(max(0.0, filamentA * filamentB), 7.0);
 
   vec3 body = mix(uBaseColor, uAccentColor, 0.12 + fluidVein * 0.54 + cloud * 0.18);
   body = mix(body, uGlowColor, innerCurrent * 0.22);
@@ -179,6 +183,9 @@ void main() {
   color += vec3(1.0, 0.88, 1.0) * fillSpecular * 0.34;
   color += uAccentColor * broadSpecular * 0.28;
   color += mix(uAccentColor, uGlowColor, cloud) * cloud * 0.12;
+  color += mix(uGlowColor, uAccentColor, cloud) * microFilament * (0.045 + uEnergy * 0.035);
+  // A restrained grazing highlight makes the glass-like edge read as a solid volume.
+  color += vec3(1.0, 0.76, 0.94) * pow(max(dot(reflect(-fillDirection, normal), viewDirection), 0.0), 76.0) * 0.18;
 
   // A layered inner glow gives the sphere depth; microphone energy gently lifts its core.
   float coreFalloff = exp(-dot(position.xy, position.xy) * 4.6);
@@ -245,7 +252,7 @@ function compileShader(gl: any, type: number, source: string) {
 
 export default function EzraOrb3D({ status, level = 0 }: OrbStatus) {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  const stageSize = Math.min(344, Math.max(220, Math.min(screenWidth - 40, screenHeight - 420)));
+  const stageSize = Math.min(384, Math.max(240, Math.min(screenWidth - 20, screenHeight - 410)));
   const statusRef = useRef(status);
   const levelRef = useRef(level);
   const reducedMotionRef = useRef(false);
@@ -394,7 +401,7 @@ export default function EzraOrb3D({ status, level = 0 }: OrbStatus) {
       {rendererFailed ? (
         <View style={styles.fallback}>
           <View style={[styles.fallbackAura, { width: stageSize * 0.98, height: stageSize * 0.98, borderRadius: stageSize * 0.49 }]} />
-          <View style={[styles.fallbackSphere, { width: stageSize * 0.76, height: stageSize * 0.76, borderRadius: stageSize * 0.38 }]}>
+          <View style={[styles.fallbackSphere, { width: stageSize * 0.82, height: stageSize * 0.82, borderRadius: stageSize * 0.41 }]}>
             <View style={[styles.fallbackHighlight, { width: stageSize * 0.32, height: stageSize * 0.17, top: stageSize * 0.075, left: stageSize * 0.12, borderRadius: stageSize * 0.18 }]} />
             <View style={[styles.fallbackCore, { width: stageSize * 0.26, height: stageSize * 0.26, borderRadius: stageSize * 0.13 }]} />
           </View>
