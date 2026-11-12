@@ -36,6 +36,7 @@ import EzraOrb3D from './src/EzraOrb3D';
 import { EzraButton, EzraTextField } from './src/components/DesignSystem';
 import { colors, motion, radius, spacing, typography, shadows } from './src/theme';
 import { ASSISTANT_MODE_OPTIONS, getAssistantModeGuidance, getAssistantModeSuggestions, type AssistantMode } from './src/modes/assistantModes';
+import LearningToolsModal from './src/components/LearningToolsModal';
 import { supabase } from './src/lib/supabase';
 import { DEFAULT_EZRA_VOICE } from './src/voice/voiceProfile';
 import { requireNativeModule } from 'expo-modules-core';
@@ -257,6 +258,7 @@ export default function App() {
   const [aiPreferencesLoaded, setAiPreferencesLoaded] = useState(false);
   const [assistantMode, setAssistantMode] = useState<AssistantMode>('companion');
   const [assistantModeLoaded, setAssistantModeLoaded] = useState(false);
+  const [learningToolsVisible, setLearningToolsVisible] = useState(false);
 
   const [habibiCapacity, setHabibiCapacity] = useState<HabibiDeviceCapacity | null>(null);
   const [habibiCapacityLoading, setHabibiCapacityLoading] = useState(false);
@@ -3213,7 +3215,19 @@ export default function App() {
           ) : assistantMode === 'study' ? (
             <Text style={styles.assistantModeSafety}>شرح تدريجي مع مصطلحات وأمثلة ونقاط مراجعة حسب سؤالك.</Text>
           ) : null}
+          {assistantMode !== 'companion' ? (
+            <TouchableOpacity style={styles.learningToolsButton} onPress={() => setLearningToolsVisible(true)} accessibilityRole="button">
+              <Text style={styles.learningToolsButtonText}>{assistantMode === 'dentist' ? 'فتح مكتبة الأسنان  ▤' : 'فتح أدوات الدراسة  ✧'}</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
+
+        <LearningToolsModal
+          visible={learningToolsVisible}
+          mode={assistantMode}
+          onClose={() => setLearningToolsVisible(false)}
+          onAskEzra={prompt => { setMessage(prompt); setLearningToolsVisible(false); }}
+        />
 
         <Modal
           visible={memoryVisible}
@@ -3814,6 +3828,8 @@ const styles = StyleSheet.create({
   assistantModeChipText: { color: colors.textSecondary, fontSize: 10, fontWeight: '700', textAlign: 'center' },
   assistantModeChipTextActive: { color: colors.textPrimary },
   assistantModeSafety: { color: colors.textSecondary, fontSize: 9, lineHeight: 15, textAlign: 'right' },
+  learningToolsButton: { alignSelf: 'flex-end', minHeight: 38, paddingHorizontal: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.accentBright, backgroundColor: colors.surface, justifyContent: 'center' },
+  learningToolsButtonText: { color: colors.accentBright, fontSize: 10, fontWeight: '800' },
   modeSuggestions: { width: '100%', gap: spacing.sm, alignItems: 'flex-end', paddingHorizontal: spacing.xs },
   modeSuggestionsTitle: { color: colors.textSecondary, fontSize: 11, fontWeight: '700', textAlign: 'right' },
   modeSuggestionsList: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: spacing.xs },
