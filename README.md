@@ -21,7 +21,7 @@ Private personal AI companion built with Expo SDK 54 and React Native, with Andr
 
 - New chat attachments use a private, owner-scoped Supabase Storage bucket with short-lived signed URLs. Migration `ezra_private_chat_attachment_storage` has been applied to the EZRA AI Supabase project and its schema, bucket, and owner-scoped policies were verified. Previously saved metadata-only attachments cannot be restored.
 - Message-level document attachments currently support TXT, MD, CSV, and JSON only, up to 5 MB for persistent chat storage. PDF and Word extraction are not implemented.
-- The knowledge library is stored locally on the device and is not synchronized to the user's account.
+- The knowledge library keeps a local device cache and synchronizes account-owned copies through the `knowledge_documents` table. Row Level Security restricts each account to its own files. Sync source tests and CI checks pass; signed-in multi-device restore and cross-account denial still need end-to-end runtime verification.
 - Habibi TTS requires a large model download and suitable free RAM/storage. Its Android native code is compiled by CI, but actual model inference and playback still require runtime verification on a device. Android system TTS remains the fallback.
 - Wake-word recognition depends on Android's speech-recognition provider, microphone/notification permissions, foreground-service rules, and manufacturer battery-management behavior.
 - The orb is an animated 2D React Native illustration, not a 3D model.
