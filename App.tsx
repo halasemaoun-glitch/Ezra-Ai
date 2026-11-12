@@ -3362,7 +3362,7 @@ export default function App() {
                       </View>
                     </View>
                   ))}
-                </ScrollView>
+                </View>
               )}
             </ScrollView>
             </View>
