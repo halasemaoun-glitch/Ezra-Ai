@@ -2020,7 +2020,7 @@ export default function App() {
               await sayResult('أحتاج إذن إرسال الرسائل النصية حتى أرسل مباشرة. يمكنك تفعيله من إعدادات EZRA.');
             } else {
               const sent = await EzraWakeWord.sendSmsDirect(phone, smsBody);
-              await sayResult(sent ? `تم إرسال الرسالة إلى ${contactName}.` : 'تعذّر إرسال الرسالة. تحققي من الشبكة والشريحة.');
+              await sayResult(sent ? `أرسل Android طلب الرسالة إلى ${contactName}. هذا لا يؤكد وصولها إلى هاتفه بعد.` : 'تعذّر إرسال الرسالة. تحققي من الشبكة والشريحة.');
             }
           }
         }
