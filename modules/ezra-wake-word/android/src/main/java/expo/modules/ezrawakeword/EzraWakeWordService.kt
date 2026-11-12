@@ -128,11 +128,13 @@ class EzraWakeWordService : Service(), RecognitionListener {
         val canUseOnDevice = Build.VERSION.SDK_INT >= 31 && preferOnDeviceRecognition &&
           SpeechRecognizer.isOnDeviceRecognitionAvailable(this)
         usingOnDeviceRecognition = canUseOnDevice
-        recognizer = if (canUseOnDevice) {
+        val speechRecognizer = if (canUseOnDevice) {
           SpeechRecognizer.createOnDeviceSpeechRecognizer(this)
         } else {
           SpeechRecognizer.createSpeechRecognizer(this)
-        }.also { it.setRecognitionListener(this) }
+        }
+        speechRecognizer.setRecognitionListener(this)
+        recognizer = speechRecognizer
       }
       val request = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
         putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -179,7 +181,7 @@ class EzraWakeWordService : Service(), RecognitionListener {
 
     wakeTriggered = true
     val command = recognized
-      .replaceFirst(Regex("(?i)(?:(?:يا|hey|okay|ok)\\s*)?(?:إ?زرا|ايزرا|عذرا|ezra)"), "")
+      .replaceFirst(Regex("(?i)(?:(?:يا|hey|okay|ok)\\s*)?(?:(?:إ|ا)?زرا|ايزرا|عذرا|ezra)"), "")
       .trim(' ', ',', '،', '.', '!', '?', '؟', ':', ';', '؛', '-')
     getSharedPreferences(PREFERENCES, MODE_PRIVATE)
       .edit()
