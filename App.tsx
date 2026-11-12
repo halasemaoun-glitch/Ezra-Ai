@@ -8,6 +8,7 @@ import {
   BackHandler,
   Easing,
   Image,
+  Linking,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -124,6 +125,7 @@ type Attachment = {
   base64?: string;
   textContent?: string;
   sizeBytes?: number;
+  storagePath?: string;
 };
 
 type ConversationSummary = {
@@ -1086,6 +1088,16 @@ export default function App() {
         text: 'حذف',
         style: 'destructive',
         onPress: async () => {
+          const { data: attachmentRows, error: attachmentLookupError } = await supabase
+            .from('chat_messages')
+            .select('attachment_path')
+            .eq('owner_id', session.user.id)
+            .eq('conversation_id', selectedId);
+          if (attachmentLookupError) {
+            console.error('Could not list conversation attachments:', attachmentLookupError);
+            Alert.alert('تعذّر حذف المحادثة', 'لم نتمكن من التحقق من ملفاتها المرفقة. حاول مرة أخرى.');
+            return;
+          }
           const { error } = await supabase
             .from('chat_messages')
             .delete()
@@ -1095,6 +1107,11 @@ export default function App() {
             console.error('Could not delete conversation:', error);
             Alert.alert('تعذّر حذف المحادثة', 'حاول مرة أخرى بعد قليل.');
             return;
+          }
+          const storedPaths = (attachmentRows ?? []).map((row: any) => row.attachment_path).filter((path: unknown): path is string => typeof path === 'string' && path.length > 0);
+          if (storedPaths.length) {
+            const { error: storageDeleteError } = await supabase.storage.from('ezra-chat-attachments').remove(storedPaths);
+            if (storageDeleteError) console.warn('Some conversation attachment files could not be removed:', storageDeleteError.message);
           }
           setConversations(previous => previous.filter(item => item.id !== selectedId));
           if (selectedId === conversationId) await startNewConversation();
@@ -1157,7 +1174,7 @@ export default function App() {
       setChatLoading(true);
       const { data, error } = await supabase
         .from('chat_messages')
-        .select('id, role, content, attachment_name, attachment_type')
+        .select('id, role, content, attachment_name, attachment_type, attachment_path, attachment_mime_type, attachment_size_bytes')
         .eq('owner_id', session.user.id)
         .eq('conversation_id', conversationId)
         .order('created_at', { ascending: true });
@@ -1166,18 +1183,32 @@ export default function App() {
       if (error) {
         Alert.alert('تعذّر تحميل المحادثة', 'حاول مرة أخرى.');
       } else if (data && data.length > 0) {
-        setMessages(data.map((row: any) => ({
-          id: row.id,
-          sender: row.role === 'assistant' ? 'ezra' : 'user',
-          text: row.content,
-          ...(row.attachment_name ? {
-            attachment: {
-              uri: '',
-              name: row.attachment_name,
-              kind: row.attachment_type === 'image' ? 'image' : 'file',
-            },
-          } : {}),
-        })));
+        const restoredMessages = await Promise.all(data.map(async (row: any) => {
+          let attachmentUri = '';
+          if (row.attachment_path) {
+            const { data: signedFile, error: signedUrlError } = await supabase.storage
+              .from('ezra-chat-attachments')
+              .createSignedUrl(row.attachment_path, 60 * 60);
+            if (signedUrlError) console.warn('Could not create attachment preview URL:', signedUrlError.message);
+            attachmentUri = signedFile?.signedUrl ?? '';
+          }
+          return {
+            id: row.id,
+            sender: row.role === 'assistant' ? 'ezra' as const : 'user' as const,
+            text: row.content,
+            ...(row.attachment_name ? {
+              attachment: {
+                uri: attachmentUri,
+                name: row.attachment_name,
+                kind: row.attachment_type === 'image' ? 'image' as const : 'file' as const,
+                mimeType: row.attachment_mime_type ?? undefined,
+                sizeBytes: row.attachment_size_bytes ?? undefined,
+                storagePath: row.attachment_path ?? undefined,
+              },
+            } : {}),
+          };
+        }));
+        setMessages(restoredMessages);
       } else {
         setMessages([WELCOME_MESSAGE]);
       }
@@ -1663,20 +1694,62 @@ export default function App() {
     setSending(true);
 
     try {
+      const messageId = createConversationId();
+      let uploadedAttachmentPath: string | null = null;
+      let uploadedAttachmentMime: string | null = null;
+      let uploadedAttachmentSize: number | null = null;
+
+      if (attachment) {
+        const extension = attachment.name.split('.').pop()?.toLowerCase() ?? '';
+        const mimeByExtension: Record<string, string> = {
+          jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
+          txt: 'text/plain', md: 'text/markdown', csv: 'text/csv', json: 'application/json',
+        };
+        const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'text/plain', 'text/markdown', 'text/csv', 'application/json'];
+        const contentType = allowedMimeTypes.includes(attachment.mimeType ?? '')
+          ? attachment.mimeType!
+          : (mimeByExtension[extension] ?? (attachment.kind === 'image' ? 'image/jpeg' : 'text/plain'));
+        const fileResponse = await fetch(attachment.uri);
+        if (!fileResponse.ok) throw new Error('تعذّر قراءة الملف المحدد.');
+        const fileBlob = await fileResponse.blob();
+        if (!fileBlob.size || fileBlob.size > 5 * 1024 * 1024) {
+          throw new Error('حجم المرفق غير صالح أو يتجاوز الحد المسموح (5 ميغابايت).');
+        }
+        const safeName = attachment.name.normalize('NFKC').replace(/[^\p{L}\p{N}._-]/gu, '_').slice(0, 100) || 'attachment';
+        uploadedAttachmentPath = `${session.user.id}/${conversationId}/${messageId}/${safeName}`;
+        uploadedAttachmentMime = contentType;
+        uploadedAttachmentSize = fileBlob.size;
+        const { error: uploadError } = await supabase.storage
+          .from('ezra-chat-attachments')
+          .upload(uploadedAttachmentPath, fileBlob, {
+            contentType,
+            cacheControl: '3600',
+            upsert: false,
+          });
+        if (uploadError) throw new Error(`تعذّر حفظ المرفق بأمان: ${uploadError.message}`);
+      }
+
       const { data, error } = await supabase
         .from('chat_messages')
         .insert({
+          id: messageId,
           owner_id: session.user.id,
           conversation_id: conversationId,
           role: 'user',
           content: text,
           attachment_name: attachment?.name ?? null,
           attachment_type: attachment?.kind ?? null,
+          attachment_path: uploadedAttachmentPath,
+          attachment_mime_type: uploadedAttachmentMime,
+          attachment_size_bytes: uploadedAttachmentSize,
         })
         .select('id')
         .single();
 
       if (error || !data) {
+        if (uploadedAttachmentPath) {
+          await supabase.storage.from('ezra-chat-attachments').remove([uploadedAttachmentPath]).catch(cleanupError => console.warn('Attachment cleanup failed:', cleanupError));
+        }
         console.error('Could not save user message to chat_messages:', {
           message: error?.message,
           details: error?.details,
@@ -1699,7 +1772,12 @@ export default function App() {
         id: data.id,
         sender: 'user',
         text,
-        ...(attachment ? { attachment } : {}),
+        ...(attachment ? { attachment: {
+          ...attachment,
+          storagePath: uploadedAttachmentPath ?? undefined,
+          mimeType: uploadedAttachmentMime ?? attachment.mimeType,
+          sizeBytes: uploadedAttachmentSize ?? attachment.sizeBytes,
+        } } : {}),
       };
       setMessages(previous => [...previous, nextMessage]);
       setMessage('');
@@ -3475,7 +3553,20 @@ export default function App() {
                           accessibilityLabel="الصورة المرفقة"
                         />
                       )}
-                      <View style={styles.attachmentChip}>
+                      <TouchableOpacity
+                        style={styles.attachmentChip}
+                        activeOpacity={0.75}
+                        disabled={!item.attachment.uri}
+                        onPress={() => {
+                          if (!item.attachment?.uri) {
+                            Alert.alert('المرفق غير متاح', 'تعذّر إنشاء رابط آمن لهذا الملف. أعد فتح المحادثة وحاول مرة أخرى.');
+                            return;
+                          }
+                          Linking.openURL(item.attachment.uri).catch(() => Alert.alert('تعذّر فتح المرفق', 'حاول مرة أخرى بعد قليل.'));
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`فتح المرفق ${item.attachment.name}`}
+                      >
                         <Text style={styles.attachmentIcon}>
                           {item.attachment.kind === 'image' ? '▧' : '▤'}
                         </Text>
@@ -3487,7 +3578,7 @@ export default function App() {
                             <Text style={styles.attachmentSize}>{formatBytes(item.attachment.sizeBytes)}</Text>
                           )}
                         </View>
-                      </View>
+                      </TouchableOpacity>
                     </View>
                   )}
                 </View>
