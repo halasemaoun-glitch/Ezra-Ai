@@ -70,21 +70,29 @@ class EzraWakeWordModule : Module() {
 
     AsyncFunction("captureScreen") { promise: Promise ->
       val context = appContext.reactContext?.applicationContext
-        ?: throw IllegalStateException("EZRA Android context is unavailable")
+      if (context == null) {
+        promise.resolve("ERROR: EZRA Android context is unavailable.")
+        return@AsyncFunction
+      }
       if (pendingScreenCapturePromise != null) {
         promise.resolve("ERROR: يوجد طلب التقاط شاشة قيد التنفيذ.")
         return@AsyncFunction
       }
       pendingScreenCapturePromise = promise
-      val manager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-      val activity = appContext.throwingActivity
-      activity.runOnUiThread {
-        try {
-          activity.startActivityForResult(manager.createScreenCaptureIntent(), SCREEN_CAPTURE_REQUEST_CODE)
-        } catch (error: Exception) {
-          pendingScreenCapturePromise = null
-          promise.resolve("ERROR: تعذّر فتح إذن التقاط الشاشة: ${error.message ?: "unknown error"}")
+      try {
+        val manager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        val activity = appContext.throwingActivity
+        activity.runOnUiThread {
+          try {
+            activity.startActivityForResult(manager.createScreenCaptureIntent(), SCREEN_CAPTURE_REQUEST_CODE)
+          } catch (error: Exception) {
+            if (pendingScreenCapturePromise === promise) pendingScreenCapturePromise = null
+            promise.resolve("ERROR: تعذّر فتح إذن التقاط الشاشة: ${error.message ?: "unknown error"}")
+          }
         }
+      } catch (error: Exception) {
+        if (pendingScreenCapturePromise === promise) pendingScreenCapturePromise = null
+        promise.resolve("ERROR: تعذّر بدء طلب التقاط الشاشة: ${error.message ?: "unknown error"}")
       }
     }
 
