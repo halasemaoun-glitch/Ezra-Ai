@@ -2,7 +2,7 @@
 
 Date: 2026-11-12
 Branch: `ezra/habibi-android-spike`
-Audited application revision: `0310756630b7b26040926e918e98e3dac0247b7c` (screenshot capture source revision; validation in progress)
+Audited application revision: `4888c5ea4151958b64eccd1a8769ebb46d235212` (accessibility service source revision; validation in progress)
 Phone parser helper: `f6f274f2b0fa906d44978c3bee6aa3ef2a6ed602`
 Phase 7 attachment storage migration: `202611120001_chat_attachment_storage.sql`
 Phone parser tests: `03bfe6929e43745572a080a882576e814dd14932`
@@ -45,7 +45,7 @@ The previous application source revision `9d4bb15d80fe9fe2710d000c72351abc124cad
 - The wake-word module exposes a foreground microphone service, pending-command handoff, and explicit Android actions for contacts, dialer, SMS composer, alarm/timer, flashlight, volume/media, app launch, and system settings.
 - The app requests microphone and (Android 13+) notification permission before enabling background wake. Direct calls and SMS use `CALL_PHONE` and `SEND_SMS` only after Android runtime permission grants; SMS submission is not proof of carrier delivery.
 - Voice screenshot commands are parsed locally and start Android's MediaProjection consent UI. After approval, a dedicated foreground service captures one frame and saves it to the device gallery under `Pictures/EZRA`; Android can request consent again for later sessions.
-- Android native module manifests and the wake-word config plugin declare both the microphone wake service and the MediaProjection screenshot service. Screenshot command parser regression tests are registered in CI.
+- Android native module manifests and the wake-word config plugin declare the microphone wake service, the MediaProjection screenshot service, and an opt-in AccessibilityService. The accessibility service searches the active accessibility tree only when an explicit click command is issued; it does not retain or transmit node text. Click, scroll, and global navigation commands are parsed locally; high-impact button labels require an in-app confirmation. Regression tests are registered in CI.
 
 ### Dental, study, and knowledge flows
 - Companion, Dentist, and Study modes have separate guidance and mode suggestions.
