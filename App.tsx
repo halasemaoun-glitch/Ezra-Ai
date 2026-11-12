@@ -1921,7 +1921,7 @@ export default function App() {
         await sayResult('مدة المؤقت يجب أن تكون بين ثانية واحدة و24 ساعة.');
         return true;
       }
-      await run(() => EzraWakeWord!.createTimer(seconds, 'EZRA'), 'تمام، فتحت إعداد المؤقت على هاتفك لتأكيده.', 'لم أتمكن من فتح تطبيق المؤقت.');
+      await run(() => EzraWakeWord!.createTimer(seconds, 'EZRA'), 'أرسلت طلب ضبط المؤقت إلى تطبيق الساعة. قد يعرض الهاتف شاشة تأكيد إذا لم يدعم الضبط المباشر.', 'لم أتمكن من فتح تطبيق المؤقت.');
       return true;
     }
 
@@ -1936,7 +1936,7 @@ export default function App() {
         await sayResult('وقت المنبه غير صحيح. قولي مثلاً: اضبط منبه الساعة 7:30 صباحاً.');
         return true;
       }
-      await run(() => EzraWakeWord!.createAlarm(hour, minute, 'EZRA'), `فتحت المنبه على ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} لتأكيد الحفظ.`, 'لم أتمكن من فتح تطبيق المنبه.');
+      await run(() => EzraWakeWord!.createAlarm(hour, minute, 'EZRA'), `أرسلت طلب ضبط المنبه على ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} إلى تطبيق الساعة.`, 'لم أتمكن من فتح تطبيق المنبه.');
       return true;
     }
 
