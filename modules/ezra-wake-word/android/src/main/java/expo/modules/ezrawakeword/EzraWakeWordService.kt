@@ -31,6 +31,8 @@ class EzraWakeWordService : Service(), RecognitionListener {
   private var stopping = false
   private var wakeTriggered = false
   private var recognitionActive = false
+  private var preferOnDeviceRecognition = true
+  private var usingOnDeviceRecognition = false
   private var wakeLock: PowerManager.WakeLock? = null
 
   override fun onCreate() {
@@ -123,15 +125,24 @@ class EzraWakeWordService : Service(), RecognitionListener {
     }
     try {
       if (recognizer == null) {
-        recognizer = SpeechRecognizer.createSpeechRecognizer(this).also {
-          it.setRecognitionListener(this)
-        }
+        val canUseOnDevice = Build.VERSION.SDK_INT >= 31 && preferOnDeviceRecognition &&
+          SpeechRecognizer.isOnDeviceRecognitionAvailable(this)
+        usingOnDeviceRecognition = canUseOnDevice
+        recognizer = if (canUseOnDevice) {
+          SpeechRecognizer.createOnDeviceSpeechRecognizer(this)
+        } else {
+          SpeechRecognizer.createSpeechRecognizer(this)
+        }.also { it.setRecognitionListener(this) }
       }
       val request = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
         putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
         putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ar")
+        putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "ar-DZ")
         putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-        putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+        putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
+        // Keep a longer phrase window so the wake phrase and the following command arrive together.
+        putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1200L)
+        putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2100L)
         putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
       }
       recognitionActive = true
@@ -150,21 +161,26 @@ class EzraWakeWordService : Service(), RecognitionListener {
     }
   }
 
+  private fun normalizeRecognitionText(value: String): String = value.lowercase(Locale.ROOT)
+    .replace(Regex("[\\u064B-\\u065F\\u0670\\u0640]"), "")
+    .replace('إ', 'ا').replace('أ', 'ا').replace('آ', 'ا')
+    .replace('ى', 'ي')
+    .replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
+    .replace(Regex("\\s+"), " ")
+    .trim()
+
   private fun inspectResults(results: ArrayList<String>?) {
     if (stopping || wakeTriggered || results.isNullOrEmpty()) return
-    val recognized = results.firstOrNull()?.trim().orEmpty()
+    val wakePattern = Regex("(?<![\\p{L}\\p{N}])(?:يا\\s*)?(?:ازرا|ايزرا|عذرا|ezra)(?![\\p{L}\\p{N}])")
+    val recognized = results.firstOrNull { candidate ->
+      wakePattern.containsMatchIn(normalizeRecognitionText(candidate))
+    }?.trim().orEmpty()
     if (recognized.isEmpty()) return
-
-    val normalized = recognized.lowercase(Locale.ROOT)
-      .replace(Regex("[\\u064B-\\u065F\\u0670]"), "")
-      .replace('إ', 'ا').replace('أ', 'ا').replace('آ', 'ا')
-    val wakePhrases = listOf("يا ازرا", "يا ايزرا", "يا عذرا", "يا ezra", "ازرا", "ايزرا", "ezra")
-    if (wakePhrases.none { normalized.contains(it) }) return
 
     wakeTriggered = true
     val command = recognized
-      .replace(Regex("(?i)يا\\s*(?:إزرا|ازرا|عذرا|ezra)|(?:إزرا|ازرا|عذرا|ezra)"), "")
-      .trim(' ', ',', '،', '.', '!')
+      .replaceFirst(Regex("(?i)(?:(?:يا|hey|okay|ok)\\s*)?(?:إ?زرا|ايزرا|عذرا|ezra)"), "")
+      .trim(' ', ',', '،', '.', '!', '?', '؟', ':', ';', '؛', '-')
     getSharedPreferences(PREFERENCES, MODE_PRIVATE)
       .edit()
       .putString(PENDING_COMMAND, if (command.isEmpty()) "__EZRA_WAKE_ONLY__" else command)
@@ -190,6 +206,23 @@ class EzraWakeWordService : Service(), RecognitionListener {
   override fun onError(error: Int) {
     recognitionActive = false
     if (stopping || wakeTriggered) return
+    if (usingOnDeviceRecognition && preferOnDeviceRecognition &&
+      (error == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED ||
+        error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE ||
+        error == SpeechRecognizer.ERROR_SERVER)) {
+      // Some phones expose on-device recognition but do not have an Arabic model installed.
+      // Fall back to the platform recognizer rather than silently losing wake-word support.
+      preferOnDeviceRecognition = false
+      handler.post {
+        recognizer?.setRecognitionListener(null)
+        recognizer?.cancel()
+        recognizer?.destroy()
+        recognizer = null
+        usingOnDeviceRecognition = false
+        scheduleRetry(250)
+      }
+      return
+    }
     if (error == SpeechRecognizer.ERROR_CLIENT || error == SpeechRecognizer.ERROR_SERVER) {
       handler.post {
         recognizer?.setRecognitionListener(null)
