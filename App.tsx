@@ -298,6 +298,9 @@ export default function App() {
   const voiceTurnInProgressRef = useRef(false);
   const voiceRequestStartedRef = useRef(false);
   const interruptVoiceFramesRef = useRef(0);
+  const voiceCaptureDuringSpeechRef = useRef(false);
+  const voiceInterruptionConfirmedRef = useRef(false);
+  const ignoreNextVoiceEndRef = useRef(false);
   const voiceRetryCountRef = useRef(0);
   const [ttsVoices, setTtsVoices] = useState<{ identifier: string; name: string; language: string; quality?: string }[]>([]);
   const [selectedTtsVoice, setSelectedTtsVoice] = useState<string | null>(null);
@@ -343,6 +346,9 @@ export default function App() {
         // Discard partial speech so background transitions can never submit an unfinished phrase.
         const hadPartialTranscript = !!voiceTranscriptRef.current;
         voiceTranscriptRef.current = '';
+        voiceCaptureDuringSpeechRef.current = false;
+        voiceInterruptionConfirmedRef.current = false;
+        interruptVoiceFramesRef.current = 0;
         if (hadPartialTranscript) setMessage('');
         setVoiceRetrying(false);
         setVoiceRetryMessage('');
@@ -1400,6 +1406,8 @@ export default function App() {
   }, [session?.user.id, conversationId]);
 
   useSpeechRecognitionEvent('start', () => {
+    if (!voiceCaptureDuringSpeechRef.current) voiceInterruptionConfirmedRef.current = false;
+    interruptVoiceFramesRef.current = 0;
     setVoiceRetrying(false);
     setVoiceRetryMessage('');
     setVoiceLevel(0);
@@ -1412,12 +1420,14 @@ export default function App() {
     // During EZRA playback, require several consecutive strong mic-energy frames
     // before treating input as an interruption. The recognition session stays open
     // so the user's words continue into the transcript after playback stops.
-    if (speakingMessageId && voiceHome && autoListenRef.current && appIsActiveRef.current) {
-      interruptVoiceFramesRef.current = normalized >= 0.58
+    if (voiceCaptureDuringSpeechRef.current && speakingMessageId && voiceHome && autoListenRef.current && appIsActiveRef.current) {
+      // Require a sustained, clear voice signal so EZRA's own speaker echo is less likely to interrupt it.
+      interruptVoiceFramesRef.current = normalized >= 0.62
         ? interruptVoiceFramesRef.current + 1
         : Math.max(0, interruptVoiceFramesRef.current - 1);
-      if (interruptVoiceFramesRef.current >= 4) {
+      if (interruptVoiceFramesRef.current >= 5) {
         interruptVoiceFramesRef.current = 0;
+        voiceInterruptionConfirmedRef.current = true;
         Speech.stop();
         EzraHabibiTts?.stopAudio().catch(() => {});
         activeHabibiSpeechRef.current = null;
@@ -1436,6 +1446,20 @@ export default function App() {
     setVoiceLevel(0);
     const spokenText = voiceTranscriptRef.current.trim();
     voiceTranscriptRef.current = '';
+    if (ignoreNextVoiceEndRef.current) {
+      ignoreNextVoiceEndRef.current = false;
+      voiceCaptureDuringSpeechRef.current = false;
+      voiceInterruptionConfirmedRef.current = false;
+      return;
+    }
+    if (voiceCaptureDuringSpeechRef.current && !voiceInterruptionConfirmedRef.current) {
+      // Discard recognition of EZRA's own spoken answer when the user did not interrupt.
+      voiceCaptureDuringSpeechRef.current = false;
+      voiceInterruptionConfirmedRef.current = false;
+      return;
+    }
+    voiceCaptureDuringSpeechRef.current = false;
+    voiceInterruptionConfirmedRef.current = false;
     if (appIsActiveRef.current && autoListenRef.current && voiceHome && spokenText) {
       voiceTurnInProgressRef.current = true;
       voiceTranscriptRef.current = '';
@@ -1445,6 +1469,7 @@ export default function App() {
   });
   useSpeechRecognitionEvent('result', event => {
     if (!appIsActiveRef.current) return;
+    if (voiceCaptureDuringSpeechRef.current && !voiceInterruptionConfirmedRef.current) return;
     const latestResult = event.results[event.results.length - 1];
     const transcript = latestResult?.transcript;
     if (transcript) {
@@ -2347,7 +2372,7 @@ export default function App() {
     };
   }, [backgroundWakeEnabled, appIsActive, speechRate, speechPitch]);
 
-  const beginListening = async (interruptSpeech = false) => {
+  const beginListening = async (interruptSpeech = false, interruptionAlreadyConfirmed = false) => {
     if (!appIsActiveRef.current || !appIsActive || !autoListenRef.current || isListening || sending || (speakingMessageId && !interruptSpeech)) return;
     try {
       const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
@@ -2359,6 +2384,9 @@ export default function App() {
         return;
       }
       voiceTranscriptRef.current = '';
+      voiceCaptureDuringSpeechRef.current = interruptSpeech && !interruptionAlreadyConfirmed;
+      voiceInterruptionConfirmedRef.current = interruptionAlreadyConfirmed;
+      interruptVoiceFramesRef.current = 0;
       // Use the language explicitly selected by the user; do not auto-switch recognition locales.
       ExpoSpeechRecognitionModule.start({
         lang: responseLanguage === 'en' ? 'en-US' : 'ar-DZ',
@@ -2369,8 +2397,8 @@ export default function App() {
         // Some Android recognition providers may ignore these optional intent extras.
         ...(Platform.OS === 'android' ? {
           androidIntentOptions: {
-            EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS: 700,
-            EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 1300,
+            EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS: 1100,
+            EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 1900,
           },
         } : {}),
         volumeChangeEventOptions: { enabled: true, intervalMillis: 90 },
@@ -2388,13 +2416,15 @@ export default function App() {
     }
     if (speakingMessageId) {
       Speech.stop();
+      EzraHabibiTts?.stopAudio().catch(() => {});
+      activeHabibiSpeechRef.current = null;
       setSpeakingMessageId(null);
       voiceTurnInProgressRef.current = false;
       voiceRequestStartedRef.current = false;
       autoListenRef.current = true;
       setAutoListen(true);
       AsyncStorage.setItem('ezra:autoListen', 'true').catch(() => {});
-      setTimeout(() => beginListening(true), 250);
+      setTimeout(() => beginListening(true, true), 250);
       return;
     }
     if (isListening) {
@@ -2488,10 +2518,22 @@ export default function App() {
     ]);
   };
 
+  const finishVoiceCaptureAfterPlayback = () => {
+    if (!voiceCaptureDuringSpeechRef.current || voiceInterruptionConfirmedRef.current) return;
+    voiceCaptureDuringSpeechRef.current = false;
+    voiceInterruptionConfirmedRef.current = false;
+    interruptVoiceFramesRef.current = 0;
+    voiceTranscriptRef.current = '';
+    ignoreNextVoiceEndRef.current = true;
+    ExpoSpeechRecognitionModule.stop();
+    setIsListening(false);
+  };
+
   const playNextHabibiChunk = async () => {
     const active = activeHabibiSpeechRef.current;
     if (!active || !EzraHabibiTts) return;
     if (active.nextIndex >= active.chunks.length) {
+      finishVoiceCaptureAfterPlayback();
       activeHabibiSpeechRef.current = null;
       setSpeakingMessageId(current => current === active.messageId ? null : current);
       resumeBackgroundWake();
@@ -2521,14 +2563,17 @@ export default function App() {
         pitch: speechPitch,
         volume: 1,
         onDone: () => {
+          finishVoiceCaptureAfterPlayback();
           setSpeakingMessageId(current => current === active.messageId ? null : current);
           resumeBackgroundWake();
         },
         onStopped: () => {
+          finishVoiceCaptureAfterPlayback();
           setSpeakingMessageId(current => current === active.messageId ? null : current);
           resumeBackgroundWake();
         },
         onError: () => {
+          finishVoiceCaptureAfterPlayback();
           setSpeakingMessageId(current => current === active.messageId ? null : current);
           resumeBackgroundWake();
         },
@@ -2551,6 +2596,7 @@ export default function App() {
   const speak = async (text: string, messageId: string) => {
     if (speakingMessageId === messageId) {
       Speech.stop();
+      finishVoiceCaptureAfterPlayback();
       EzraHabibiTts?.stopAudio().catch(() => {});
       activeHabibiSpeechRef.current = null;
       setSpeakingMessageId(null);
@@ -2585,14 +2631,17 @@ export default function App() {
       pitch: speechPitch,
       volume: 1.0,
       onDone: () => {
+        finishVoiceCaptureAfterPlayback();
         setSpeakingMessageId(current => current === messageId ? null : current);
         resumeBackgroundWake();
       },
       onStopped: () => {
+        finishVoiceCaptureAfterPlayback();
         setSpeakingMessageId(current => current === messageId ? null : current);
         resumeBackgroundWake();
       },
       onError: () => {
+        finishVoiceCaptureAfterPlayback();
         setSpeakingMessageId(current => current === messageId ? null : current);
         resumeBackgroundWake();
       },
