@@ -9,6 +9,7 @@ create table public.knowledge_documents (
   size_bytes integer not null check (size_bytes between 0 and 262144),
   added_at timestamptz not null,
   updated_at timestamptz not null default now(),
+  deleted_at timestamptz,
   primary key (owner_id, id)
 );
 
