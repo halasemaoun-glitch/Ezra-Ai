@@ -207,6 +207,7 @@ export default function App() {
   const [appIsActive, setAppIsActive] = useState(AppState.currentState === 'active');
   const appIsActiveRef = useRef(AppState.currentState === 'active');
   const [settingsVisible, setSettingsVisible] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<string | null>(null);
   const [habibiCapacity, setHabibiCapacity] = useState<HabibiDeviceCapacity | null>(null);
   const [habibiCapacityLoading, setHabibiCapacityLoading] = useState(false);
   const [habibiCapacityError, setHabibiCapacityError] = useState('');
@@ -2123,7 +2124,7 @@ export default function App() {
               accessibilityRole="tab"
               accessibilityState={{ selected: settingsVisible }}
               accessibilityLabel="الإعدادات"
-              onPress={() => { setVoiceHome(true); setSettingsVisible(true); }}
+              onPress={() => { setVoiceHome(true); setSettingsSection(null); setSettingsVisible(true); }}
             >
               <Text style={styles.mainTabIcon}>⚙</Text>
               <Text style={styles.mainTabLabel}>الإعدادات</Text>
@@ -2133,9 +2134,79 @@ export default function App() {
             <View style={styles.settingsBackdrop}>
               <View style={styles.settingsPanel}>
                 <View style={styles.historyHeader}>
-                  <Text style={styles.historyTitle}>إعدادات الصوت</Text>                  <TouchableOpacity style={styles.historyClose} onPress={() => setSettingsVisible(false)}><Text style={styles.historyCloseText}>×</Text></TouchableOpacity>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                    {settingsSection !== null ? (
+                      <TouchableOpacity
+                        style={styles.historyClose}
+                        onPress={() => setSettingsSection(null)}
+                        accessibilityRole="button"
+                        accessibilityLabel="العودة إلى أقسام الإعدادات"
+                      ><Text style={styles.historyCloseText}>‹</Text></TouchableOpacity>
+                    ) : null}
+                    <Text style={styles.historyTitle}>{settingsSection === null ? 'الإعدادات' : settingsSection === 'voice' ? 'إعدادات الصوت' : settingsSection}</Text>
+                  </View>
+                  <TouchableOpacity style={styles.historyClose} onPress={() => { setSettingsVisible(false); setSettingsSection(null); }} accessibilityRole="button" accessibilityLabel="إغلاق الإعدادات"><Text style={styles.historyCloseText}>×</Text></TouchableOpacity>
                 </View>
                 <ScrollView style={styles.settingsScroll} contentContainerStyle={styles.settingsScrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                {settingsSection === null ? (
+                  <View style={{ gap: 14, paddingBottom: 18 }}>
+                    <View style={{ paddingHorizontal: 4, paddingTop: 4, paddingBottom: 8 }}>
+                      <Text style={{ color: '#F4D9EA', fontSize: 23, fontWeight: '800', textAlign: 'right' }}>اجعلي EZRA على طريقتك</Text>
+                      <Text style={{ color: '#A99AA8', fontSize: 13, lineHeight: 21, textAlign: 'right', marginTop: 5 }}>خصصي رفيقك، ذاكرتك، صوته، ومعرفته وصلاحيات هاتفك من مكان واحد.</Text>
+                    </View>
+                    {([
+                      { id: 'companion', title: 'الرفيق الشخصي', subtitle: 'شخصية EZRA وطريقة تواصله وتفضيلاتك', icon: '✧', color: '#D58AB8' },
+                      { id: 'memory', title: 'الذاكرة', subtitle: 'الذكريات والمعلومات التي يحتفظ بها EZRA', icon: '◈', color: '#B58BE4' },
+                      { id: 'files', title: 'الملفات وقاعدة المعرفة', subtitle: 'مكتبتك ومستنداتك ومصادر المعرفة', icon: '▤', color: '#C58DBB' },
+                      { id: 'voice', title: 'الصوت', subtitle: 'الصوت الرجالي وHabibi واللهجة والاستماع', icon: '♫', color: '#E49BC6' },
+                      { id: 'phone', title: 'التحكم بالهاتف', subtitle: 'إدارة صلاحيات Android لكل ميزة بشكل مستقل', icon: '▣', color: '#B58BE4' },
+                      { id: 'ai', title: 'الذكاء الاصطناعي المتقدم', subtitle: 'النموذج ومزوّد الخدمة وأسلوب الرد', icon: '✦', color: '#D58AB8' },
+                    ] as const).map(item => (
+                      <TouchableOpacity
+                        key={item.id}
+                        activeOpacity={0.82}
+                        onPress={() => setSettingsSection(item.id === 'voice' ? 'voice' : item.title)}
+                        accessibilityRole="button"
+                        accessibilityLabel={item.title}
+                        accessibilityHint={item.id === 'voice' ? 'فتح إعدادات الصوت الحالية' : 'فتح هذا القسم'}
+                        style={{
+                          minHeight: 88,
+                          borderRadius: 20,
+                          borderWidth: 1,
+                          borderColor: '#56384F',
+                          backgroundColor: '#171119',
+                          paddingHorizontal: 16,
+                          paddingVertical: 15,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 14,
+                        }}
+                      >
+                        <View style={{ width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#352033', borderWidth: 1, borderColor: '#76506D' }}>
+                          <Text style={{ color: item.color, fontSize: 25, fontWeight: '700' }}>{item.icon}</Text>
+                        </View>
+                        <View style={{ flex: 1, gap: 5 }}>
+                          <Text style={{ color: '#F5EAF2', fontSize: 15, fontWeight: '800', textAlign: 'right' }}>{item.title}</Text>
+                          <Text style={{ color: '#A99AA8', fontSize: 11, lineHeight: 17, textAlign: 'right' }}>{item.subtitle}</Text>
+                        </View>
+                        <Text style={{ color: '#C58DBB', fontSize: 25 }}>‹</Text>
+                      </TouchableOpacity>
+                    ))}
+                    <View style={{ borderTopWidth: 1, borderTopColor: '#382735', paddingTop: 14, paddingHorizontal: 4 }}>
+                      <Text style={{ color: '#847583', fontSize: 11, textAlign: 'center' }}>EZRA AI · مساحة واحدة لتخصيص تجربتك</Text>
+                    </View>
+                  </View>
+                ) : settingsSection !== 'voice' ? (
+                  <View style={{ flex: 1, minHeight: 250, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 }}>
+                    <Text style={{ color: '#D58AB8', fontSize: 36 }}>✧</Text>
+                    <Text style={{ color: '#F5EAF2', fontSize: 18, fontWeight: '800', textAlign: 'center' }}>{settingsSection}</Text>
+                    <Text style={{ color: '#A99AA8', fontSize: 13, lineHeight: 22, textAlign: 'center' }}>هذا القسم ضمن خطة التنفيذ. سنبني وظائفه ونربطه فعلياً في خطوته المخصصة، ولن نعرض إعدادات وهمية.</Text>
+                    <TouchableOpacity onPress={() => setSettingsSection(null)} style={{ marginTop: 8, borderRadius: 14, borderWidth: 1, borderColor: '#875477', paddingHorizontal: 20, paddingVertical: 11 }}>
+                      <Text style={{ color: '#F2C8E5', fontWeight: '700' }}>العودة إلى الإعدادات</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <>
                 <View style={[styles.settingRow, { flexDirection: 'column', alignItems: 'stretch', gap: 10 }]}>
                   <View style={styles.settingCopy}>
                     <Text style={styles.settingTitle}>لغة EZRA</Text>
@@ -2334,6 +2405,8 @@ export default function App() {
                   ) : null}
                 </View>
                 <Text style={styles.settingsFootnote}>بعد تفعيل Habibi تُولّد الردود العربية محليًا بصوت العينة المعتمدة؛ الإنجليزية تستخدم صوت النظام، ويظل صوت النظام احتياطيًا إذا تعذّر تشغيل Habibi. عند تفعيل «يا EZRA» تعمل خدمة استماع أمامية بإشعار دائم ويمكنها إيقاظ التطبيق عند التقاط كلمة التنبيه. قد يقيّد النظام الخدمة أو يوقفها بسبب توفير البطارية؛ أوقف الميزة من هنا متى شئت.</Text>
+                  </>
+                )}
                 </ScrollView>
               </View>
             </View>
