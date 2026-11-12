@@ -3364,6 +3364,7 @@ export default function App() {
         <LearningToolsModal
           visible={learningToolsVisible}
           mode={assistantMode}
+          userId={session?.user.id ?? null}
           onClose={() => setLearningToolsVisible(false)}
           onAskEzra={prompt => { setMessage(prompt); setLearningToolsVisible(false); }}
         />
