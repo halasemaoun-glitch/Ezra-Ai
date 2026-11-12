@@ -9,7 +9,8 @@ const PERMISSIONS = [
   "android.permission.CALL_PHONE",
   "android.permission.SEND_SMS",
   "android.permission.WAKE_LOCK",
-  "android.permission.POST_NOTIFICATIONS"
+  "android.permission.POST_NOTIFICATIONS",
+  "android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"
 ];
 
 module.exports = function withEzraWakeWord(config) {
@@ -59,6 +60,18 @@ module.exports = function withEzraWakeWord(config) {
           "android:exported": "false",
           "android:stopWithTask": "false",
           "android:foregroundServiceType": "microphone"
+        }
+      });
+    }
+    const captureServiceName = "expo.modules.ezrawakeword.EzraScreenCaptureService";
+    if (!application.service.some(item => item.$["android:name"] === captureServiceName)) {
+      application.service.push({
+        $: {
+          "android:name": captureServiceName,
+          "android:enabled": "true",
+          "android:exported": "false",
+          "android:stopWithTask": "false",
+          "android:foregroundServiceType": "mediaProjection"
         }
       });
     }
