@@ -23,7 +23,8 @@ This matrix separates implementation evidence from proof of behavior. A componen
 | Chat and conversation history | `App.tsx` | No dedicated mobile tests | Verify send/error/retry, new chat, history load/select, ownership and persistence |
 | Voice input and speech output | `App.tsx`, `src/voice/voiceProfile.ts`, native modules | No dedicated voice-flow tests | Verify permissions, Arabic/English recognition, interruption, fallback TTS and playback lifecycle |
 | Habibi TTS native engine | `modules/ezra-habibi-tts` | Module/config presence only | Verify model loading, synthesis, playback, stop/error events on Android |
-| Wake word and phone actions | `modules/ezra-wake-word`, config plugin | Module/config presence only | Verify foreground service, permission denial, command parsing and safe intents on Android |
+| Wake word and phone actions | `modules/ezra-wake-word`, config plugin, `App.tsx` | Deno tests for call, settings, and screenshot command parsing; CI compiles native Kotlin | Verify foreground service, granted/denied permissions, direct calls/SMS, and action outcomes on Android |
+| User-approved screen capture | `EzraScreenCapture.kt`, `EzraScreenCaptureService.kt`, `EzraWakeWordModule.kt`, `App.tsx` | Deno tests for Arabic/English screenshot command recognition; CI compiles Kotlin and checks config plugin | Verify Android consent/cancel flow, MediaProjection foreground service, gallery save, and protected-content behavior on Android |
 | Memory | `App.tsx`, Supabase tables/functions | Backend auth tests only | Verify approval states, user isolation, save/edit/reject and approved-only prompt injection |
 | Knowledge files and document extraction | `src/documents/documentExtractor.ts`, `src/documents/documentTextUtils.ts`, `App.tsx`, Ream parser | Deno tests for HTML-to-text cleanup, supported extensions, and relevant excerpt selection; current CI build pending | Exercise real PDF/DOCX/PPTX/XLSX fixtures, malformed/password-protected files, and signed-in persistence/retrieval |
 | Dentist/study modes and dental references | `assistantModes.ts`, `studyLibrary.ts`, `LearningToolsModal.tsx` | Source audit only | Verify mode switching, reference retrieval, card/quiz flows and progress restoration |
@@ -34,7 +35,7 @@ This matrix separates implementation evidence from proof of behavior. A componen
 
 ## Baseline gaps
 
-1. The repository has dedicated Deno tests for the Supabase smart-service auth, persona, Groq contracts, knowledge sync, and document text utilities.
+1. The repository has dedicated Deno tests for the Supabase smart-service auth, persona, Groq contracts, knowledge sync, document text utilities, and phone/screenshot command parsing.
 2. The React Native application currently has no dedicated component/integration test runner configured in `package.json`.
 3. Most client-side features live in the large `App.tsx` module. This makes isolated behavioral tests difficult and increases the risk of treating source inspection as proof.
 4. Native TTS and wake-word behavior requires Android runtime verification; compiling their Kotlin code alone cannot prove model inference, microphone lifecycle, or audio playback.
