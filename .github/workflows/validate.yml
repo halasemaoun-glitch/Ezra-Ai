@@ -40,6 +40,8 @@ jobs:
         run: deno test src/modes/assistantModes_test.ts
       - name: Test EZRA Android contact command parsing
         run: deno test src/phone/commandParser_test.ts
+      - name: Test EZRA direct SMS command parsing
+        run: deno test src/phone/smsCommandParser_test.ts
       - name: Test EZRA expanded phone control commands
         run: deno test src/phone/phoneControlCommands_test.ts
       - name: Test EZRA expanded files notifications and media commands
