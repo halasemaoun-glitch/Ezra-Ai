@@ -131,3 +131,12 @@ A feature is marked **implemented** when its source integration exists. It is ma
 - Media controls dispatch Android media key events to the active session; app support varies. Existing quick settings deep links remain available.
 - Added Deno regression tests in src/phone/phoneActionCommands_test.ts and added the suite to GitHub Actions.
 - Verification boundary: source parser tests and CI checks do not prove every OEM file manager, notification shade, Clock app, or media session behaves identically. Notification shade requires the user to enable EZRA AccessibilityService.
+
+
+## Final integration review — 2026-11-13
+
+- Fixed direct-SMS command matching by moving Arabic/English phrase parsing into \`src/phone/smsCommandParser.ts\`; the previous inline regex was double-escaped and did not match whitespace as intended.
+- Added regression coverage for joined Arabic contact prefixes (for example \`لاختي\`), \`الى\` phrasing, English commands, incomplete requests, and unrelated phrases.
+- Hardened the screen-capture permission request so missing Activity/context and activity-launch exceptions always resolve the pending promise and clear its in-flight state rather than leaving future capture requests blocked.
+- CI validates the SMS parser, all existing Deno suites, Expo config, native Android project generation, Kotlin compilation, TypeScript, and Android bundle export.
+- Scope remains the development branch only; no merge, APK, Edge Function deployment, or paid service change is part of this review.
