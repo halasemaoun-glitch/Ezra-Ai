@@ -2,6 +2,7 @@ package expo.modules.ezrawakeword
 
 import android.Manifest
 import android.app.AlarmManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -31,6 +32,41 @@ class EzraWakeWordModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("EzraWakeWord")
+
+    Function("isAccessibilityEnabled") {
+      val context = appContext.reactContext?.applicationContext
+        ?: throw IllegalStateException("EZRA Android context is unavailable")
+      val component = ComponentName(context, EzraAccessibilityService::class.java)
+      val enabled = Settings.Secure.getString(
+        context.contentResolver,
+        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+      ).orEmpty()
+      enabled.split(':').any { it.equals(component.flattenToString(), true) || it.equals(component.flattenToShortString(), true) }
+    }
+
+    AsyncFunction("openAccessibilitySettings") {
+      val context = appContext.reactContext?.applicationContext
+        ?: throw IllegalStateException("EZRA Android context is unavailable")
+      val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      if (intent.resolveActivity(context.packageManager) == null) return@AsyncFunction false
+      context.startActivity(intent)
+      true
+    }
+
+    AsyncFunction("clickAccessibilityText") { target: String ->
+      if (target.isBlank() || target.length > 100) return@AsyncFunction false
+      EzraAccessibilityService.clickText(target)
+    }
+
+    AsyncFunction("scrollAccessibility") { direction: String ->
+      if (direction !in listOf("up", "down", "للأعلى", "للأسفل")) return@AsyncFunction false
+      EzraAccessibilityService.scroll(direction)
+    }
+
+    AsyncFunction("performAccessibilityGlobalAction") { action: String ->
+      if (action !in listOf("back", "home", "notifications", "quick_settings")) return@AsyncFunction false
+      EzraAccessibilityService.globalAction(action)
+    }
 
     AsyncFunction("captureScreen") { promise: Promise ->
       val context = appContext.reactContext?.applicationContext
