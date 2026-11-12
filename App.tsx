@@ -40,6 +40,7 @@ import LearningToolsModal from './src/components/LearningToolsModal';
 import { DENTAL_REFERENCE_LIBRARY } from './src/study/studyLibrary';
 import { supabase } from './src/lib/supabase';
 import { DEFAULT_EZRA_VOICE } from './src/voice/voiceProfile';
+import { parseCallContactName } from './src/phone/commandParser';
 import { requireNativeModule } from 'expo-modules-core';
 
 type EzraWakeWordNative = {
@@ -1415,11 +1416,8 @@ export default function App() {
 
   const handleCallCommand = async (commandText: string, voiceReply: boolean) => {
     if (Platform.OS !== 'android' || !EzraWakeWord) return false;
-    const normalized = commandText.toLowerCase().replace(/[إأآ]/g, 'ا');
-    const contactMatch = normalized.match(/(?:اتصل|كلم|دق|رن|call|phone)\\s*(?:ب|على|ل|الى)?\\s*(.+)$/i);
-    if (!contactMatch) return false;
-    const contactName = contactMatch[1].replace(/\\s*(?:الان|الحين|حالاً|حالا|من فضلك)$/i, '').trim();
-    if (!contactName || /^(?:بي|me|myself)$/.test(contactName)) return false;
+    const contactName = parseCallContactName(commandText);
+    if (!contactName) return false;
 
     setSending(true);
     const userId = `call-user-${Date.now()}`;
