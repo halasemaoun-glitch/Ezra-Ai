@@ -41,5 +41,5 @@ export function parseAccessibilityCommand(command: string): AccessibilityCommand
 
 export function isSensitiveAccessibilityTarget(target: string): boolean {
   const value = normalize(target);
-  return /(?:حذف|احذف|مسح|الغاء الحساب|شراء|اشتر|ادفع|دفع|تحويل|ارسال|ابعث|نشر|موافق|تأكيد|confirm|delete|remove|buy|purchase|pay|payment|transfer|send|post|submit)/i.test(value);
+  return /(?:حذف|احذف|مسح|الغاء الحساب|شراء|اشتر|ادفع|دفع|تحويل|ارسال|ابعث|نشر|موافق|تاكيد|اتصال|اتصل|مكالمة|اشتراك|confirm|delete|remove|buy|purchase|pay|payment|transfer|send|post|submit|call|dial|subscribe)/i.test(value);
 }
