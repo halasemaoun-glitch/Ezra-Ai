@@ -1,6 +1,6 @@
 export function parseCallContactName(commandText: string): string | null {
   const normalized = commandText.toLowerCase().replace(/[إأآ]/g, 'ا');
-  const match = normalized.match(/(?:اتصل|كلم|دق|رن|call|phone)\s*(?:ب|على|ل|الى)?\s*(.+)$/i);
+  const match = normalized.match(/(?:اتصل(?:ي)?|اتصلي|كلم(?:ي)?|دق(?:ي)?|رن(?:ي)?|call|phone)\s*(?:ب|على|ل|الى)?\s*(.+)$/i);
   if (!match) return null;
 
   const contactName = match[1]
