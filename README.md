@@ -17,6 +17,7 @@ Private personal AI companion built with Expo SDK 54 and React Native, with Andr
 - Arabic/English speech recognition, system text-to-speech fallback, and an optional local Habibi TTS native engine.
 - Android wake-word foreground service and phone actions including flashlight, volume/media controls, app/system settings, alarms/timers, contact lookup, direct phone calls, and direct SMS after the corresponding Android permissions are granted.
 - Voice screenshot commands (for example, “EZRA, take a screenshot”) launch Android's official screen-capture consent prompt, then save the approved capture to `Pictures/EZRA` in the device gallery.
+- Optional Android AccessibilityService integration lets the user explicitly enable EZRA in system settings, then issue semantic button clicks, scroll, Back/Home, notifications, and quick-settings commands. High-impact button labels (send, delete, payment, purchase, confirmation) require an in-app confirmation first.
 
 ## Important limitations
 
@@ -26,6 +27,7 @@ Private personal AI companion built with Expo SDK 54 and React Native, with Andr
 - Habibi TTS requires a large model download and suitable free RAM/storage. Its Android native code is compiled by CI, but actual model inference and playback still require runtime verification on a device. Android system TTS remains the fallback.
 - Wake-word recognition depends on Android's speech-recognition provider, microphone/notification permissions, foreground-service rules, and manufacturer battery-management behavior.
 - Android requires the user to approve screen capture through its system prompt. The approval is session-scoped and may be requested again for later captures; protected app content may appear black. Calls and SMS require explicit permissions, and SMS submission does not guarantee carrier delivery.
+- Accessibility control is opt-in and must be enabled manually by the user in Android Settings. EZRA only searches the active accessibility tree when the user gives a supported action; the service does not log or transmit screen text. Controls without accessible labels, custom canvas controls, and apps that restrict accessibility may not respond.
 - The orb is an animated 2D React Native illustration, not a 3D model.
 - Groq free-tier availability and quotas can change. If the provider quota is exhausted, AI responses may be temporarily unavailable.
 
