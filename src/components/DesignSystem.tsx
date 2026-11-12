@@ -79,7 +79,7 @@ export function EzraButton({
       ]}
     >
       {loading ? <ActivityIndicator color={palette.color} /> : (
-        <Text style={{ color: palette.color, ...typography.bodyStrong }}>{title}</Text>
+        <Text style={{ color: palette.color, ...typography.button }}>{title}</Text>
       )}
     </Pressable>
   );
@@ -115,7 +115,7 @@ export function EzraTextField({ label, error, containerStyle, style, onFocus, on
             color: colors.textPrimary,
             paddingHorizontal: spacing.lg,
             paddingVertical: spacing.md,
-            fontSize: 14,
+            ...typography.input,
           },
           style,
         ]}
