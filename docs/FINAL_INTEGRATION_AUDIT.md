@@ -75,7 +75,9 @@ The last confirmed successful validation baseline is revision `0294013a0abe6129e
 - EZRA checks: success.
 - Habibi Android native engine cross-compile: success.
 
-The latest confirmed CI success was on `2ea0e8074ba88084c1985ef686766bc5fcf02186`. Phase 7 changes (`783f253` and the subsequent migration commit) require a fresh CI run on the new branch head before being marked build-verified.
+The latest confirmed CI success is on `b7e09e5550f123e0efd50f3886829756af9bab22`:
+- EZRA checks run `43302448477`: success.
+- Habibi Android native engine cross-compile run `43302448470`: success, including `android-arm64-engine` and `android-app-build` jobs.
 
 ## Acceptance rule
 
@@ -90,4 +92,5 @@ A feature is marked **implemented** when its source integration exists. It is ma
 - Conversation restore requests one-hour signed URLs for stored attachments. The attachment chip opens the signed URL; image previews use the same private URL.
 - Deleting a conversation also attempts to remove its stored objects.
 - Upload failure prevents the message from being saved; a failed message insert triggers best-effort removal of the just-uploaded object.
-- **Deployment gate:** this migration is committed to the feature branch only. It has not been applied to Supabase. Do not claim runtime availability until the migration is applied and the storage flow is validated.
+- **Supabase migration applied:** `ezra_private_chat_attachment_storage` was applied successfully to the existing `EZRA AI` Supabase project (`qjqbgbbrzovimyutzvps`). A verification query confirmed all three attachment columns, the private 5 MiB bucket, and all three owner-scoped Storage policies.
+- **Remaining verification boundary:** schema, bucket configuration, and policies are verified. An authenticated end-to-end upload, signed-URL restore, and cross-user denial test has not been run, so do not claim those runtime flows were tested.
