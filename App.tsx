@@ -43,6 +43,7 @@ import { supabase } from './src/lib/supabase';
 import { DEFAULT_EZRA_VOICE } from './src/voice/voiceProfile';
 import { parseCallContactName } from './src/phone/commandParser';
 import { isScreenCaptureCommand } from './src/phone/screenCaptureCommands';
+import { isSensitiveAccessibilityTarget, parseAccessibilityCommand } from './src/phone/accessibilityCommands';
 import { PHONE_SETTINGS_COMMANDS, parsePhoneSettingsTarget, type PhoneSettingsTarget } from './src/phone/phoneControlCommands';
 import type { KnowledgeDocumentRecord } from './src/knowledge/knowledgeSync';
 import { knowledgeDocumentsFromCloud, knowledgeDocumentsToCloud, mergeKnowledgeDocuments, normalizeKnowledgeDocuments } from './src/knowledge/knowledgeSync';
@@ -75,6 +76,11 @@ type EzraWakeWordNative = {
   composeSms: (phone: string, body: string) => Promise<boolean>;
   sendSmsDirect: (phone: string, body: string) => Promise<boolean>;
   captureScreen: () => Promise<string>;
+  isAccessibilityEnabled: () => boolean;
+  openAccessibilitySettings: () => Promise<boolean>;
+  clickAccessibilityText: (target: string) => Promise<boolean>;
+  scrollAccessibility: (direction: string) => Promise<boolean>;
+  performAccessibilityGlobalAction: (action: string) => Promise<boolean>;
   createAlarm: (hour: number, minute: number, label: string) => Promise<boolean>;
   createTimer: (seconds: number, label: string) => Promise<boolean>;
   openSystemSettings: (target: string) => Promise<boolean>;
@@ -258,7 +264,7 @@ export default function App() {
   const appIsActiveRef = useRef(AppState.currentState === 'active');
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [settingsSection, setSettingsSection] = useState<string | null>(null);
-  const [phonePermissions, setPhonePermissions] = useState({ contacts: false, camera: false, microphone: false, notifications: false, calls: false, sms: false });
+  const [phonePermissions, setPhonePermissions] = useState({ contacts: false, camera: false, microphone: false, notifications: false, calls: false, sms: false, accessibility: false });
   const [phonePermissionsLoading, setPhonePermissionsLoading] = useState(false);
   const [phoneTorchEnabled, setPhoneTorchEnabled] = useState(false);
   const [phoneOverview, setPhoneOverview] = useState<EzraPhoneOverview | null>(null);
@@ -1661,6 +1667,75 @@ export default function App() {
     return true;
   };
 
+  const handleAccessibilityCommand = async (commandText: string, voiceReply: boolean) => {
+    if (Platform.OS !== 'android' || !EzraWakeWord) return false;
+    const command = parseAccessibilityCommand(commandText);
+    if (!command) return false;
+
+    const execute = async () => {
+      setSending(true);
+      let reply = '';
+      try {
+        const enabled = EzraWakeWord!.isAccessibilityEnabled();
+        if (!enabled) {
+          await EzraWakeWord!.openAccessibilitySettings();
+          reply = 'خدمة إمكانية الوصول الخاصة بـ EZRA غير مفعّلة بعد. افتحي EZRA من القائمة وفعّلي الخدمة بنفسك، ثم أعيدي الأمر.';
+        } else {
+          const ok = command.kind === 'click'
+            ? await EzraWakeWord!.clickAccessibilityText(command.target)
+            : command.kind === 'scroll'
+              ? await EzraWakeWord!.scrollAccessibility(command.direction)
+              : await EzraWakeWord!.performAccessibilityGlobalAction(command.action);
+          reply = ok
+            ? command.kind === 'click' ? `ضغطت على «${command.target}».`
+              : command.kind === 'scroll' ? 'تم تنفيذ التمرير.'
+              : 'تم تنفيذ أمر التنقل.'
+            : command.kind === 'click'
+              ? `لم أجد عنصراً قابلاً للضغط باسم «${command.target}» في الشاشة الحالية.`
+              : 'لم يتمكن Android من تنفيذ هذا الإجراء في الشاشة الحالية.';
+        }
+      } catch (error) {
+        console.warn('EZRA accessibility action failed:', error);
+        reply = 'تعذّر تنفيذ الأمر عبر إمكانية الوصول. تأكدي من تفعيل خدمة EZRA في إعدادات Android.';
+      }
+
+      const userId = `accessibility-user-${Date.now()}`;
+      const replyId = `accessibility-reply-${Date.now()}`;
+      try {
+        const { error } = await supabase.from('chat_messages').insert([
+          { owner_id: session!.user.id, conversation_id: conversationId!, role: 'user', content: commandText },
+          { owner_id: session!.user.id, conversation_id: conversationId!, role: 'assistant', content: reply },
+        ]);
+        if (error) console.warn('Could not save accessibility action to history:', error);
+      } catch (error) {
+        console.warn('Could not save accessibility action to history:', error);
+      }
+      setMessages(previous => [
+        ...previous,
+        { id: userId, sender: 'user', text: commandText },
+        { id: replyId, sender: 'ezra', text: reply },
+      ]);
+      setMessage('');
+      if (voiceReply || autoSpeak) speak(reply, replyId);
+      setSending(false);
+    };
+
+    if (command.kind === 'click' && isSensitiveAccessibilityTarget(command.target)) {
+      Alert.alert(
+        'تأكيد الضغط',
+        `هل تريدين الضغط على «${command.target}» في التطبيق المفتوح؟ قد يؤدي ذلك إلى تنفيذ إجراء لا يمكن التراجع عنه.`,
+        [
+          { text: 'إلغاء', style: 'cancel' },
+          { text: 'تأكيد', onPress: () => { void execute(); } },
+        ]
+      );
+      return true;
+    }
+
+    await execute();
+    return true;
+  };
+
   const handleScreenshotCommand = async (commandText: string, voiceReply: boolean) => {
     if (Platform.OS !== 'android' || !EzraWakeWord || !isScreenCaptureCommand(commandText)) return false;
 
@@ -1964,6 +2039,7 @@ export default function App() {
     if (await handleMemorySaveCommand(text, voiceReply)) return;
     if (await handleFlashCommand(text, voiceReply)) return;
     if (await handleSystemCommand(text, voiceReply)) return;
+    if (await handleAccessibilityCommand(text, voiceReply)) return;
     if (await handleScreenshotCommand(text, voiceReply)) return;
     if (await handleCallCommand(text, voiceReply)) return;
 
@@ -2295,7 +2371,7 @@ export default function App() {
     if (Platform.OS !== 'android') return;
     setPhonePermissionsLoading(true);
     try {
-      const [contacts, camera, microphone, notifications, calls, sms] = await Promise.all([
+      const [contacts, camera, microphone, notifications, calls, sms, accessibility] = await Promise.all([
         PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.READ_CONTACTS),
         PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.CAMERA),
         PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO),
@@ -2304,8 +2380,9 @@ export default function App() {
           : Promise.resolve(true),
         PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.CALL_PHONE),
         PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.SEND_SMS),
+        Promise.resolve(EzraWakeWord?.isAccessibilityEnabled() ?? false),
       ]);
-      setPhonePermissions({ contacts, camera, microphone, notifications, calls, sms });
+      setPhonePermissions({ contacts, camera, microphone, notifications, calls, sms, accessibility });
     } catch (error) {
       console.warn('Could not refresh EZRA phone permissions:', error);
     } finally {
@@ -2383,10 +2460,13 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (settingsVisible && settingsSection === 'التحكم بالهاتف') {
-      void refreshPhonePermissions();
-      void refreshPhoneOverview();
-    }
+    if (!settingsVisible || settingsSection !== 'التحكم بالهاتف') return;
+    void refreshPhonePermissions();
+    void refreshPhoneOverview();
+    const subscription = AppState.addEventListener('change', state => {
+      if (state === 'active') void refreshPhonePermissions();
+    });
+    return () => subscription.remove();
   }, [settingsVisible, settingsSection]);
 
   const toggleBackgroundWake = async (enabled: boolean) => {
@@ -3331,6 +3411,27 @@ export default function App() {
                       <Text style={{ color: '#F2D9E9', fontSize: 14, fontWeight: '800' }}>أذونات الميزات</Text>
                       <TouchableOpacity onPress={() => { void refreshPhonePermissions(); }} disabled={phonePermissionsLoading} accessibilityRole="button">
                         <Text style={{ color: '#DCA8CA', fontSize: 11, fontWeight: '700' }}>{phonePermissionsLoading ? 'جارٍ التحديث…' : 'تحديث الحالة ↻'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <View style={{ padding: 13, borderRadius: 14, backgroundColor: '#1B151E', borderWidth: 1, borderColor: '#80516F', gap: 9 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                        <View style={{ flex: 1, gap: 4 }}>
+                          <Text style={{ color: '#F5EAF2', fontSize: 13, fontWeight: '800', textAlign: 'right' }}>التحكم داخل التطبيقات (إمكانية الوصول)</Text>
+                          <Text style={{ color: '#A99AA8', fontSize: 10, lineHeight: 16, textAlign: 'right' }}>يسمح لـ EZRA بالعثور على الأزرار التي تطلبينها والضغط عليها والتمرير داخل التطبيق المفتوح. لا يقرأ محتوى الشاشة للتخزين أو الإرسال.</Text>
+                        </View>
+                        <View style={{ paddingHorizontal: 9, paddingVertical: 5, borderRadius: 10, backgroundColor: phonePermissions.accessibility ? '#20352C' : '#38202D' }}>
+                          <Text style={{ color: phonePermissions.accessibility ? '#A9D7B9' : '#E5B7C8', fontSize: 10, fontWeight: '700' }}>{phonePermissions.accessibility ? 'مفعّلة' : 'غير مفعّلة'}</Text>
+                        </View>
+                      </View>
+                      <TouchableOpacity onPress={async () => {
+                        try {
+                          const opened = await EzraWakeWord?.openAccessibilitySettings();
+                          if (!opened) Alert.alert('تعذّر فتح الإعدادات', 'افتحي إعدادات إمكانية الوصول في Android يدوياً.');
+                        } catch (error) {
+                          Alert.alert('تعذّر فتح الإعدادات', String(error));
+                        }
+                      }} accessibilityRole="button" style={{ alignSelf: 'flex-start', paddingHorizontal: 13, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: '#80516F' }}>
+                        <Text style={{ color: '#E9B8D8', fontSize: 11, fontWeight: '700' }}>{phonePermissions.accessibility ? 'إدارة خدمة EZRA' : 'تفعيل خدمة EZRA في Android'}</Text>
                       </TouchableOpacity>
                     </View>
                     {([
