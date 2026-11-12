@@ -44,6 +44,8 @@ import { DEFAULT_EZRA_VOICE } from './src/voice/voiceProfile';
 import { parseCallContactName } from './src/phone/commandParser';
 import type { KnowledgeDocumentRecord } from './src/knowledge/knowledgeSync';
 import { knowledgeDocumentsFromCloud, knowledgeDocumentsToCloud, mergeKnowledgeDocuments, normalizeKnowledgeDocuments } from './src/knowledge/knowledgeSync';
+import { extractDocumentText, MAX_DOCUMENT_SOURCE_BYTES, MAX_EXTRACTED_DOCUMENT_BYTES } from './src/documents/documentExtractor';
+import { getDocumentExtension, getDocumentMimeType, isSupportedDocumentExtension, selectRelevantDocumentText } from './src/documents/documentTextUtils';
 import {
   DEFAULT_COMPANION_PROFILE,
   companionProfileFromCloudRow,
@@ -1040,33 +1042,27 @@ export default function App() {
   const addKnowledgeDocument = async () => {
     if (!session || !knowledgeLoaded || knowledgeLoading || !!knowledgeError) return;
     if (knowledgeDocuments.filter(item => !item.deletedAt).length >= 8) {
-      Alert.alert('وصلت إلى الحد الأقصى', 'يمكنك حفظ 8 ملفات نصية حالياً. احذف ملفاً قديماً لإضافة ملف جديد.');
+      Alert.alert('وصلت إلى الحد الأقصى', 'يمكنك حفظ 8 مستندات حالياً. احذف مستنداً قديماً لإضافة مستند جديد.');
       return;
     }
     try {
       const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true, multiple: false });
       if (result.canceled || !result.assets[0]) return;
       const file = result.assets[0];
-      const extension = file.name.split('.').pop()?.toLowerCase() || '';
-      if (!['txt', 'md', 'csv', 'json'].includes(extension)) {
-        Alert.alert('صيغة غير مدعومة', 'تدعم المكتبة حالياً TXT وMD وCSV وJSON فقط. PDF وWord غير مدعومين بعد.');
+      const extension = getDocumentExtension(file.name);
+      if (!isSupportedDocumentExtension(extension)) {
+        Alert.alert('صيغة غير مدعومة', 'يمكنك إضافة TXT وMD وCSV وJSON وPDF وDOCX وPPTX وXLSX.');
         return;
       }
-      if (typeof file.size === 'number' && file.size > 256 * 1024) {
-        Alert.alert('الملف كبير', 'الحد الأقصى للملف الواحد 256 كيلوبايت.');
+      if (typeof file.size === 'number' && file.size > MAX_DOCUMENT_SOURCE_BYTES) {
+        Alert.alert('الملف كبير', 'الحد الأقصى لحجم المستند الأصلي 5 ميغابايت.');
         return;
       }
       const response = await fetch(file.uri);
-      if (!response.ok) throw new Error('Could not read selected file');
-      const content = await response.text();
-      if (!content.trim()) {
-        Alert.alert('ملف فارغ', 'لم نعثر على نص قابل للقراءة داخل الملف.');
-        return;
-      }
-      if (content.length > 256 * 1024) {
-        Alert.alert('الملف كبير', 'الحد الأقصى لمحتوى الملف 256 كيلوبايت.');
-        return;
-      }
+      if (!response.ok) throw new Error('تعذّرت قراءة المستند المحدد.');
+      const sourceBytes = new Uint8Array(await response.arrayBuffer());
+      const extracted = await extractDocumentText(file.name, sourceBytes, MAX_EXTRACTED_DOCUMENT_BYTES);
+      const content = extracted.content;
       if (knowledgeDocuments.some(item => !item.deletedAt && item.name.toLowerCase() === file.name.toLowerCase())) {
         Alert.alert('الملف موجود مسبقاً', 'احذف النسخة القديمة أولاً إذا أردت استبدال هذا الملف.');
         return;
@@ -1076,7 +1072,7 @@ export default function App() {
         id: `knowledge-${Date.now()}`,
         name: file.name,
         content,
-        sizeBytes: typeof file.size === 'number' ? file.size : content.length,
+        sizeBytes: extracted.extractedBytes,
         addedAt: now,
         updatedAt: now,
         deletedAt: null,
@@ -1912,8 +1908,12 @@ export default function App() {
         const mimeByExtension: Record<string, string> = {
           jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
           txt: 'text/plain', md: 'text/markdown', csv: 'text/csv', json: 'application/json',
+          pdf: 'application/pdf',
+          docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+          xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         };
-        const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'text/plain', 'text/markdown', 'text/csv', 'application/json'];
+        const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'text/plain', 'text/markdown', 'text/csv', 'application/json', 'application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
         const contentType = allowedMimeTypes.includes(attachment.mimeType ?? '')
           ? attachment.mimeType!
           : (mimeByExtension[extension] ?? (attachment.kind === 'image' ? 'image/jpeg' : 'text/plain'));
@@ -1995,7 +1995,11 @@ export default function App() {
         const attachmentPrompt = attachment?.kind === 'image'
           ? 'Please inspect the attached image carefully and answer the user\'s question. If no question was provided, describe the image and any readable text.'
           : attachment?.textContent
-            ? `The user attached a text document named ${attachment.name}. Analyze its contents below:\n\n${attachment.textContent.slice(0, 8000)}${attachment.textContent.length > 12000 ? '\\n\\n[The document was shortened to fit the request.]' : ''}`
+            ? (() => {
+                const excerpt = selectRelevantDocumentText(attachment.textContent!, text, 12000);
+                const shortened = excerpt.length < attachment.textContent!.length;
+                return `The user attached a document named ${attachment.name}. Analyze the extracted text below. ${shortened ? 'Only relevant excerpts are included; do not assume omitted sections contain no information.' : 'The full extracted text is included.'}\n\n${excerpt}`;
+              })()
             : '';
         const userInput = [text, attachmentPrompt].filter(Boolean).join('\n\n');
         const recentContext = messages
@@ -2496,27 +2500,27 @@ export default function App() {
       });
       if (result.canceled || !result.assets[0]) return;
       const file = result.assets[0];
-      const extension = file.name.split('.').pop()?.toLowerCase() || '';
-      const supportedTextTypes = ['txt', 'md', 'csv', 'json'];
-      if (!supportedTextTypes.includes(extension)) {
-        Alert.alert('نوع الملف غير مدعوم بعد', 'حاليًا يستطيع إزرا قراءة ملفات TXT وMD وCSV وJSON. دعم PDF وWord قادم لاحقًا.');
+      const extension = getDocumentExtension(file.name);
+      if (!isSupportedDocumentExtension(extension)) {
+        Alert.alert('نوع الملف غير مدعوم', 'يمكنك إرفاق TXT وMD وCSV وJSON وPDF وDOCX وPPTX وXLSX.');
         return;
       }
-      if (typeof file.size === 'number' && file.size > 1024 * 1024) {
-        Alert.alert('الملف كبير جدًا', 'اختر ملفًا نصيًا أصغر من 1 ميغابايت.');
+      if (typeof file.size === 'number' && file.size > MAX_DOCUMENT_SOURCE_BYTES) {
+        Alert.alert('الملف كبير جدًا', 'الحد الأقصى لحجم المرفق 5 ميغابايت.');
         return;
       }
       const response = await fetch(file.uri);
-      const textContent = await response.text();
-      if (!textContent.trim()) {
-        Alert.alert('الملف فارغ', 'لم نعثر على نص قابل للقراءة داخل الملف.');
-        return;
-      }
-      if (textContent.length > 1024 * 1024) {
-        Alert.alert('الملف كبير جدًا', 'اختر ملفًا نصيًا أصغر من 1 ميغابايت.');
-        return;
-      }
-      setAttachment({ uri: file.uri, name: file.name, kind: 'file', mimeType: file.mimeType, textContent, sizeBytes: file.size });
+      if (!response.ok) throw new Error('تعذّرت قراءة الملف المحدد.');
+      const sourceBytes = new Uint8Array(await response.arrayBuffer());
+      const extracted = await extractDocumentText(file.name, sourceBytes, MAX_EXTRACTED_DOCUMENT_BYTES);
+      setAttachment({
+        uri: file.uri,
+        name: file.name,
+        kind: 'file',
+        mimeType: file.mimeType || getDocumentMimeType(extension),
+        textContent: extracted.content,
+        sizeBytes: typeof file.size === 'number' ? file.size : sourceBytes.byteLength,
+      });
     } catch {
       Alert.alert('تعذّر فتح الملفات', 'حاول مرة أخرى.');
     }
@@ -3060,7 +3064,7 @@ export default function App() {
                   <View style={{ gap: 15, paddingBottom: 22 }}>
                     <View style={{ padding: 17, borderRadius: 18, backgroundColor: '#241625', borderWidth: 1, borderColor: '#68435F', gap: 7 }}>
                       <Text style={{ color: '#F5DDED', fontSize: 18, fontWeight: '800', textAlign: 'right' }}>مكتبة معرفة EZRA</Text>
-                      <Text style={{ color: '#B9A6B6', fontSize: 12, lineHeight: 20, textAlign: 'right' }}>أضف مستنداتك النصية ليبحث EZRA في محتواها عند طرح سؤال ذي صلة. تُحفظ نسخة محلية وتُزامن مع حسابك الخاص.</Text>
+                      <Text style={{ color: '#B9A6B6', fontSize: 12, lineHeight: 20, textAlign: 'right' }}>أضف مستنداتك ليقرأ EZRA محتواها ويسترجع الأجزاء المرتبطة بسؤالك. تُحفظ نسخة محلية وتُزامن مع حسابك الخاص.</Text>
                       <Text style={{ color: '#A9D7B9', fontSize: 11, textAlign: 'right' }}>يمكنك استعادتها على أجهزتك الأخرى؛ ويرسل EZRA المقتطفات المرتبطة بالسؤال فقط إلى خدمة الذكاء الاصطناعي.</Text>
                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                         <Text style={{ color: knowledgeSyncStatus === 'error' ? '#E5B7C8' : '#A9D7B9', fontSize: 10, textAlign: 'right', flex: 1 }}>
@@ -3082,9 +3086,9 @@ export default function App() {
                       </View>
                     </View>
                     <View style={{ padding: 14, borderRadius: 15, backgroundColor: '#1B151E', borderWidth: 1, borderColor: '#493747', gap: 7 }}>
-                      <Text style={{ color: '#F2D9E9', fontSize: 14, fontWeight: '800', textAlign: 'right' }}>الصيغ المدعومة حالياً</Text>
-                      <Text style={{ color: '#B9AAB7', fontSize: 12, textAlign: 'right' }}>TXT · Markdown · CSV · JSON</Text>
-                      <Text style={{ color: '#8F8290', fontSize: 10, lineHeight: 17, textAlign: 'right' }}>حتى 8 ملفات، وبحد أقصى 256 كيلوبايت لكل ملف. دعم PDF وWord والفهرسة المتقدمة لاحقاً.</Text>
+                      <Text style={{ color: '#F2D9E9', fontSize: 14, fontWeight: '800', textAlign: 'right' }}>الصيغ المدعومة</Text>
+                      <Text style={{ color: '#B9AAB7', fontSize: 12, textAlign: 'right' }}>TXT · MD · CSV · JSON · PDF · DOCX · PPTX · XLSX</Text>
+                      <Text style={{ color: '#8F8290', fontSize: 10, lineHeight: 17, textAlign: 'right' }}>حتى 8 مستندات، وبحد أقصى 5 ميغابايت للملف الأصلي و1 ميغابايت للنص المستخرج. ملفات PDF المصوّرة تحتاج OCR غير المتاح حالياً.</Text>
                     </View>
                     <TouchableOpacity onPress={addKnowledgeDocument} disabled={!knowledgeLoaded || knowledgeLoading || !!knowledgeError || knowledgeDocuments.filter(item => !item.deletedAt).length >= 8} style={{ borderRadius: 15, paddingVertical: 14, alignItems: 'center', backgroundColor: '#754765', borderWidth: 1, borderColor: '#C58DBB', opacity: !knowledgeLoaded || knowledgeLoading || !!knowledgeError || knowledgeDocuments.filter(item => !item.deletedAt).length >= 8 ? 0.55 : 1 }}>
                       <Text style={{ color: '#FFF0F8', fontSize: 14, fontWeight: '800' }}>{knowledgeLoading ? 'جارٍ تحميل المكتبة…' : '＋ إضافة ملف إلى مكتبة المعرفة'}</Text>
@@ -3110,7 +3114,7 @@ export default function App() {
                       ) : knowledgeLoading && !knowledgeLoaded ? (
                         <Text style={styles.historyEmpty}>جارٍ تحميل مكتبة المعرفة…</Text>
                       ) : visibleKnowledgeDocuments.length === 0 ? (
-                        <Text style={styles.historyEmpty}>{knowledgeDocuments.filter(item => !item.deletedAt).length === 0 ? 'لم تضف ملفات بعد. ابدأ بإضافة مستند نصي.' : 'لا توجد ملفات تطابق البحث.'}</Text>
+                        <Text style={styles.historyEmpty}>{knowledgeDocuments.filter(item => !item.deletedAt).length === 0 ? 'لم تضف مستندات بعد. ابدأ بإضافة ملف من الصيغ المدعومة.' : 'لا توجد ملفات تطابق البحث.'}</Text>
                       ) : (
                         visibleKnowledgeDocuments.map(document => (
                           <View key={document.id} style={{ padding: 13, borderRadius: 14, backgroundColor: '#1B151E', borderWidth: 1, borderColor: '#493747', gap: 8 }}>
