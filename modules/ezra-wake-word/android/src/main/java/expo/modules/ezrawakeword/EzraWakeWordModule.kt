@@ -163,7 +163,7 @@ class EzraWakeWordModule : Module() {
         else -> Settings.ACTION_SETTINGS
       }
       val intent = Intent(action).apply {
-        if (target.equals("app", true)) data = Uri.parse("package:${context.packageName}")
+        if (target.equals("app", true) || target.equals("app_permissions", true)) data = Uri.parse("package:${context.packageName}")
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
       }
       if (intent.resolveActivity(context.packageManager) == null) return@AsyncFunction false
@@ -177,7 +177,28 @@ class EzraWakeWordModule : Module() {
       val query = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
       val matches = context.packageManager.queryIntentActivities(query, 0)
       val wanted = requestedName.trim().lowercase(Locale.ROOT)
+      val packageAliases = mapOf(
+        "whatsapp" to setOf("com.whatsapp"),
+        "youtube" to setOf("com.google.android.youtube"),
+        "chrome" to setOf("com.android.chrome"),
+        "gmail" to setOf("com.google.android.gm"),
+        "phone" to setOf("com.google.android.dialer", "com.android.phone"),
+        "messages" to setOf("com.google.android.apps.messaging", "com.android.mms"),
+        "contacts" to setOf("com.google.android.contacts", "com.android.contacts"),
+        "calendar" to setOf("com.google.android.calendar"),
+        "camera" to setOf("com.android.camera2", "com.google.android.GoogleCamera"),
+        "clock" to setOf("com.google.android.deskclock"),
+        "maps" to setOf("com.google.android.apps.maps"),
+        "photos" to setOf("com.google.android.apps.photos"),
+        "play store" to setOf("com.android.vending"),
+        "spotify" to setOf("com.spotify.music"),
+        "calculator" to setOf("com.google.android.calculator"),
+        "files" to setOf("com.google.android.documentsui")
+      )
+      val preferredPackages = packageAliases[wanted].orEmpty()
       val match = matches.firstOrNull { info ->
+        preferredPackages.contains(info.activityInfo.packageName)
+      } ?: matches.firstOrNull { info ->
         info.loadLabel(context.packageManager).toString().trim().lowercase(Locale.ROOT) == wanted
       } ?: matches.firstOrNull { info ->
         info.loadLabel(context.packageManager).toString().trim().lowercase(Locale.ROOT).contains(wanted)
@@ -208,7 +229,9 @@ class EzraWakeWordModule : Module() {
       val context = appContext.reactContext?.applicationContext
         ?: throw IllegalStateException("EZRA Android context is unavailable")
       val keyCode = when (requestedAction.lowercase(Locale.ROOT)) {
-        "play", "pause", "toggle" -> KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+        "play" -> KeyEvent.KEYCODE_MEDIA_PLAY
+        "pause" -> KeyEvent.KEYCODE_MEDIA_PAUSE
+        "toggle" -> KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
         "next" -> KeyEvent.KEYCODE_MEDIA_NEXT
         "previous" -> KeyEvent.KEYCODE_MEDIA_PREVIOUS
         "stop" -> KeyEvent.KEYCODE_MEDIA_STOP
