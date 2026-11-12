@@ -29,7 +29,7 @@ function decodeHtmlEntities(value: string): string {
 export function htmlToPlainText(html: string): string {
   return decodeHtmlEntities(
     html
-      .replace(/<\s*(?:script|style|noscript)\b[^>]*>[\s\S]*?<\/\s*\1\s*>/gi, ' ')
+      .replace(/<\s*(script|style|noscript)\b[^>]*>[\s\S]*?<\/\s*\1\s*>/gi, ' ')
       .replace(/<!--([\s\S]*?)-->/g, ' ')
       .replace(/<\s*br\b[^>]*\/?\s*>/gi, '\n')
       .replace(/<\s*\/\s*(?:td|th)\s*>/gi, ' | ')
