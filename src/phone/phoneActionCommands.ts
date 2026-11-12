@@ -23,7 +23,7 @@ export function parsePhoneActionCommand(command: string): PhoneActionCommand | n
   if (/^(?:(?:يا\s*)?(?:ازرا|ezra)\s*)?(?:افتح|اذهب الى|open)\s+(?:اعدادات\s+)?(?:الاشعارات|اشعارات الهاتف|notification settings)$/.test(value)) {
     return { kind: 'notification_settings' };
   }
-  if (/^(?:شغل|تشغيل|استأنف|استأنفي|كمل|اكمل|play|resume)(?:\s+(?:الموسيقى|الاغاني|الصوت|الوسائط|music|media))?$/.test(value)) {
+  if (/^(?:شغل|تشغيل|استانف|استانفي|كمل|اكمل|play|resume)(?:\s+(?:الموسيقى|الاغاني|الصوت|الوسائط|music|media))?$/.test(value)) {
     return { kind: 'media', action: 'play' };
   }
   if (/^(?:وقف|اوقف|توقف|ايقاف|pause)(?:\s+(?:الموسيقى|الاغاني|الصوت|الوسائط|music|media))?$/.test(value)) {
