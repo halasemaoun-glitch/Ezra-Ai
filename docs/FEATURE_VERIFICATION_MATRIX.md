@@ -31,6 +31,7 @@ This matrix separates implementation evidence from proof of behavior. A componen
 | Clinical case simulator | `ClinicalCaseSimulator.tsx` | Source-level scenario checks only | Verify answer lock, feedback, completion callback and navigation |
 | Settings and phone controls | `App.tsx`, native wake-word module | No dedicated mobile tests | Verify each setting persists and each action handles unavailable/denied permissions |
 | Navigation and RTL/LTR | `App.tsx`, theme tokens | Source audit only | Verify all tabs, language direction and narrow-screen layouts |
+| Android app interaction via AccessibilityService | `EzraAccessibilityService.kt`, `EzraWakeWordModule.kt`, `withEzraWakeWord.js`, `App.tsx`, `src/phone/accessibilityCommands.ts` | Deno tests cover Arabic/English click, scroll, global navigation parsing and high-impact action confirmation; CI prebuild checks the service manifest/resources and compiles Kotlin | Verify user opt-in, semantic button clicks, scroll, global actions, permission disable/re-enable, and apps with inaccessible/custom controls on Android |
 | Accessibility and reduced motion | `App.tsx`, design system | Source audit only | Verify labels, touch targets, focus/contrast and reduced-motion behavior |
 
 ## Baseline gaps
