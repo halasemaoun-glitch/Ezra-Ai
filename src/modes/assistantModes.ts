@@ -52,3 +52,28 @@ export const getAssistantModeGuidance = (mode: AssistantMode): string => {
     'Be a warm, emotionally intelligent, practical personal assistant. Follow the user\'s request and saved response preferences while preserving accuracy and safety.',
   ].join('\n');
 };
+
+export const getAssistantModeSuggestions = (mode: AssistantMode): string[] => {
+  if (mode === 'dentist') {
+    return [
+      'اشرح لي أسباب ألم الضرس وكيفية تقييمه',
+      'ما الفرق بين التهاب اللب والخراج؟',
+      'كيف تُقرأ الأشعة حول الذروية؟',
+      'ما علامات الحالة السنية الطارئة؟',
+    ];
+  }
+
+  if (mode === 'study') {
+    return [
+      'اشرح لي هذا الدرس خطوة بخطوة',
+      'لخّص هذه الملاحظات مع أهم النقاط',
+      'اختبرني بأسئلة اختيار من متعدد',
+      'قارن بين مفهومين في جدول',
+    ];
+  }
+
+  return [
+    'ساعدني في تنظيم يومي',
+    'اشرح لي فكرة جديدة ببساطة',
+  ];
+};
