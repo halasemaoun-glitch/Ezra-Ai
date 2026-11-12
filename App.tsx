@@ -2752,11 +2752,21 @@ export default function App() {
                             <Text style={{ color: phonePermissions[item.permission] ? '#A9D7B9' : '#E5B7C8', fontSize: 10, fontWeight: '700' }}>{phonePermissions[item.permission] ? 'مسموح' : 'غير مسموح'}</Text>
                           </View>
                         </View>
-                        <TouchableOpacity onPress={() => { void requestPhonePermission(item.permission); }} accessibilityRole="button" style={{ alignSelf: 'flex-start', paddingHorizontal: 13, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: '#80516F' }}>
-                          <Text style={{ color: '#E9B8D8', fontSize: 11, fontWeight: '700' }}>{phonePermissions[item.permission] ? 'إعادة طلب / إدارة الإذن' : 'طلب الإذن'}</Text>
+                        <TouchableOpacity onPress={() => {
+                          if (phonePermissions[item.permission]) {
+                            void EzraWakeWord?.openSystemSettings('app').catch(error => Alert.alert('تعذّر فتح الإعدادات', String(error)));
+                          } else {
+                            void requestPhonePermission(item.permission);
+                          }
+                        }} accessibilityRole="button" style={{ alignSelf: 'flex-start', paddingHorizontal: 13, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: '#80516F' }}>
+                          <Text style={{ color: '#E9B8D8', fontSize: 11, fontWeight: '700' }}>{phonePermissions[item.permission] ? 'إدارة الإذن في Android' : 'طلب الإذن'}</Text>
                         </TouchableOpacity>
                       </View>
                     ))}
+                    <View style={{ padding: 14, borderRadius: 14, backgroundColor: '#1B151E', borderWidth: 1, borderColor: '#493747', gap: 7 }}>
+                      <Text style={{ color: '#F2D9E9', fontSize: 13, fontWeight: '800', textAlign: 'right' }}>جرّبي هذه الأوامر الصوتية</Text>
+                      <Text style={{ color: '#B9AAB7', fontSize: 11, lineHeight: 19, textAlign: 'right' }}>«اتصل بأمي» · «أرسل رسالة إلى سارة تقول وصلت» · «اضبط منبه الساعة 7 صباحًا» · «شغّل الفلاش» · «ارفع صوت الوسائط» · «افتح إعدادات Wi-Fi»</Text>
+                    </View>
                     <Text style={{ color: '#F2D9E9', fontSize: 14, fontWeight: '800', textAlign: 'right', marginTop: 3 }}>اختصارات التحكم</Text>
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 9 }}>
                       <TouchableOpacity onPress={() => { void togglePhoneTorch(); }} accessibilityRole="button" style={{ flexGrow: 1, minWidth: '46%', padding: 13, borderRadius: 13, backgroundColor: '#241925', borderWidth: 1, borderColor: '#69465F', alignItems: 'center' }}>
@@ -2780,7 +2790,7 @@ export default function App() {
                         { label: 'الصوت', target: 'sound' },
                         { label: 'الشاشة', target: 'display' },
                         { label: 'البطارية', target: 'battery' },
-                        { label: 'إشعارات EZRA', target: 'app' },
+                        { label: 'أذونات التطبيق', target: 'app' },
                       ] as const).map(item => (
                         <TouchableOpacity key={item.target} onPress={() => { void EzraWakeWord?.openSystemSettings(item.target).catch(error => Alert.alert('تعذّر فتح الإعدادات', String(error))); }} accessibilityRole="button" style={{ flexGrow: 1, minWidth: '30%', paddingHorizontal: 11, paddingVertical: 12, borderRadius: 12, backgroundColor: '#1B151E', borderWidth: 1, borderColor: '#493747', alignItems: 'center' }}>
                           <Text style={{ color: '#E9B8D8', fontSize: 11, fontWeight: '700' }}>{item.label}</Text>
