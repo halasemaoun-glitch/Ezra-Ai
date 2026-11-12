@@ -44,6 +44,8 @@ jobs:
         run: deno test src/knowledge/knowledgeSync_test.ts
       - name: Test EZRA study progress synchronization
         run: deno test src/study/studyProgressSync_test.ts
+      - name: Test EZRA companion profile synchronization
+        run: deno test src/companion/companionProfileSync_test.ts
       - name: Check Expo configuration and dependencies
         run: npx expo-doctor
       - name: Set up Java 17
