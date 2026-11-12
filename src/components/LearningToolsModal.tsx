@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Modal,
   SafeAreaView,
@@ -41,6 +41,11 @@ export default function LearningToolsModal({ visible, mode, onClose, onAskEzra }
   );
   const currentCard = DENTAL_STUDY_CARDS[cardIndex];
   const currentQuestion = DENTAL_QUIZ[questionIndex];
+
+  useEffect(() => {
+    if (!visible) return;
+    setTab(mode === 'study' ? 'cards' : 'library');
+  }, [visible, mode]);
 
   const chooseTab = (next: ToolTab) => {
     setTab(next);
