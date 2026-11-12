@@ -70,11 +70,9 @@ export default function LearningToolsModal({ visible, mode, onClose, onAskEzra }
   }, []);
 
   const saveProgress = (patch: Partial<StudyProgress>) => {
-    setProgress(previous => {
-      const next = { ...previous, ...patch };
-      AsyncStorage.setItem(STUDY_PROGRESS_KEY, JSON.stringify(next)).catch(() => undefined);
-      return next;
-    });
+    const next = { ...progress, ...patch };
+    setProgress(next);
+    AsyncStorage.setItem(STUDY_PROGRESS_KEY, JSON.stringify(next)).catch(() => undefined);
   };
 
   const selectedTopic = useMemo(
