@@ -74,3 +74,27 @@ Deno.test('cloud payload always carries the authenticated owner id', () => {
     throw new Error('Cloud payload owner or timestamp mapping failed');
   }
 });
+
+Deno.test('a cloud tombstone wins over a stale local copy', () => {
+  const local = normalizeKnowledgeDocuments([{
+    id: 'doc-delete',
+    name: 'old.txt',
+    content: 'stale content',
+    sizeBytes: 13,
+    addedAt: '2026-11-01T00:00:00.000Z',
+    updatedAt: '2026-11-01T00:00:00.000Z',
+  }]);
+  const cloud = normalizeKnowledgeDocuments([{
+    id: 'doc-delete',
+    name: 'old.txt',
+    content: '',
+    sizeBytes: 0,
+    addedAt: '2026-11-01T00:00:00.000Z',
+    updatedAt: '2026-11-04T00:00:00.000Z',
+    deletedAt: '2026-11-04T00:00:00.000Z',
+  }]);
+  const merged = mergeKnowledgeDocuments(local, cloud);
+  if (merged[0]?.deletedAt !== '2026-11-04T00:00:00.000Z') {
+    throw new Error('A cloud deletion did not override stale local data');
+  }
+});
