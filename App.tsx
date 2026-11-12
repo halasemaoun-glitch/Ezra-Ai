@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Alert,
+  AccessibilityInfo,
   Animated,
   AppState,
   BackHandler,
@@ -161,14 +162,32 @@ const createConversationId = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replac
   return value.toString(16);
 });
 
+const activeMotionLevel = (index: number, listening: boolean, thinking: boolean, speaking: boolean) => {
+  if (listening) return 0.28 + (index % 3) * 0.08;
+  if (thinking) return 0.26 + (index % 2) * 0.06;
+  if (speaking) return 0.3 + (index % 3) * 0.09;
+  return 0.18;
+};
+
 function EzraOrb({ status, voiceLevel = 0 }: { status: string; voiceLevel?: number }) {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const stageSize = Math.min(344, Math.max(220, Math.min(screenWidth - 40, screenHeight - 420)));
   const waveform = useRef(Array.from({ length: 9 }, () => new Animated.Value(0.18))).current;
+  const [reduceMotion, setReduceMotion] = useState(false);
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled().then(value => { if (mounted) setReduceMotion(value); }).catch(() => {});
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => { mounted = false; subscription.remove(); };
+  }, []);
   const listening = status.includes('يستمع') || status.includes('أستمع');
   const thinking = status.includes('أفكر');
   const speaking = status.includes('يتحدث') || status.includes('أتحدث');
   useEffect(() => {
+    if (reduceMotion) {
+      waveform.forEach((bar, index) => bar.setValue(activeMotionLevel(index, listening, thinking, speaking)));
+      return () => waveform.forEach(bar => bar.stopAnimation());
+    }
     if (listening) {
       waveform.forEach((bar, index) => {
         const envelope = 0.12 + voiceLevel * (0.38 + (Math.sin(index * 1.7) + 1) * 0.2);
@@ -188,7 +207,7 @@ function EzraOrb({ status, voiceLevel = 0 }: { status: string; voiceLevel?: numb
       return loop;
     });
     return () => waveLoops.forEach(loop => loop.stop());
-  }, [waveform, status, listening, thinking, speaking, voiceLevel]);
+  }, [waveform, status, listening, thinking, speaking, voiceLevel, reduceMotion]);
   const active = listening || thinking || speaking;
   const caption = listening ? 'أنا أسمعك… خذ وقتك' : thinking ? 'أرتّب أفكاري لأجيبك' : speaking ? 'أنا معك، ويمكنك مقاطعتي' : 'أنا هنا عندما تحتاجني';
   return (
