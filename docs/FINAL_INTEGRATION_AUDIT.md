@@ -127,7 +127,7 @@ A feature is marked **implemented** when its source integration exists. It is ma
 - Added Arabic/English command parsing for opening the system file picker, Downloads, notification shade, notification settings, and media transport (play, pause, stop, next, previous).
 - Added native Android ACTION_OPEN_DOCUMENT support and a Downloads UI intent with a document-picker fallback.
 - Notification shade display uses the existing optional AccessibilityService global action. Notification settings now target EZRA's app-specific notification settings page; this feature does not read notification contents.
-- Existing alarm and timer actions remain integrated through Android Clock intents and explicitly leave the Clock confirmation UI visible so the user can confirm creation. Alarm phrase parsing now accepts both “منبه” and “المنبه”.
+- Existing alarm and timer actions use Android Clock intents with the skip-UI preference enabled when supported; Android or the installed Clock app may still show a confirmation screen. Alarm phrase parsing accepts both “منبه” and “المنبه”.
 - Media controls dispatch Android media key events to the active session; app support varies. Existing quick settings deep links remain available.
 - Added Deno regression tests in src/phone/phoneActionCommands_test.ts and added the suite to GitHub Actions.
 - Verification boundary: source parser tests and CI checks do not prove every OEM file manager, notification shade, Clock app, or media session behaves identically. Notification shade requires the user to enable EZRA AccessibilityService.
