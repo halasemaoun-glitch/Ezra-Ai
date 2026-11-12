@@ -50,10 +50,12 @@ export default function LearningToolsModal({ visible, mode, onClose, onAskEzra, 
   const [quizFinished, setQuizFinished] = useState(false);
   const [progress, setProgress] = useState<StudyProgress>(EMPTY_STUDY_PROGRESS);
   const [progressLoaded, setProgressLoaded] = useState(false);
+  const [loadedForUserId, setLoadedForUserId] = useState<string | null>(null);
   const [syncState, setSyncState] = useState<'loading' | 'synced' | 'error' | 'local'>('loading');
 
   useEffect(() => {
     let active = true;
+    setLoadedForUserId(null);
     if (!userId) {
       setProgress(EMPTY_STUDY_PROGRESS);
       setProgressLoaded(false);
@@ -61,6 +63,7 @@ export default function LearningToolsModal({ visible, mode, onClose, onAskEzra, 
       return () => { active = false; };
     }
     setProgressLoaded(false);
+    setProgress(EMPTY_STUDY_PROGRESS);
     setSyncState('loading');
     (async () => {
       const storageKey = `${STUDY_PROGRESS_KEY}:${userId}`;
@@ -87,6 +90,7 @@ export default function LearningToolsModal({ visible, mode, onClose, onAskEzra, 
       if (error) {
         setProgress(localSnapshot.progress);
         await AsyncStorage.setItem(storageKey, JSON.stringify(localSnapshot));
+        setLoadedForUserId(userId);
         setProgressLoaded(true);
         setSyncState('error');
         return;
@@ -98,6 +102,7 @@ export default function LearningToolsModal({ visible, mode, onClose, onAskEzra, 
       const merged = mergeStudyProgressSnapshots(localSnapshot, cloudSnapshot);
       setProgress(merged.progress);
       await AsyncStorage.setItem(storageKey, JSON.stringify(merged));
+      setLoadedForUserId(userId);
       setProgressLoaded(true);
       setSyncState('synced');
     })().catch(async () => {
@@ -109,7 +114,7 @@ export default function LearningToolsModal({ visible, mode, onClose, onAskEzra, 
   }, [userId]);
 
   useEffect(() => {
-    if (!progressLoaded || !userId) return;
+    if (!progressLoaded || !userId || loadedForUserId !== userId) return;
     const snapshot = { progress, updatedAt: new Date().toISOString() };
     const storageKey = `${STUDY_PROGRESS_KEY}:${userId}`;
     AsyncStorage.setItem(storageKey, JSON.stringify(snapshot)).catch(() => undefined);
@@ -117,7 +122,7 @@ export default function LearningToolsModal({ visible, mode, onClose, onAskEzra, 
       .upsert(studyProgressToCloudRow(snapshot, userId), { onConflict: 'owner_id' })
       .then(({ error }) => setSyncState(error ? 'error' : 'synced'))
       .catch(() => setSyncState('error'));
-  }, [progress, progressLoaded, userId]);
+  }, [progress, progressLoaded, userId, loadedForUserId]);
 
   const saveProgress = (patch: Partial<StudyProgress>) => {
     setProgress(previous => ({ ...previous, ...patch }));
