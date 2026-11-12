@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { GLView } from 'expo-gl';
+import { colors, motion } from './theme';
 
 type OrbStatus = { status: string; level?: number };
 
@@ -201,24 +202,24 @@ const toRgb = (hex: string): [number, number, number] => {
 
 const palettes: Record<'idle' | 'listening' | 'thinking' | 'speaking', Palette> = {
   idle: {
-    base: toRgb('#350A2C'),
-    accent: toRgb('#D65BAF'),
-    glow: toRgb('#8E286F'),
+    base: toRgb(colors.orbIdleBase),
+    accent: toRgb(colors.orbIdleAccent),
+    glow: toRgb(colors.orbIdleGlow),
   },
   listening: {
-    base: toRgb('#430B35'),
-    accent: toRgb('#FF73C8'),
-    glow: toRgb('#C12B8C'),
+    base: toRgb(colors.orbListeningBase),
+    accent: toRgb(colors.orbListeningAccent),
+    glow: toRgb(colors.orbListeningGlow),
   },
   thinking: {
-    base: toRgb('#241039'),
-    accent: toRgb('#B18AFF'),
-    glow: toRgb('#7547C5'),
+    base: toRgb(colors.orbThinkingBase),
+    accent: toRgb(colors.orbThinkingAccent),
+    glow: toRgb(colors.orbThinkingGlow),
   },
   speaking: {
-    base: toRgb('#4A0A34'),
-    accent: toRgb('#FF91D2'),
-    glow: toRgb('#D83D9E'),
+    base: toRgb(colors.orbSpeakingBase),
+    accent: toRgb(colors.orbSpeakingAccent),
+    glow: toRgb(colors.orbSpeakingGlow),
   },
 };
 
@@ -341,7 +342,8 @@ export default function EzraOrb3D({ status, level = 0 }: OrbStatus) {
         const state = getState(statusRef.current);
         const stateMode = state === 'listening' ? 1 : state === 'thinking' ? 2 : state === 'speaking' ? 3 : 0;
         const targetPalette = palettes[state];
-        const blend = reducedMotionRef.current ? 1 : 1 - Math.exp(-deltaSeconds * 4.8);
+        const paletteRate = 1 / (motion.orb.paletteBlendSeconds || 0.21);
+        const blend = reducedMotionRef.current ? 1 : 1 - Math.exp(-deltaSeconds * paletteRate);
         for (let channel = 0; channel < 3; channel += 1) {
           currentPalette.base[channel] += (targetPalette.base[channel] - currentPalette.base[channel]) * blend;
           currentPalette.accent[channel] += (targetPalette.accent[channel] - currentPalette.accent[channel]) * blend;
@@ -416,8 +418,8 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   fallback: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
-  fallbackAura: { position: 'absolute', backgroundColor: '#8E286F', opacity: 0.24, shadowColor: '#E65AB9', shadowOpacity: 1, shadowRadius: 50, elevation: 20 },
-  fallbackSphere: { overflow: 'hidden', borderWidth: 2, borderColor: '#D65BAF', backgroundColor: '#350A2C', alignItems: 'center', justifyContent: 'center', shadowColor: '#D83D9E', shadowOpacity: 0.9, shadowRadius: 34, elevation: 24 },
+  fallbackAura: { position: 'absolute', backgroundColor: colors.orbIdleGlow, opacity: 0.24, shadowColor: colors.orbIdleAccent, shadowOpacity: 1, shadowRadius: 50, elevation: 20 },
+  fallbackSphere: { overflow: 'hidden', borderWidth: 2, borderColor: colors.orbIdleAccent, backgroundColor: colors.orbIdleBase, alignItems: 'center', justifyContent: 'center', shadowColor: colors.orbSpeakingGlow, shadowOpacity: 0.9, shadowRadius: 34, elevation: 24 },
   fallbackHighlight: { position: 'absolute', backgroundColor: 'rgba(255,225,247,0.22)', transform: [{ rotate: '-32deg' }] },
   fallbackCore: { backgroundColor: 'rgba(255,115,200,0.2)', borderWidth: 1, borderColor: 'rgba(255,191,231,0.35)' },
 });
