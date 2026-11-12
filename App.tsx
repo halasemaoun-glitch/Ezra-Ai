@@ -1811,6 +1811,41 @@ export default function App() {
     setSending(false);
   };
 
+  const resetVoiceSoundSettings = () => {
+    Alert.alert(
+      'إعادة ضبط إعدادات الصوت؟',
+      'سيُعاد اختيار العربية والصوت التلقائي وسرعة وعمق الصوت الافتراضيين. لن تتغير إعدادات الاستماع التلقائي أو كلمة التنبيه.',
+      [
+        { text: 'إلغاء', style: 'cancel' },
+        {
+          text: 'إعادة الضبط',
+          onPress: async () => {
+            Speech.stop();
+            await EzraHabibiTts?.stopAudio().catch(() => {});
+            setResponseLanguage('ar');
+            setSpeechRate(DEFAULT_EZRA_VOICE.rate);
+            setSpeechPitch(DEFAULT_EZRA_VOICE.pitch);
+            setSelectedTtsVoice(null);
+            setSelectedEnglishTtsVoice(null);
+            setSpeakingMessageId(null);
+            try {
+              await AsyncStorage.multiSet([
+                ['ezra:responseLanguage', 'ar'],
+                ['ezra:speechRate', String(DEFAULT_EZRA_VOICE.rate)],
+                ['ezra:speechPitch', String(DEFAULT_EZRA_VOICE.pitch)],
+              ]);
+              await AsyncStorage.multiRemove(['ezra:ttsVoice', 'ezra:ttsEnglishVoice']);
+              Alert.alert('تمت إعادة الضبط', 'عادت إعدادات اللغة وسرعة وعمق الصوت إلى القيم الافتراضية.');
+            } catch (error) {
+              console.error('Could not reset EZRA voice preferences:', error);
+              Alert.alert('تعذّر حفظ الإعدادات', 'تم تحديث القيم الحالية، لكن تعذّر حفظها على الجهاز. أعد المحاولة.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const toggleBackgroundWake = async (enabled: boolean) => {
     if (Platform.OS !== 'android' || !EzraWakeWord) {
       Alert.alert('غير متاح', 'الاستماع بكلمة التنبيه متاح حاليًا على Android فقط.');
@@ -2661,7 +2696,7 @@ export default function App() {
                     <Text style={styles.settingTitle}>ملف صوت EZRA المعتمد</Text>
                     <Text style={styles.settingHint}>صوت رجالي دافئ وعميق · اللغة تختارينها يدوياً</Text>
                     <Text style={styles.settingHint}>Habibi-TTS هو المحرك العربي الأساسي بعد تنزيل النموذج واعتماد عينة صوت؛ صوت الهاتف احتياطي عند عدم جاهزيته.</Text>
-                    <Text style={styles.settingHint}>تنبيه الذاكرة: تفعيل Habibi يتطلب 3.5 GB RAM متاحة على الأقل قبل بدء التحميل إلى الذاكرة؛ هذا شرط أمان وليس ضمانًا للتشغيل على كل هاتف.</Text>
+                    <Text style={styles.settingHint}>تنبيه الذاكرة: تهيئة Habibi تتطلب 2.2 GB RAM متاحة على الأقل قبل تحميل النموذج إلى الذاكرة؛ هذا شرط أمان وليس ضمانًا للتشغيل على كل هاتف.</Text>
                     <Text style={styles.settingHint}>الصوت العربي: اللهجة الجزائرية عبر Habibi ALG · الإنجليزية: محرك النظام</Text>
                   </View>
                 </View>
@@ -2714,7 +2749,7 @@ export default function App() {
                   {habibiEngineError ? <Text style={styles.authError}>{habibiEngineError}</Text> : null}
                 </View>
                 <View style={styles.settingRow}>
-                  <View style={styles.settingCopy}><Text style={styles.settingTitle}>كلمة التنبيه «يا EZRA»</Text><Text style={styles.settingHint}>استماع بالخلفية وعند قفل الشاشة · قد يزيد استهلاك البطارية</Text></View>
+                  <View style={styles.settingCopy}><Text style={styles.settingTitle}>كلمة التنبيه «يا EZRA»</Text><Text style={styles.settingHint}>استماع بالخلفية بإشعار دائم · قد يقيّد النظام الخدمة عند قفل الشاشة أو توفير البطارية</Text></View>
                   <Switch value={backgroundWakeEnabled} onValueChange={toggleBackgroundWake} trackColor={{ false: '#39323D', true: '#875477' }} thumbColor={backgroundWakeEnabled ? '#F2C8E5' : '#AAA'} />
                 </View>
                 <View style={styles.settingRow}>
@@ -2827,6 +2862,14 @@ export default function App() {
                     </View>
                   ) : null}
                 </View>
+                <TouchableOpacity
+                  onPress={resetVoiceSoundSettings}
+                  accessibilityRole="button"
+                  accessibilityLabel="إعادة ضبط إعدادات اللغة والصوت"
+                  style={{ borderRadius: 14, borderWidth: 1, borderColor: '#80516F', backgroundColor: '#241824', paddingVertical: 13, alignItems: 'center', marginTop: 4 }}
+                >
+                  <Text style={{ color: '#E9B8D8', fontSize: 12, fontWeight: '800' }}>إعادة ضبط اللغة والصوت</Text>
+                </TouchableOpacity>
                 <Text style={styles.settingsFootnote}>بعد تفعيل Habibi تُولّد الردود العربية محليًا بصوت العينة المعتمدة؛ الإنجليزية تستخدم صوت النظام، ويظل صوت النظام احتياطيًا إذا تعذّر تشغيل Habibi. عند تفعيل «يا EZRA» تعمل خدمة استماع أمامية بإشعار دائم ويمكنها إيقاظ التطبيق عند التقاط كلمة التنبيه. قد يقيّد النظام الخدمة أو يوقفها بسبب توفير البطارية؛ أوقف الميزة من هنا متى شئت.</Text>
                   </>
                 )}
