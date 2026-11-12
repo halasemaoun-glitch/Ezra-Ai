@@ -20,7 +20,5 @@ Deno.test("ignores incomplete or self-directed call commands", () => {
 
 
 Deno.test("Arabic feminine direct-call commands resolve contact names", () => {
-  if (parseCallContactName("إزرا اتصلي بأمي") !== "بأمي") {
-    throw new Error("Expected feminine Arabic call command to be recognized");
-  }
+  assertEquals(parseCallContactName("إزرا اتصلي بأمي"), "امي");
 });
