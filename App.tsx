@@ -1925,7 +1925,7 @@ export default function App() {
       return true;
     }
 
-    const alarmMatch = normalized.match(/(?:اضبط\s+)?(?:منبه|منبّه|alarm)\s*(?:على|الساعة|at)?\s*(\d{1,2})(?::(\d{1,2}))?\s*(صباحا|مساء|am|pm)?/i);
+    const alarmMatch = normalized.match(/(?:اضبط\s+)?(?:المنبه|منبه|alarm)\s*(?:على|الساعة|at)?\s*(\d{1,2})(?::(\d{1,2}))?\s*(صباحا|مساء|am|pm)?/i);
     if (alarmMatch) {
       let hour = Number(alarmMatch[1]);
       const minute = Number(alarmMatch[2] || 0);
