@@ -121,3 +121,13 @@ A feature is marked **implemented** when its source integration exists. It is ma
 - Supabase migration `ezra_document_format_support` was applied to the correct `EZRA AI` project (`qjqbgbbrzovimyutzvps`). Verification confirmed the knowledge content/size checks are 1 MiB and the private attachment bucket allows PDF, DOCX, PPTX, and XLSX MIME types while retaining its 5 MiB limit.
 - **Known boundary:** scanned/image-only PDFs do not have OCR; password-protected documents must be unlocked before import. Parser coverage currently tests text cleanup and selection helpers, not full binary fixtures for every format.
 - **Validation:** GitHub Actions run `43317942617` on revision `b2d64db046d250a91ba34a9e441d32796503a227` was in progress at the time of this audit update.
+
+## Phase 11 — Expanded Android phone commands (source implementation)
+
+- Added Arabic/English command parsing for opening the system file picker, Downloads, notification shade, notification settings, and media transport (play, pause, stop, next, previous).
+- Added native Android ACTION_OPEN_DOCUMENT support and a Downloads UI intent with a document-picker fallback.
+- Notification shade display uses the existing optional AccessibilityService global action. Notification settings now target EZRA's app-specific notification settings page; this feature does not read notification contents.
+- Existing alarm and timer actions remain integrated through Android Clock intents and explicitly leave the Clock confirmation UI visible so the user can confirm creation. Alarm phrase parsing now accepts both “منبه” and “المنبه”.
+- Media controls dispatch Android media key events to the active session; app support varies. Existing quick settings deep links remain available.
+- Added Deno regression tests in src/phone/phoneActionCommands_test.ts and added the suite to GitHub Actions.
+- Verification boundary: source parser tests and CI checks do not prove every OEM file manager, notification shade, Clock app, or media session behaves identically. Notification shade requires the user to enable EZRA AccessibilityService.
