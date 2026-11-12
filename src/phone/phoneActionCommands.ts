@@ -35,7 +35,7 @@ export function parsePhoneActionCommand(command: string): PhoneActionCommand | n
   if (/^(?:التالي|تخطي|الاغنيه التاليه|next|skip)(?:\s+(?:الموسيقي|الاغنيه|music|song))?$/.test(value)) {
     return { kind: 'media', action: 'next' };
   }
-  if (/^(?:السابق|الاغنيه السابقة|previous)(?:\s+(?:الموسيقي|الاغنيه|music|song))?$/.test(value)) {
+  if (/^(?:السابق|الاغنيه السابقه|previous)(?:\s+(?:الموسيقي|الاغنيه|music|song))?$/.test(value)) {
     return { kind: 'media', action: 'previous' };
   }
   return null;
