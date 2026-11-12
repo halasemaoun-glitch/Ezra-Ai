@@ -10,6 +10,8 @@ import android.hardware.camera2.CameraManager
 import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
+import android.os.BatteryManager
+import android.os.StatFs
 import android.provider.AlarmClock
 import android.provider.ContactsContract
 import android.provider.Settings
@@ -141,7 +143,7 @@ class EzraWakeWordModule : Module() {
         ?: throw IllegalStateException("EZRA Android context is unavailable")
       val action = when (target.lowercase(Locale.ROOT)) {
         "wifi" -> if (Build.VERSION.SDK_INT >= 29) Settings.Panel.ACTION_WIFI else Settings.ACTION_WIFI_SETTINGS
-        "internet" -> if (Build.VERSION.SDK_INT >= 29) Settings.Panel.ACTION_INTERNET_CONNECTIVITY else Settings.ACTION_WIRELESS_SETTINGS
+        "internet", "network" -> if (Build.VERSION.SDK_INT >= 29) Settings.Panel.ACTION_INTERNET_CONNECTIVITY else Settings.ACTION_WIRELESS_SETTINGS
         "bluetooth" -> Settings.ACTION_BLUETOOTH_SETTINGS
         "volume", "sound" -> if (Build.VERSION.SDK_INT >= 29) Settings.Panel.ACTION_VOLUME else Settings.ACTION_SOUND_SETTINGS
         "display" -> Settings.ACTION_DISPLAY_SETTINGS
@@ -150,6 +152,13 @@ class EzraWakeWordModule : Module() {
         "apps" -> Settings.ACTION_APPLICATION_SETTINGS
         "notifications" -> Settings.ACTION_APP_NOTIFICATION_SETTINGS
         "accessibility" -> Settings.ACTION_ACCESSIBILITY_SETTINGS
+        "storage" -> "android.settings.INTERNAL_STORAGE_SETTINGS"
+        "date" -> "android.settings.DATE_SETTINGS"
+        "privacy" -> "android.settings.PRIVACY_SETTINGS"
+        "security" -> Settings.ACTION_SECURITY_SETTINGS
+        "language" -> "android.settings.LOCALE_SETTINGS"
+        "defaults" -> "android.settings.MANAGE_DEFAULT_APPS_SETTINGS"
+        "app_permissions" -> Settings.ACTION_APPLICATION_DETAILS_SETTINGS
         "app" -> Settings.ACTION_APPLICATION_DETAILS_SETTINGS
         else -> Settings.ACTION_SETTINGS
       }
@@ -209,6 +218,26 @@ class EzraWakeWordModule : Module() {
       audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
       audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
       true
+    }
+
+    AsyncFunction("getDeviceOverview") {
+      val context = appContext.reactContext?.applicationContext
+        ?: throw IllegalStateException("EZRA Android context is unavailable")
+      val battery = context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+      val storage = StatFs(context.filesDir.absolutePath)
+      val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+      val batteryPercent = battery.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+      mapOf(
+        "deviceModel" to listOf(Build.MANUFACTURER, Build.MODEL).filter { it.isNotBlank() }.joinToString(" "),
+        "androidVersion" to Build.VERSION.RELEASE,
+        "androidApi" to Build.VERSION.SDK_INT,
+        "batteryPercent" to if (batteryPercent in 0..100) batteryPercent else -1,
+        "isCharging" to battery.isCharging,
+        "availableStorageBytes" to storage.availableBytes,
+        "totalStorageBytes" to storage.totalBytes,
+        "mediaVolume" to audio.getStreamVolume(AudioManager.STREAM_MUSIC),
+        "maxMediaVolume" to audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+      )
     }
 
     AsyncFunction("isAvailable") {
