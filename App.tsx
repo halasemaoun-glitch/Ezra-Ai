@@ -42,6 +42,7 @@ import { DENTAL_REFERENCE_LIBRARY } from './src/study/studyLibrary';
 import { supabase } from './src/lib/supabase';
 import { DEFAULT_EZRA_VOICE } from './src/voice/voiceProfile';
 import { parseCallContactName } from './src/phone/commandParser';
+import { isScreenCaptureCommand } from './src/phone/screenCaptureCommands';
 import { PHONE_SETTINGS_COMMANDS, parsePhoneSettingsTarget, type PhoneSettingsTarget } from './src/phone/phoneControlCommands';
 import type { KnowledgeDocumentRecord } from './src/knowledge/knowledgeSync';
 import { knowledgeDocumentsFromCloud, knowledgeDocumentsToCloud, mergeKnowledgeDocuments, normalizeKnowledgeDocuments } from './src/knowledge/knowledgeSync';
@@ -73,6 +74,7 @@ type EzraWakeWordNative = {
   placeCall: (phone: string) => Promise<boolean>;
   composeSms: (phone: string, body: string) => Promise<boolean>;
   sendSmsDirect: (phone: string, body: string) => Promise<boolean>;
+  captureScreen: () => Promise<string>;
   createAlarm: (hour: number, minute: number, label: string) => Promise<boolean>;
   createTimer: (seconds: number, label: string) => Promise<boolean>;
   openSystemSettings: (target: string) => Promise<boolean>;
@@ -1659,6 +1661,47 @@ export default function App() {
     return true;
   };
 
+  const handleScreenshotCommand = async (commandText: string, voiceReply: boolean) => {
+    if (Platform.OS !== 'android' || !EzraWakeWord || !isScreenCaptureCommand(commandText)) return false;
+
+    setSending(true);
+    const userId = `screenshot-user-${Date.now()}`;
+    const replyId = `screenshot-reply-${Date.now()}`;
+    let reply = '';
+    try {
+      const result = await EzraWakeWord.captureScreen();
+      if (!result) {
+        reply = 'تم إلغاء التقاط الشاشة. لم يتم حفظ أي صورة.';
+      } else if (result.startsWith('ERROR:')) {
+        reply = result.replace(/^ERROR:\\s*/, '') || 'تعذّر التقاط الشاشة.';
+      } else {
+        reply = 'تم التقاط الشاشة وحفظ الصورة في معرض الصور داخل مجلد EZRA.';
+      }
+    } catch (error) {
+      console.warn('EZRA screen capture failed:', error);
+      reply = 'تعذّر التقاط الشاشة. حاولي مرة أخرى ووافقي على نافذة Android الخاصة بمشاركة الشاشة.';
+    }
+
+    try {
+      const { error } = await supabase.from('chat_messages').insert([
+        { owner_id: session!.user.id, conversation_id: conversationId!, role: 'user', content: commandText },
+        { owner_id: session!.user.id, conversation_id: conversationId!, role: 'assistant', content: reply },
+      ]);
+      if (error) console.warn('Could not save screenshot command to history:', error);
+    } catch (error) {
+      console.warn('Could not save screenshot command to history:', error);
+    }
+    setMessages(previous => [
+      ...previous,
+      { id: userId, sender: 'user', text: commandText },
+      { id: replyId, sender: 'ezra', text: reply },
+    ]);
+    setMessage('');
+    if (voiceReply || autoSpeak) speak(reply, replyId);
+    setSending(false);
+    return true;
+  };
+
   const handleCallCommand = async (commandText: string, voiceReply: boolean) => {
     if (Platform.OS !== 'android' || !EzraWakeWord) return false;
     const contactName = parseCallContactName(commandText);
@@ -1921,6 +1964,7 @@ export default function App() {
     if (await handleMemorySaveCommand(text, voiceReply)) return;
     if (await handleFlashCommand(text, voiceReply)) return;
     if (await handleSystemCommand(text, voiceReply)) return;
+    if (await handleScreenshotCommand(text, voiceReply)) return;
     if (await handleCallCommand(text, voiceReply)) return;
 
     setSending(true);
