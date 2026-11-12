@@ -45,7 +45,7 @@ class EzraAccessibilityService : AccessibilityService() {
       }
 
       val scrollDown = Regex("""(?:مرر|اسحب|انزل|انزلي|scroll)\s*(?:الى\s*)?(?:الاسفل|للاسفل|لتحت|down)""").containsMatchIn(value)
-      val scrollUp = Regex("""(?:مرر|اسحب|اصعد|اطلع|scroll)\s*(?:الى\s*)?(?:الاعلى|للاعلى|لفوق|up)""").containsMatchIn(value)
+      val scrollUp = Regex("""(?:مرر|اسحب|اصعد|اطلع|scroll)\s*(?:الى\s*)?(?:الاعلى|الاعلي|للاعلى|للاعلي|لفوق|up)""").containsMatchIn(value)
       if (scrollDown || scrollUp) {
         val success = scroll(if (scrollDown) "down" else "up")
         postActionResult(context, if (success) "تم تنفيذ التمرير." else "لم أجد قائمة قابلة للتمرير في التطبيق المفتوح.")
