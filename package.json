@@ -27,7 +27,8 @@
     "expo-file-system": "~19.0.24",
     "three": "^0.180.0",
     "@react-three/fiber": "^9.8.1",
-    "expo-clipboard": "~8.0.7"
+    "expo-clipboard": "~8.0.7",
+    "reamkit": "1.35.0"
   },
   "devDependencies": {
     "typescript": "~5.9.2",
