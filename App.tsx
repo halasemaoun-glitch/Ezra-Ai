@@ -2424,7 +2424,14 @@ export default function App() {
       autoListenRef.current = true;
       setAutoListen(true);
       AsyncStorage.setItem('ezra:autoListen', 'true').catch(() => {});
-      setTimeout(() => beginListening(true, true), 250);
+      if (isListening) {
+        // The recognition session is already open; treat the user's mic-button press as an explicit interruption.
+        voiceCaptureDuringSpeechRef.current = true;
+        voiceInterruptionConfirmedRef.current = true;
+        interruptVoiceFramesRef.current = 0;
+      } else {
+        setTimeout(() => beginListening(true, true), 250);
+      }
       return;
     }
     if (isListening) {
@@ -2673,14 +2680,17 @@ export default function App() {
           pitch: speechPitch,
           volume: 1,
           onDone: () => {
+            finishVoiceCaptureAfterPlayback();
             setSpeakingMessageId(current => current === pending.messageId ? null : current);
             resumeBackgroundWake();
           },
           onStopped: () => {
+            finishVoiceCaptureAfterPlayback();
             setSpeakingMessageId(current => current === pending.messageId ? null : current);
             resumeBackgroundWake();
           },
           onError: () => {
+            finishVoiceCaptureAfterPlayback();
             setSpeakingMessageId(current => current === pending.messageId ? null : current);
             resumeBackgroundWake();
           },
