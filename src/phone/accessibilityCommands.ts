@@ -26,7 +26,7 @@ export function parseAccessibilityCommand(command: string): AccessibilityCommand
   if (/(?:مرر|اسحب|انزل|انزلي|scroll)\s*(?:الى\s*)?(?:الاسفل|للاسفل|لتحت|down)/.test(value) || /^(?:انزل|انزلي|مرر للاسفل|scroll down)$/.test(value)) {
     return { kind: 'scroll', direction: 'down' };
   }
-  if (/(?:مرر|اسحب|اصعد|اطلع|scroll)\s*(?:الى\s*)?(?:الاعلى|للاعلى|لفوق|up)/.test(value) || /^(?:اصعد|اطلع|مرر للاعلى|scroll up)$/.test(value)) {
+  if (/(?:مرر|اسحب|اصعد|اطلع|scroll)\s*(?:الى\s*)?(?:الاعلى|الاعلي|للاعلى|للاعلي|لفوق|up)/.test(value) || /^(?:اصعد|اطلع|مرر للاعلى|scroll up)$/.test(value)) {
     return { kind: 'scroll', direction: 'up' };
   }
 
