@@ -3901,13 +3901,10 @@ const styles = StyleSheet.create({
   attachmentIcon: { color: '#D5A9CC', fontSize: 17 },
   attachmentName: { color: '#E8DCE8', fontSize: 11, maxWidth: 190 },
   attachmentSize: { color: '#A995A8', fontSize: 9 },
-  pendingAttachment: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, marginHorizontal: 14, marginBottom: 8, borderRadius: 14, backgroundColor: '#211923', borderWidth: 1, borderColor: '#69435D' },
   pendingImagePreview: { width: 58, height: 58, borderRadius: 9, backgroundColor: '#302331' },
   pendingAttachmentDetails: { flex: 1, minWidth: 0, gap: 3 },
-  pendingText: { color: '#DDA8CA', fontSize: 10, fontWeight: '700' },
   pendingFileName: { color: '#F0E4EE', fontSize: 11 },
   removeAttachmentButton: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#39232F' },
-  removeAttachment: { color: '#F0B4CF', fontSize: 23, lineHeight: 25 },
   quickActions: { flexDirection: 'row', paddingHorizontal: 15, gap: 7, paddingVertical: 12 },
   quickButton: {
     flex: 1,
