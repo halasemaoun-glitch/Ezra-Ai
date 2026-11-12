@@ -12,16 +12,16 @@ Private personal AI companion built with Expo SDK 54 and React Native, with Andr
 - Conversation history and user-approved memory personalization.
 - Companion, Dentist, and Study modes with mode-specific guidance.
 - Dental learning references, flashcards, quizzes, and clinical case simulations. These are educational tools, not remote diagnosis or treatment.
-- Local knowledge library for TXT, Markdown, CSV, and JSON files (up to 8 files, with a 256 KB per-file library limit). Relevant excerpts may be sent with a question to the AI service.
-- One-off message attachments: images can be sent for AI image analysis; TXT, MD, CSV, and JSON documents can be read as text for the current request.
+- Local knowledge library for TXT, Markdown, CSV, JSON, PDF, DOCX, PPTX, and XLSX documents (up to 8 files, with up to 5 MB per source file and 1 MB of extracted text per library item). Relevant excerpts may be sent with a question to the AI service.
+- One-off message attachments: images can be sent for AI image analysis; TXT, MD, CSV, JSON, PDF, DOCX, PPTX, and XLSX documents are text-extracted for the current request (up to 5 MB per source file and 1 MB of extracted text).
 - Arabic/English speech recognition, system text-to-speech fallback, and an optional local Habibi TTS native engine.
 - Android wake-word foreground service and phone actions including flashlight, volume/media controls, app/system settings, alarm/timer intents, and contact lookup. Calls and SMS open the relevant Android app for the user to review and confirm.
 
 ## Important limitations
 
 - New chat attachments use a private, owner-scoped Supabase Storage bucket with short-lived signed URLs. Migration `ezra_private_chat_attachment_storage` has been applied to the EZRA AI Supabase project and its schema, bucket, and owner-scoped policies were verified. Previously saved metadata-only attachments cannot be restored.
-- Message-level document attachments currently support TXT, MD, CSV, and JSON only, up to 5 MB for persistent chat storage. PDF and Word extraction are not implemented.
-- The knowledge library keeps a local device cache and synchronizes account-owned copies through the `knowledge_documents` table. Row Level Security restricts each account to its own files. Sync source tests and CI checks pass; signed-in multi-device restore and cross-account denial still need end-to-end runtime verification.
+- PDF and Office document extraction runs locally in the app through the Ream parser. The current implementation extracts embedded text; scanned/image-only PDFs do not receive OCR, and password-protected files must be unlocked before import.
+- The knowledge library keeps a local device cache and synchronizes extracted text with the `knowledge_documents` table. Row Level Security restricts each account to its own files. The database allows up to 1 MB of extracted text per document; signed-in multi-device restore and cross-account denial still need end-to-end runtime verification.
 - Habibi TTS requires a large model download and suitable free RAM/storage. Its Android native code is compiled by CI, but actual model inference and playback still require runtime verification on a device. Android system TTS remains the fallback.
 - Wake-word recognition depends on Android's speech-recognition provider, microphone/notification permissions, foreground-service rules, and manufacturer battery-management behavior.
 - The orb is an animated 2D React Native illustration, not a 3D model.
