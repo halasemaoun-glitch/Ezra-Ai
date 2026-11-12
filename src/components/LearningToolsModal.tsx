@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import ClinicalCaseSimulator from './ClinicalCaseSimulator';
 import {
   Modal,
   SafeAreaView,
@@ -15,7 +17,20 @@ import {
 } from '../study/studyLibrary';
 import type { AssistantMode } from '../modes/assistantModes';
 
-type ToolTab = 'library' | 'cards' | 'quiz';
+type ToolTab = 'library' | 'cards' | 'quiz' | 'cases';
+
+type StudyProgress = {
+  reviewedCardIds: string[];
+  completedCaseIds: string[];
+  quizAttempts: number;
+  bestQuizScore: number;
+  lastQuizScore: number;
+};
+
+const STUDY_PROGRESS_KEY = 'ezra:studyProgress:v1';
+const EMPTY_PROGRESS: StudyProgress = {
+  reviewedCardIds: [], completedCaseIds: [], quizAttempts: 0, bestQuizScore: 0, lastQuizScore: 0,
+};
 
 type Props = {
   visible: boolean;
@@ -34,6 +49,33 @@ export default function LearningToolsModal({ visible, mode, onClose, onAskEzra }
   const [score, setScore] = useState(0);
   const [answeredCount, setAnsweredCount] = useState(0);
   const [quizFinished, setQuizFinished] = useState(false);
+  const [progress, setProgress] = useState<StudyProgress>(EMPTY_PROGRESS);
+
+  useEffect(() => {
+    let active = true;
+    AsyncStorage.getItem(STUDY_PROGRESS_KEY).then(raw => {
+      if (!active || !raw) return;
+      try {
+        const parsed = JSON.parse(raw) as Partial<StudyProgress>;
+        setProgress({
+          reviewedCardIds: Array.isArray(parsed.reviewedCardIds) ? parsed.reviewedCardIds.filter((id): id is string => typeof id === 'string') : [],
+          completedCaseIds: Array.isArray(parsed.completedCaseIds) ? parsed.completedCaseIds.filter((id): id is string => typeof id === 'string') : [],
+          quizAttempts: Number.isFinite(parsed.quizAttempts) ? Math.max(0, Number(parsed.quizAttempts)) : 0,
+          bestQuizScore: Number.isFinite(parsed.bestQuizScore) ? Math.max(0, Number(parsed.bestQuizScore)) : 0,
+          lastQuizScore: Number.isFinite(parsed.lastQuizScore) ? Math.max(0, Number(parsed.lastQuizScore)) : 0,
+        });
+      } catch { setProgress(EMPTY_PROGRESS); }
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
+  const saveProgress = (patch: Partial<StudyProgress>) => {
+    setProgress(previous => {
+      const next = { ...previous, ...patch };
+      AsyncStorage.setItem(STUDY_PROGRESS_KEY, JSON.stringify(next)).catch(() => undefined);
+      return next;
+    });
+  };
 
   const selectedTopic = useMemo(
     () => DENTAL_REFERENCE_LIBRARY.find(item => item.id === topicId) ?? DENTAL_REFERENCE_LIBRARY[0],
@@ -68,6 +110,7 @@ export default function LearningToolsModal({ visible, mode, onClose, onAskEzra }
   const nextQuestion = () => {
     if (questionIndex >= DENTAL_QUIZ.length - 1) {
       setQuizFinished(true);
+      saveProgress({ quizAttempts: progress.quizAttempts + 1, lastQuizScore: score, bestQuizScore: Math.max(progress.bestQuizScore, score) });
       return;
     }
     setQuestionIndex(previous => previous + 1);
@@ -114,6 +157,7 @@ export default function LearningToolsModal({ visible, mode, onClose, onAskEzra }
                 ['library', 'مكتبة الأسنان'],
                 ['cards', 'بطاقات المراجعة'],
                 ['quiz', 'اختبر نفسك'],
+                ['cases', 'حالات سريرية'],
               ] as [ToolTab, string][]).map(([value, label]) => (
                 <TouchableOpacity key={value} onPress={() => chooseTab(value)} style={[styles.tab, tab === value && styles.tabActive]} accessibilityRole="button" accessibilityState={{ selected: tab === value }}>
                   <Text style={[styles.tabText, tab === value && styles.tabTextActive]}>{label}</Text>
@@ -122,6 +166,11 @@ export default function LearningToolsModal({ visible, mode, onClose, onAskEzra }
             </View>
 
             <ScrollView style={styles.content} contentContainerStyle={styles.contentInner} showsVerticalScrollIndicator={false}>
+              <View style={styles.studyProgressCard}>
+                <Text style={styles.studyProgressTitle}>تقدّمك المحفوظ</Text>
+                <Text style={styles.studyProgressText}>بطاقات راجعتها: {progress.reviewedCardIds.length}/{DENTAL_STUDY_CARDS.length}  ·  حالات أكملتها: {progress.completedCaseIds.length}/4</Text>
+                <Text style={styles.studyProgressText}>محاولات الاختبار: {progress.quizAttempts}  ·  أفضل نتيجة: {progress.bestQuizScore}/{DENTAL_QUIZ.length}</Text>
+              </View>
               {tab === 'library' ? (
                 <>
                   <Text style={styles.sectionTitle}>مراجع أساسية مختصرة</Text>
@@ -157,7 +206,7 @@ export default function LearningToolsModal({ visible, mode, onClose, onAskEzra }
                     <Text style={styles.progressText}>البطاقة {cardIndex + 1} من {DENTAL_STUDY_CARDS.length}</Text>
                     <Text style={styles.progressText}>{currentCard.topic}</Text>
                   </View>
-                  <TouchableOpacity style={styles.flashcard} onPress={() => setCardRevealed(previous => !previous)} accessibilityRole="button" accessibilityLabel={cardRevealed ? 'إخفاء الإجابة' : 'كشف الإجابة'}>
+                  <TouchableOpacity style={styles.flashcard} onPress={() => { const reveal = !cardRevealed; setCardRevealed(reveal); if (reveal && !progress.reviewedCardIds.includes(currentCard.id)) saveProgress({ reviewedCardIds: [...progress.reviewedCardIds, currentCard.id] }); }} accessibilityRole="button" accessibilityLabel={cardRevealed ? 'إخفاء الإجابة' : 'كشف الإجابة'}>
                     <Text style={styles.cardEyebrow}>{cardRevealed ? 'الإجابة' : 'السؤال'}</Text>
                     <Text style={styles.flashcardText}>{cardRevealed ? currentCard.answer : currentCard.question}</Text>
                     <Text style={styles.tapHint}>{cardRevealed ? 'اضغط لإظهار السؤال' : 'اضغط لكشف الإجابة'}</Text>
@@ -174,7 +223,7 @@ export default function LearningToolsModal({ visible, mode, onClose, onAskEzra }
                     </TouchableOpacity>
                   </View>
                 </>
-              ) : (
+              ) : tab === 'quiz' ? (
                 <>
                   <Text style={styles.sectionTitle}>اختبار المعرفة السنية</Text>
                   <TouchableOpacity style={styles.askButton} onPress={askForCustomQuiz} accessibilityRole="button">
@@ -226,6 +275,8 @@ export default function LearningToolsModal({ visible, mode, onClose, onAskEzra }
                     </>
                   )}
                 </>
+              ) : (
+                <ClinicalCaseSimulator completedCaseIds={progress.completedCaseIds} onCaseCompleted={caseId => { if (!progress.completedCaseIds.includes(caseId)) saveProgress({ completedCaseIds: [...progress.completedCaseIds, caseId] }); }} />
               )}
               <Text style={styles.disclaimer}>محتوى تعليمي تأسيسي للمراجعة، وليس بديلاً عن المراجع الأكاديمية المعتمدة أو الإرشادات السريرية المحلية أو التقييم السريري.</Text>
             </ScrollView>
@@ -252,6 +303,9 @@ const styles = StyleSheet.create({
   tabText: { color: '#B9ABB9', fontSize: 10, fontWeight: '700', textAlign: 'center' },
   tabTextActive: { color: '#FFF0FA' },
   content: { flex: 1 },
+  studyProgressCard: { backgroundColor: '#211629', borderRadius: 14, borderWidth: 1, borderColor: '#5A3B55', padding: 12, gap: 5 },
+  studyProgressTitle: { color: '#F0C5DF', fontSize: 11, fontWeight: '800', textAlign: 'right' },
+  studyProgressText: { color: '#C7B8C7', fontSize: 10, textAlign: 'right' },
   contentInner: { padding: 16, gap: 12, paddingBottom: 28 },
   sectionTitle: { color: '#F5EAF3', fontSize: 15, fontWeight: '800', textAlign: 'right' },
   helper: { color: '#A99BAA', fontSize: 11, lineHeight: 17, textAlign: 'right' },
