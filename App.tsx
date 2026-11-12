@@ -32,6 +32,8 @@ import {
 } from 'expo-speech-recognition';
 import { StatusBar } from 'expo-status-bar';
 import EzraOrb3D from './src/EzraOrb3D';
+import { EzraButton, EzraTextField } from './src/components/DesignSystem';
+import { motion } from './src/theme';
 import { supabase } from './src/lib/supabase';
 import { DEFAULT_EZRA_VOICE } from './src/voice/voiceProfile';
 import { requireNativeModule } from 'expo-modules-core';
@@ -176,7 +178,7 @@ function EzraOrb({ status, voiceLevel = 0 }: { status: string; voiceLevel?: numb
     }
     const waveLoops = waveform.map((bar, index) => {
       bar.setValue(0.18);
-      const duration = thinking ? 1050 : speaking ? 360 : 560;
+      const duration = thinking ? motion.waveform.thinkingTempoMs : speaking ? motion.waveform.speakingTempoMs : motion.waveform.idleTempoMs;
       const loop = Animated.loop(Animated.sequence([
         Animated.delay(index * (thinking ? 110 : 65)),
         Animated.timing(bar, { toValue: 0.95, duration, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
@@ -2380,10 +2382,10 @@ export default function App() {
           <Text style={styles.authBrand}>EZRA</Text>
           <Text style={styles.authTitle}>مساحتك الخاصة.</Text>
           <Text style={styles.authHint}>سجّل الدخول للمتابعة مع مساعدك الشخصي.</Text>
-          <TextInput
-            style={[styles.authInput, styles.authInputLtr]}
+          <EzraTextField
+            style={{ textAlign: 'left', writingDirection: 'ltr' }}
+            containerStyle={{ marginBottom: 12 }}
             placeholder="البريد الإلكتروني"
-            placeholderTextColor="#777680"
             textAlign="left"
             value={email}
             onChangeText={setEmail}
@@ -2391,10 +2393,10 @@ export default function App() {
             keyboardType="email-address"
             autoComplete="email"
           />
-          <TextInput
-            style={[styles.authInput, styles.authInputLtr]}
+          <EzraTextField
+            style={{ textAlign: 'left', writingDirection: 'ltr' }}
+            containerStyle={{ marginBottom: 12 }}
             placeholder="كلمة المرور"
-            placeholderTextColor="#777680"
             textAlign="left"
             value={password}
             onChangeText={setPassword}
@@ -2403,13 +2405,13 @@ export default function App() {
             autoComplete="password"
           />
           {!!authError && <Text style={styles.authError}>{authError}</Text>}
-          <TouchableOpacity
-            style={[styles.authButton, signingIn && styles.authButtonDisabled]}
+          <EzraButton
+            title="تسجيل الدخول"
             onPress={signIn}
+            loading={signingIn}
             disabled={signingIn}
-          >
-            <Text style={styles.authButtonText}>{signingIn ? 'جارٍ تسجيل الدخول…' : 'تسجيل الدخول'}</Text>
-          </TouchableOpacity>
+            style={{ width: '100%', marginTop: 4 }}
+          />
           <Text style={styles.authFootnote}>دخول خاص · للحساب المصرّح فقط</Text>
         </View>
       </SafeAreaView>
