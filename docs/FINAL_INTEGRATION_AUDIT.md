@@ -61,8 +61,8 @@ The most recent successful CI baseline before the memory-flow cleanup was `02940
 
 ## Known limitations and open verification items
 
-1. **Attachment storage migration must be applied to Supabase.** The app now uploads chat attachments to a private owner-scoped bucket and restores them using short-lived signed URLs. Until migration `202611120001_chat_attachment_storage.sql` is applied to the Supabase project, the new runtime storage flow is not available. Previously stored metadata-only attachments cannot be restored.
-2. **Knowledge library is local-only.** The library is stored in device AsyncStorage and is not synchronized across devices.
+1. **Previously stored metadata-only chat attachments cannot be restored.** New chat attachments use the private owner-scoped bucket and short-lived signed URLs; the storage migration is applied and its schema, bucket, and policies were verified.
+2. **Knowledge-library runtime sync is not end-to-end device-verified.** The account table and owner policies are installed, and source regression/build checks pass. A signed-in upload, sign-out/sign-in restore on a second device, and cross-user denial test have not been executed.
 3. **File formats are limited.** Message attachments and knowledge files support TXT, MD, CSV, and JSON text extraction. PDF and Word extraction are not implemented.
 4. **Habibi inference is not runtime-verified.** Native compilation does not prove model compatibility, memory sufficiency, successful inference, or audio playback on the target device.
 5. **Wake-word reliability is device-dependent.** Android speech-recognition provider behavior, foreground-service restrictions, OEM battery management, and notification permission can affect background listening.
@@ -94,3 +94,17 @@ A feature is marked **implemented** when its source integration exists. It is ma
 - Upload failure prevents the message from being saved; a failed message insert triggers best-effort removal of the just-uploaded object.
 - **Supabase migration applied:** `ezra_private_chat_attachment_storage` was applied successfully to the existing `EZRA AI` Supabase project (`qjqbgbbrzovimyutzvps`). A verification query confirmed all three attachment columns, the private 5 MiB bucket, and all three owner-scoped Storage policies.
 - **Remaining verification boundary:** schema, bucket configuration, and policies are verified. An authenticated end-to-end upload, signed-URL restore, and cross-user denial test has not been run, so do not claim those runtime flows were tested.
+
+
+## Phase 8 — account-synchronized knowledge library
+
+- The app keeps an owner-scoped AsyncStorage cache and synchronizes knowledge documents with `public.knowledge_documents` after authentication.
+- Cloud rows are filtered by the authenticated owner. The database enforces RLS for select/insert/update/delete and grants CRUD only to `authenticated`; anonymous access is revoked.
+- The local/cloud merge chooses the most recently updated copy, retains deletion tombstones so stale devices do not immediately resurrect deleted documents, and caps active documents at eight.
+- New files are written to the local cache first, then upserted to the account table. A temporary cloud failure leaves the local copy available and exposes a sync error/retry state.
+- The legacy unscoped local library key is migrated into the signed-in user's scoped cache on first load.
+- Migration `20261112210427_knowledge_library_sync.sql` is present in the repository and was applied to the EZRA AI Supabase project (`qjqbgbbrzovimyutzvps`) as migration `ezra_knowledge_library_sync`.
+- Database verification confirmed the table, eight columns, RLS enabled, four owner-scoped policies, authenticated CRUD grants, and no anonymous SELECT grant.
+- Regression tests cover legacy normalization, cloud mapping, latest-copy merge, eight-document cap, owner payload mapping, and deletion tombstones.
+- CI run `43307038966` on `9d4bb15d80fe9fe2710d000c72351abc124cad60` passed the knowledge-sync test, Expo checks, TypeScript check, Android Kotlin compilation, and Android bundle export.
+- **Remaining verification boundary:** the authenticated app-level cloud upload/restore and cross-user denial flows have not been exercised end-to-end.
