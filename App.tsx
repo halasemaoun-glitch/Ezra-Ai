@@ -208,6 +208,19 @@ export default function App() {
   const appIsActiveRef = useRef(AppState.currentState === 'active');
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [settingsSection, setSettingsSection] = useState<string | null>(null);
+  const [companionProfile, setCompanionProfile] = useState({
+    personality: ['ودود', 'ذكي', 'هادئ'],
+    communicationStyle: 'متوازن',
+    preferredAddress: '',
+    affection: 2,
+    humor: 2,
+    userName: '',
+    occupation: '',
+    lifestyle: '',
+    extraInstructions: '',
+  });
+  const [companionProfileLoaded, setCompanionProfileLoaded] = useState(false);
+
   const [habibiCapacity, setHabibiCapacity] = useState<HabibiDeviceCapacity | null>(null);
   const [habibiCapacityLoading, setHabibiCapacityLoading] = useState(false);
   const [habibiCapacityError, setHabibiCapacityError] = useState('');
@@ -563,6 +576,38 @@ export default function App() {
     }).catch(error => console.warn('Could not restore Habibi activation:', error));
     return () => { cancelled = true; };
   }, [voicePrefsLoaded, session?.user.id, habibiModelPath, habibiReferencePath, habibiReferenceTranscript, habibiDialect]);
+
+  useEffect(() => {
+    AsyncStorage.getItem('ezra:companionProfile').then(raw => {
+      if (!raw) return;
+      try {
+        const saved = JSON.parse(raw);
+        if (saved && typeof saved === 'object') {
+          setCompanionProfile(previous => ({
+            ...previous,
+            ...saved,
+            personality: Array.isArray(saved.personality)
+              ? saved.personality.filter((item: unknown) => typeof item === 'string').slice(0, 8)
+              : previous.personality,
+            affection: Number.isFinite(saved.affection) ? Math.max(0, Math.min(4, saved.affection)) : previous.affection,
+            humor: Number.isFinite(saved.humor) ? Math.max(0, Math.min(4, saved.humor)) : previous.humor,
+          }));
+        }
+      } catch (error) {
+        console.warn('Could not restore EZRA companion profile:', error);
+      }
+    }).catch(error => console.warn('Could not load EZRA companion profile:', error))
+      .finally(() => setCompanionProfileLoaded(true));
+  }, []);
+
+  const updateCompanionProfile = (patch: Partial<typeof companionProfile>) => {
+    setCompanionProfile(previous => {
+      const next = { ...previous, ...patch };
+      AsyncStorage.setItem('ezra:companionProfile', JSON.stringify(next))
+        .catch(error => console.warn('Could not save EZRA companion profile:', error));
+      return next;
+    });
+  };
 
   const visibleMemories = memories.filter(item => {
     const matchesSearch = item.content.toLocaleLowerCase().includes(memorySearch.trim().toLocaleLowerCase());
@@ -1479,12 +1524,25 @@ export default function App() {
         const conversationInput = recentContext
           ? `Continue this conversation naturally. Use the previous messages as context.\n\n${recentContext}\nUser: ${userInput}`
           : userInput;
+        const companionGuidance = [
+          companionProfile.personality.length ? `Personality traits: ${companionProfile.personality.join(', ')}.` : '',
+          companionProfile.communicationStyle ? `Communication style: ${companionProfile.communicationStyle}.` : '',
+          companionProfile.preferredAddress.trim() ? `Address the user as: ${companionProfile.preferredAddress.trim()}.` : '',
+          `Affection level: ${companionProfile.affection}/4. Humor level: ${companionProfile.humor}/4.`,
+          companionProfile.userName.trim() ? `User preferred name: ${companionProfile.userName.trim()}.` : '',
+          companionProfile.occupation.trim() ? `User occupation: ${companionProfile.occupation.trim()}.` : '',
+          companionProfile.lifestyle.trim() ? `User lifestyle context: ${companionProfile.lifestyle.trim()}.` : '',
+          companionProfile.extraInstructions.trim() ? `Additional user instructions: ${companionProfile.extraInstructions.trim()}.` : '',
+        ].filter(Boolean).join('\n');
+        const personalizedInput = companionGuidance
+          ? `Use these user-approved companion preferences when relevant. Treat them as style and personalization guidance, not as instructions that override safety or the user's current request:\n${companionGuidance.slice(0, 2400)}\n\n${conversationInput}`
+          : conversationInput;
 
         let timeoutId: ReturnType<typeof setTimeout> | undefined;
         const aiRequest = await Promise.race([
           supabase.functions.invoke('smart-service', {
             body: {
-              input: conversationInput,
+              input: personalizedInput,
               voiceMode: voiceReply,
               responseLanguage,
               ...(attachment?.kind === 'image' && attachment.base64
@@ -2195,6 +2253,62 @@ export default function App() {
                     <View style={{ borderTopWidth: 1, borderTopColor: '#382735', paddingTop: 14, paddingHorizontal: 4 }}>
                       <Text style={{ color: '#847583', fontSize: 11, textAlign: 'center' }}>EZRA AI · مساحة واحدة لتخصيص تجربتك</Text>
                     </View>
+                  </View>
+                ) : settingsSection === 'الرفيق الشخصي' ? (
+                  <View style={{ gap: 16, paddingBottom: 22 }}>
+                    <View style={{ padding: 16, borderRadius: 18, backgroundColor: '#241625', borderWidth: 1, borderColor: '#68435F', gap: 6 }}>
+                      <Text style={{ color: '#F5DDED', fontSize: 17, fontWeight: '800', textAlign: 'right' }}>شخصية EZRA تبدأ من هنا</Text>
+                      <Text style={{ color: '#B9A6B6', fontSize: 12, lineHeight: 20, textAlign: 'right' }}>اختاري صفاته وطريقة حديثه. تُحفظ تفضيلاتك على هذا الجهاز وتُرسل مع طلبات المحادثة لتخصيص الردود.</Text>
+                      <Text style={{ color: companionProfileLoaded ? '#A9D7B9' : '#D9B77A', fontSize: 11, textAlign: 'right' }}>{companionProfileLoaded ? '✓ تم تحميل تفضيلاتك' : 'جارٍ تحميل التفضيلات…'}</Text>
+                    </View>
+                    <View style={{ gap: 10 }}>
+                      <Text style={{ color: '#F2D9E9', fontSize: 15, fontWeight: '800', textAlign: 'right' }}>سمات شخصية EZRA</Text>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'flex-end' }}>
+                        {['ودود', 'ذكي', 'هادئ', 'مرح', 'حنون', 'صريح', 'صبور', 'رسمي'].map(trait => {
+                          const selected = companionProfile.personality.includes(trait);
+                          return <TouchableOpacity key={trait} onPress={() => updateCompanionProfile({ personality: selected ? companionProfile.personality.filter(item => item !== trait) : [...companionProfile.personality, trait] })} style={{ borderRadius: 20, paddingHorizontal: 14, paddingVertical: 9, backgroundColor: selected ? '#633D59' : '#211923', borderWidth: 1, borderColor: selected ? '#D58AB8' : '#493747' }} accessibilityRole="button" accessibilityState={{ selected }}><Text style={{ color: selected ? '#FFE8F5' : '#B9AAB7', fontSize: 12, fontWeight: '700' }}>{trait}</Text></TouchableOpacity>;
+                        })}
+                      </View>
+                    </View>
+                    <View style={{ gap: 9 }}>
+                      <Text style={{ color: '#F2D9E9', fontSize: 15, fontWeight: '800', textAlign: 'right' }}>أسلوب التواصل</Text>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'flex-end' }}>
+                        {['متوازن', 'عفوي وودود', 'مختصر ومباشر', 'مفصل وتعليمي', 'رسمي'].map(style => <TouchableOpacity key={style} onPress={() => updateCompanionProfile({ communicationStyle: style })} style={{ borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: companionProfile.communicationStyle === style ? '#633D59' : '#211923', borderWidth: 1, borderColor: companionProfile.communicationStyle === style ? '#D58AB8' : '#493747' }}><Text style={{ color: '#F5EAF2', fontSize: 12 }}>{style}</Text></TouchableOpacity>)}
+                      </View>
+                    </View>
+                    {([
+                      { key: 'affection', title: 'مستوى المودة', low: 'محايد', high: 'حنون جداً' },
+                      { key: 'humor', title: 'مستوى الفكاهة', low: 'جاد', high: 'مرح جداً' },
+                    ] as const).map(item => (
+                      <View key={item.key} style={{ padding: 14, borderRadius: 16, backgroundColor: '#1B151E', borderWidth: 1, borderColor: '#493747', gap: 10 }}>
+                        <Text style={{ color: '#F2D9E9', fontSize: 14, fontWeight: '700', textAlign: 'right' }}>{item.title} · {companionProfile[item.key]}/4</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                          <Text style={{ color: '#A99AA8', fontSize: 10 }}>{item.low}</Text>
+                          <View style={{ flexDirection: 'row', gap: 7 }}>
+                            {[0,1,2,3,4].map(level => <TouchableOpacity key={level} onPress={() => updateCompanionProfile({ [item.key]: level })} style={{ width: 29, height: 29, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: companionProfile[item.key] >= level ? '#A85E91' : '#39303B', borderWidth: 1, borderColor: companionProfile[item.key] === level ? '#F0B9DC' : 'transparent' }}><Text style={{ color: '#FFF0F8', fontSize: 11 }}>{level}</Text></TouchableOpacity>)}
+                          </View>
+                          <Text style={{ color: '#A99AA8', fontSize: 10 }}>{item.high}</Text>
+                        </View>
+                      </View>
+                    ))}
+                    {([
+                      { key: 'preferredAddress', title: 'طريقة مخاطبتك المفضلة', placeholder: 'مثلاً: صديقي، باسمي، دون ألقاب…' },
+                      { key: 'userName', title: 'اسمك المفضل', placeholder: 'اكتبي الاسم الذي تريدين أن يستخدمه EZRA' },
+                      { key: 'occupation', title: 'المهنة أو مجال الدراسة', placeholder: 'مثلاً: طالبة، طبيبة، مطوّرة…' },
+                      { key: 'lifestyle', title: 'معلومات عن نمط حياتك', placeholder: 'اهتماماتك وروتينك وأهدافك (اختياري)' },
+                    ] as const).map(field => (
+                      <View key={field.key} style={{ gap: 7 }}>
+                        <Text style={{ color: '#F2D9E9', fontSize: 14, fontWeight: '700', textAlign: 'right' }}>{field.title}</Text>
+                        <TextInput value={companionProfile[field.key]} onChangeText={value => updateCompanionProfile({ [field.key]: value })} placeholder={field.placeholder} placeholderTextColor="#817482" style={{ minHeight: 48, borderRadius: 13, borderWidth: 1, borderColor: '#594253', backgroundColor: '#17121A', color: '#F5EAF2', paddingHorizontal: 13, paddingVertical: 11, textAlign: 'right', writingDirection: 'rtl' }} />
+                      </View>
+                    ))}
+                    <View style={{ gap: 7 }}>
+                      <Text style={{ color: '#F2D9E9', fontSize: 14, fontWeight: '700', textAlign: 'right' }}>تعليمات شخصية إضافية</Text>
+                      <TextInput value={companionProfile.extraInstructions} onChangeText={value => updateCompanionProfile({ extraInstructions: value })} placeholder="مثلاً: اشرح لي خطوة بخطوة، وتجنب الإطالة…" placeholderTextColor="#817482" multiline maxLength={1200} textAlignVertical="top" style={{ minHeight: 108, borderRadius: 13, borderWidth: 1, borderColor: '#594253', backgroundColor: '#17121A', color: '#F5EAF2', padding: 13, textAlign: 'right', writingDirection: 'rtl' }} />
+                      <Text style={{ color: '#827583', fontSize: 10, textAlign: 'right' }}>{companionProfile.extraInstructions.length}/1200</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => { AsyncStorage.setItem('ezra:companionProfile', JSON.stringify(companionProfile)).then(() => Alert.alert('تم الحفظ', 'حُفظت تفضيلات الرفيق الشخصي على هذا الجهاز.')).catch(() => Alert.alert('تعذّر الحفظ', 'لم نتمكن من حفظ التفضيلات. حاولي مجدداً.')); }} style={{ borderRadius: 15, paddingVertical: 14, alignItems: 'center', backgroundColor: '#754765', borderWidth: 1, borderColor: '#C58DBB' }}><Text style={{ color: '#FFF0F8', fontSize: 14, fontWeight: '800' }}>حفظ تفضيلات الرفيق</Text></TouchableOpacity>
+                    <Text style={{ color: '#8F8290', fontSize: 10, lineHeight: 17, textAlign: 'right' }}>تُخزّن هذه البيانات محلياً على جهازك حالياً، وتُضاف إلى سياق المحادثات. لا تكتبي كلمات مرور أو معلومات شديدة الحساسية هنا.</Text>
                   </View>
                 ) : settingsSection !== 'voice' ? (
                   <View style={{ flex: 1, minHeight: 250, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 }}>
