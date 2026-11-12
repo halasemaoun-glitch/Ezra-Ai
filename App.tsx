@@ -3328,28 +3328,22 @@ export default function App() {
                       <TouchableOpacity onPress={() => { void EzraWakeWord?.adjustVolume('down').catch(error => Alert.alert('تعذّر تعديل الصوت', String(error))); }} accessibilityRole="button" style={{ flexGrow: 1, minWidth: '46%', padding: 13, borderRadius: 13, backgroundColor: '#241925', borderWidth: 1, borderColor: '#69465F', alignItems: 'center' }}>
                         <Text style={{ color: '#F2D9E9', fontSize: 12, fontWeight: '700' }}>خفض صوت الوسائط −</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity onPress={() => { void EzraWakeWord?.mediaControl('play').catch(error => Alert.alert('تعذّر التحكم بالوسائط', String(error))); }} accessibilityRole="button" style={{ flexGrow: 1, minWidth: '46%', padding: 13, borderRadius: 13, backgroundColor: '#241925', borderWidth: 1, borderColor: '#69465F', alignItems: 'center' }}>
+                      <TouchableOpacity onPress={() => { void EzraWakeWord?.mediaControl('toggle').catch(error => Alert.alert('تعذّر التحكم بالوسائط', String(error))); }} accessibilityRole="button" style={{ flexGrow: 1, minWidth: '46%', padding: 13, borderRadius: 13, backgroundColor: '#241925', borderWidth: 1, borderColor: '#69465F', alignItems: 'center' }}>
                         <Text style={{ color: '#F2D9E9', fontSize: 12, fontWeight: '700' }}>تشغيل / إيقاف الوسائط</Text>
                       </TouchableOpacity>
+                      <TouchableOpacity onPress={() => { void EzraWakeWord?.adjustVolume('mute').then(() => refreshPhoneOverview()).catch(error => Alert.alert('تعذّر كتم الصوت', String(error))); }} accessibilityRole="button" style={{ flexGrow: 1, minWidth: '46%', padding: 13, borderRadius: 13, backgroundColor: '#241925', borderWidth: 1, borderColor: '#69465F', alignItems: 'center' }}>
+                        <Text style={{ color: '#F2D9E9', fontSize: 12, fontWeight: '700' }}>كتم صوت الوسائط</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => { void EzraWakeWord?.adjustVolume('unmute').then(() => refreshPhoneOverview()).catch(error => Alert.alert('تعذّر إلغاء الكتم', String(error))); }} accessibilityRole="button" style={{ flexGrow: 1, minWidth: '46%', padding: 13, borderRadius: 13, backgroundColor: '#241925', borderWidth: 1, borderColor: '#69465F', alignItems: 'center' }}>
+                        <Text style={{ color: '#F2D9E9', fontSize: 12, fontWeight: '700' }}>إلغاء كتم الصوت</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => { void EzraWakeWord?.mediaControl('previous').catch(error => Alert.alert('تعذّر التحكم بالوسائط', String(error))); }} accessibilityRole="button" style={{ flexGrow: 1, minWidth: '46%', padding: 13, borderRadius: 13, backgroundColor: '#241925', borderWidth: 1, borderColor: '#69465F', alignItems: 'center' }}>
+                        <Text style={{ color: '#F2D9E9', fontSize: 12, fontWeight: '700' }}>المقطع السابق</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => { void EzraWakeWord?.mediaControl('next').catch(error => Alert.alert('تعذّر التحكم بالوسائط', String(error))); }} accessibilityRole="button" style={{ flexGrow: 1, minWidth: '46%', padding: 13, borderRadius: 13, backgroundColor: '#241925', borderWidth: 1, borderColor: '#69465F', alignItems: 'center' }}>
+                        <Text style={{ color: '#F2D9E9', fontSize: 12, fontWeight: '700' }}>المقطع التالي</Text>
+                      </TouchableOpacity>
                     </View>
-                    <Text style={{ color: '#F2D9E9', fontSize: 14, fontWeight: '800', textAlign: 'right', marginTop: 3 }}>إعدادات Android</Text>
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 9 }}>
-                      {([
-                        { label: 'Wi-Fi', target: 'wifi' },
-                        { label: 'Bluetooth', target: 'bluetooth' },
-                        { label: 'الصوت', target: 'sound' },
-                        { label: 'الشاشة', target: 'display' },
-                        { label: 'البطارية', target: 'battery' },
-                        { label: 'أذونات التطبيق', target: 'app' },
-                      ] as const).map(item => (
-                        <TouchableOpacity key={item.target} onPress={() => { void EzraWakeWord?.openSystemSettings(item.target).catch(error => Alert.alert('تعذّر فتح الإعدادات', String(error))); }} accessibilityRole="button" style={{ flexGrow: 1, minWidth: '30%', paddingHorizontal: 11, paddingVertical: 12, borderRadius: 12, backgroundColor: '#1B151E', borderWidth: 1, borderColor: '#493747', alignItems: 'center' }}>
-                          <Text style={{ color: '#E9B8D8', fontSize: 11, fontWeight: '700' }}>{item.label}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                    <TouchableOpacity onPress={() => { void EzraWakeWord?.openSystemSettings('app').catch(error => Alert.alert('تعذّر فتح الإعدادات', String(error))); }} accessibilityRole="button" style={{ paddingVertical: 13, borderRadius: 13, alignItems: 'center', borderWidth: 1, borderColor: '#875477', backgroundColor: '#211923' }}>
-                      <Text style={{ color: '#F2C8E5', fontSize: 12, fontWeight: '800' }}>فتح صفحة أذونات EZRA في Android</Text>
-                    </TouchableOpacity>
                     {Platform.OS !== 'android' ? <Text style={{ color: '#E5B7C8', fontSize: 11, textAlign: 'right' }}>أدوات التحكم هذه مخصصة لنظام Android. ستظل إعدادات التطبيق الأخرى متاحة.</Text> : null}
                     <Text style={{ color: '#8F8290', fontSize: 10, lineHeight: 17, textAlign: 'right' }}>ملاحظة خصوصية: لا يطلب EZRA صلاحية CALL_PHONE أو SEND_SMS؛ الاتصال والرسائل يحتاجان مراجعتك داخل تطبيق الهاتف أو الرسائل. بعض اختصارات النظام قد تختلف حسب إصدار Android والشركة المصنّعة.</Text>
                   </View>
