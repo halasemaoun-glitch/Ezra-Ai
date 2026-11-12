@@ -8,7 +8,6 @@ on:
       - "modules/ezra-habibi-tts/**"
       - "modules/ezra-wake-word/**"
       - "plugins/withEzraWakeWord.js"
-      - "App.tsx"
       - "src/voice/**"
       - "src/phone/**"
       - "src/EzraOrb3D.tsx"
