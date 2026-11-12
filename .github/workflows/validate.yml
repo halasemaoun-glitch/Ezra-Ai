@@ -42,6 +42,8 @@ jobs:
         run: deno test src/phone/commandParser_test.ts
       - name: Test EZRA expanded phone control commands
         run: deno test src/phone/phoneControlCommands_test.ts
+      - name: Test EZRA expanded files notifications and media commands
+        run: deno test src/phone/phoneActionCommands_test.ts
       - name: Test EZRA screenshot voice commands
         run: deno test src/phone/screenCaptureCommands_test.ts
       - name: Test EZRA accessibility commands
