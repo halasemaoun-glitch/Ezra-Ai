@@ -1092,7 +1092,7 @@ export default function App() {
       Alert.alert('أُضيف إلى مكتبة المعرفة', 'حُفظ الملف على جهازك وحساب EZRA. يمكن استعادته عند تسجيل الدخول من جهاز آخر.');
     } catch (error) {
       console.error('Could not add knowledge document:', error);
-      Alert.alert('تعذّرت إضافة الملف', 'لم نتمكن من قراءة الملف أو حفظه. بقيت المكتبة كما هي؛ حاول مرة أخرى.');
+      Alert.alert('تعذّرت إضافة الملف', error instanceof Error ? error.message : 'لم نتمكن من قراءة الملف أو حفظه. حاول مرة أخرى.');
     }
   };
 
@@ -2521,8 +2521,8 @@ export default function App() {
         textContent: extracted.content,
         sizeBytes: typeof file.size === 'number' ? file.size : sourceBytes.byteLength,
       });
-    } catch {
-      Alert.alert('تعذّر فتح الملفات', 'حاول مرة أخرى.');
+    } catch (error) {
+      Alert.alert('تعذّر فتح الملف', error instanceof Error ? error.message : 'حاول مرة أخرى.');
     }
   };
 
