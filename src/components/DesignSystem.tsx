@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -10,7 +10,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
-import { colors, iconography, radius, shadows, spacing, typography, EzraIconName, EzraTextVariant } from '../theme';
+import { colors, componentTokens, iconography, radius, shadows, spacing, typography, EzraIconName, EzraTextVariant } from '../theme';
 
 export function EzraText({
   variant = 'body',
@@ -72,7 +72,7 @@ export function EzraButton({
           alignItems: 'center',
           justifyContent: 'center',
           opacity: disabled ? 0.48 : pressed ? 0.84 : 1,
-          transform: [{ scale: pressed && !disabled && !loading ? 0.985 : 1 }],
+          transform: [{ scale: pressed && !disabled && !loading ? componentTokens.button.pressedScale : 1 }],
         },
         variant === 'primary' ? shadows.softGlow : null,
         style,
@@ -91,21 +91,26 @@ type EzraTextFieldProps = TextInputProps & {
   containerStyle?: StyleProp<ViewStyle>;
 };
 
-export function EzraTextField({ label, error, containerStyle, style, ...inputProps }: EzraTextFieldProps) {
+export function EzraTextField({ label, error, containerStyle, style, onFocus, onBlur, editable = true, ...inputProps }: EzraTextFieldProps) {
+  const [focused, setFocused] = useState(false);
   return (
     <View style={[{ width: '100%', gap: spacing.xs }, containerStyle]}>
       {label ? <EzraText variant="caption" color={colors.textSecondary}>{label}</EzraText> : null}
       <TextInput
+        editable={editable}
+        onFocus={event => { setFocused(true); onFocus?.(event); }}
+        onBlur={event => { setFocused(false); onBlur?.(event); }}
         placeholderTextColor={colors.textMuted}
         selectionColor={colors.accentBright}
         {...inputProps}
         style={[
           {
             width: '100%',
-            minHeight: 52,
+            minHeight: componentTokens.field.minHeight,
             borderRadius: radius.md,
-            borderWidth: 1,
-            borderColor: error ? colors.danger : colors.borderSubtle,
+            borderWidth: focused ? componentTokens.field.focusedBorderWidth : 1,
+            borderColor: error ? colors.danger : focused ? colors.accentBright : colors.borderSubtle,
+            opacity: editable ? 1 : 0.56,
             backgroundColor: colors.surfaceElevated,
             color: colors.textPrimary,
             paddingHorizontal: spacing.lg,
@@ -168,5 +173,48 @@ export function EzraIcon({
     >
       {iconography.glyphs[name]}
     </Text>
+  );
+}
+
+
+/** Accessible 48dp icon action with the same quiet press language as EZRA buttons. */
+export function EzraIconButton({
+  name,
+  onPress,
+  accessibilityLabel,
+  color = colors.textSecondary,
+  size = iconography.opticalSize,
+  disabled = false,
+  style,
+}: {
+  name: EzraIconName;
+  onPress: () => void;
+  accessibilityLabel: string;
+  color?: string;
+  size?: number;
+  disabled?: boolean;
+  style?: StyleProp<ViewStyle>;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      hitSlop={4}
+      onPress={onPress}
+      style={({ pressed }) => [{
+        width: iconography.touchTarget,
+        height: iconography.touchTarget,
+        minWidth: iconography.touchTarget,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: radius.full,
+        opacity: disabled ? 0.42 : pressed ? 0.78 : 1,
+        transform: [{ scale: pressed && !disabled ? componentTokens.button.pressedScale : 1 }],
+      }, style]}
+    >
+      <EzraIcon name={name} color={color} size={size} />
+    </Pressable>
   );
 }
