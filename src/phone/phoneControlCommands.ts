@@ -14,7 +14,7 @@ export function normalizePhoneCommand(value: string): string {
 }
 export function parsePhoneSettingsTarget(command: string): PhoneSettingsTarget | null {
   const value = normalizePhoneCommand(command);
-  const openPrefix = /^(?:(?:يا\s*)?(?:ازرا|ezra)[،,: -]*)?(?:من فضلك\s*)?(?:افتح|اعرض|اذهب الى|روح على|show|open)\s+/;
+  const openPrefix = /^(?:(?:يا\s*)?(?:ازرا|ezra)[،,: -]*)?(?:من فضلك\s*)?(?:افتح|اعرض|اذهب الى|روح على|ادارة|إدارة|show|open)\s+/;
   const target = value.replace(openPrefix, '').replace(/^(?:اعدادات|الاعدادات|settings)\s+/, '').trim();
   if (/^(?:مساحة التخزين|التخزين|الذاكرة|storage|storage settings)$/.test(target)) return 'storage';
   if (/^(?:التاريخ والوقت|الوقت والتاريخ|التاريخ|date and time|date|time settings)$/.test(target)) return 'date';
