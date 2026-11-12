@@ -36,7 +36,12 @@ class EzraAccessibilityService : AccessibilityService() {
         val sensitive = Regex("""(?:حذف|احذف|مسح|الغاء الحساب|شراء|اشتر|ادفع|دفع|تحويل|ارسال|ابعث|نشر|موافق|تاكيد|اتصال|اتصل|مكالمة|اشتراك|confirm|delete|remove|buy|purchase|pay|payment|transfer|send|post|submit|call|dial|subscribe)""")
           .containsMatchIn(target)
         if (sensitive) {
-          postConfirmationNotification(context, target)
+          val activePackage = instance?.rootInActiveWindow?.packageName?.toString().orEmpty()
+          if (activePackage.isBlank()) {
+            postActionResult(context, "لم أتمكن من تحديد التطبيق المفتوح بأمان. أعيدي الطلب من داخل التطبيق المطلوب.")
+          } else {
+            postConfirmationNotification(context, target, activePackage)
+          }
         } else {
           val success = clickText(target)
           postActionResult(context, if (success) "تم تنفيذ الضغط على «$target»." else "لم أجد زراً قابلاً للضغط باسم «$target» في التطبيق المفتوح.")
@@ -76,16 +81,17 @@ class EzraAccessibilityService : AccessibilityService() {
       manager.notify(ACTION_NOTIFICATION_ID, builder.build())
     }
 
-    private fun postConfirmationNotification(context: Context, target: String) {
+    private fun postConfirmationNotification(context: Context, target: String, expectedPackage: String) {
       val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
       ensureNotificationChannel(context, manager)
       val intent = Intent(context, EzraAccessibilityActionReceiver::class.java).apply {
         action = EzraAccessibilityActionReceiver.ACTION_CONFIRM
         putExtra(EzraAccessibilityActionReceiver.EXTRA_TARGET, target)
+        putExtra(EzraAccessibilityActionReceiver.EXTRA_EXPECTED_PACKAGE, expectedPackage)
       }
       val pendingIntent = PendingIntent.getBroadcast(
         context,
-        target.hashCode(),
+        31 * target.hashCode() + expectedPackage.hashCode(),
         intent,
         PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0)
       )
@@ -119,12 +125,13 @@ class EzraAccessibilityService : AccessibilityService() {
         Notification.Builder(context)
       }
 
-    fun clickText(target: String): Boolean {
+    fun clickText(target: String, expectedPackage: String? = null): Boolean {
       val service = instance ?: return false
       val normalizedTarget = normalize(target)
       if (normalizedTarget.isBlank()) return false
       return service.runOnMain {
         val root = service.rootInActiveWindow ?: return@runOnMain false
+        if (!expectedPackage.isNullOrBlank() && root.packageName?.toString() != expectedPackage) return@runOnMain false
         val match = service.findMatchingNode(root, normalizedTarget) ?: return@runOnMain false
         service.clickNodeOrClickableParent(match)
       }
