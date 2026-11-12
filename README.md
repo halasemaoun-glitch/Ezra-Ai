@@ -55,3 +55,12 @@ The GitHub Actions validation workflow also checks the Supabase Edge Function an
 An installable Android preview build can be configured through EAS using the `preview` profile in `eas.json`. Native speech modules require a development/preview build; Expo Go alone does not include these custom native modules.
 
 Never commit provider keys, Supabase secret/service-role keys, signing credentials, or other private credentials.
+
+## Android phone command expansion (source implementation)
+
+- File and downloads commands use Android's Storage Access Framework or Downloads UI. EZRA opens the system picker; the user chooses which file to view or share.
+- Notification shade commands use the optional, user-enabled AccessibilityService global action. Notification settings open the app-specific Android notification settings page. EZRA does not silently read notification contents.
+- Alarm and timer commands open the Android Clock confirmation UI; the user confirms the alarm or timer there.
+- Media commands dispatch play, pause, stop, next, and previous media keys to the active Android media session. The result depends on the media app and its active session.
+- Existing deep links cover Wi-Fi, Internet, Bluetooth, sound, display, location, battery, storage, date/time, privacy, security, language, default apps, and EZRA app permissions.
+- Deno parser tests cover Arabic/English file, downloads, notification, and media commands. Android intents and Kotlin compilation are checked by CI; behavior still depends on the device's installed apps and Android permissions.
