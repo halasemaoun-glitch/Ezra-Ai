@@ -70,7 +70,9 @@ type EzraWakeWordNative = {
   setTorch: (enabled: boolean) => Promise<boolean>;
   findContactPhone: (name: string) => Promise<string>;
   dialNumber: (phone: string) => Promise<boolean>;
+  placeCall: (phone: string) => Promise<boolean>;
   composeSms: (phone: string, body: string) => Promise<boolean>;
+  sendSmsDirect: (phone: string, body: string) => Promise<boolean>;
   createAlarm: (hour: number, minute: number, label: string) => Promise<boolean>;
   createTimer: (seconds: number, label: string) => Promise<boolean>;
   openSystemSettings: (target: string) => Promise<boolean>;
@@ -1666,23 +1668,27 @@ export default function App() {
     const userId = `call-user-${Date.now()}`;
     const replyId = `call-reply-${Date.now()}`;
     let reply = '';
-    let phone = '';
     try {
       const contactsPermission = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_CONTACTS);
       if (contactsPermission !== PermissionsAndroid.RESULTS.GRANTED) {
         reply = 'أحتاج إذن جهات الاتصال حتى أجد الرقم. اسمحي بالإذن ثم أعيدي الطلب.';
       } else {
-        phone = await EzraWakeWord.findContactPhone(contactName);
+        const phone = await EzraWakeWord.findContactPhone(contactName);
         if (!phone) {
           reply = `ما لقيت جهة اتصال محفوظة باسم ${contactName}. تأكدي من الاسم في جهات الاتصال وجربي مرة ثانية.`;
         } else {
-          reply = `وجدت رقم ${contactName}: ${phone}. هل تريدين فتح شاشة الاتصال بهذا الرقم؟`;
+          const callPermission = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CALL_PHONE);
+          if (callPermission !== PermissionsAndroid.RESULTS.GRANTED) {
+            reply = 'أحتاج إذن إجراء المكالمات حتى أتصل مباشرة. يمكنك تفعيله من إعدادات EZRA.';
+          } else {
+            const called = await EzraWakeWord.placeCall(phone);
+            reply = called ? `جارٍ الاتصال بـ ${contactName}.` : 'لم يتمكن Android من بدء المكالمة.';
+          }
         }
       }
     } catch (error) {
-      console.warn('EZRA contact lookup failed:', error);
-      reply = 'ما قدرت أوصل لجهات الاتصال. تأكدي من الأذونات وجربي مرة ثانية.';
-      phone = '';
+      console.warn('EZRA direct call failed:', error);
+      reply = 'تعذّر إجراء المكالمة. تحققي من أذونات جهات الاتصال والاتصال.';
     }
 
     try {
@@ -1700,25 +1706,6 @@ export default function App() {
       { id: replyId, sender: 'ezra', text: reply },
     ]);
     setMessage('');
-    if (phone) {
-      const confirmedPhone = phone;
-      // Privacy-first: show the destination number and let the user place the call in Android's dialer.
-      Alert.alert('تأكيد الاتصال', `هل تريدين الاتصال بهذا الرقم؟\n${confirmedPhone}`, [
-        { text: 'إلغاء', style: 'cancel' },
-        {
-          text: 'اتصال',
-          onPress: async () => {
-            try {
-              const started = await EzraWakeWord.dialNumber(confirmedPhone);
-              if (started) Alert.alert('EZRA', 'فتحت شاشة الاتصال. راجعي الرقم واضغطي اتصال بنفسك.');
-            } catch (error) {
-              console.warn('EZRA call could not start:', error);
-              Alert.alert('تعذّر فتح الاتصال', 'لم أتمكن من فتح تطبيق الهاتف لهذا الرقم.');
-            }
-          },
-        },
-      ]);
-    }
     if (voiceReply || autoSpeak) speak(reply, replyId);
     setSending(false);
     return true;
@@ -1867,29 +1854,41 @@ export default function App() {
       }
     }
 
-    const smsMatch = normalized.match(/(?:ارسل|ابعث|اكتب)\s+(?:رسالة|sms)\s+(?:الى|ل)\s+(.+?)\s+(?:تقول|محتواها|نصها)\s+(.+)$/i);
+    const smsMatch = normalized.match(/(?:ارسل|ابعث|ابعت|اكتب)\\s+(?:لي\\s+)?(?:رسالة|مسج|sms)\\s+(?:الى|ل)\\s+(.+?)\\s+(?:تقول|قولي\\s+لها|قل\\s+له|محتواها|نصها)\\s+(.+)$/i);
     if (smsMatch) {
       const contactName = smsMatch[1].trim();
       const smsBody = smsMatch[2].trim();
       setSending(true);
       try {
-        const permission = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_CONTACTS);
-        if (permission !== PermissionsAndroid.RESULTS.GRANTED) {
+        const contactsPermission = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_CONTACTS);
+        if (contactsPermission !== PermissionsAndroid.RESULTS.GRANTED) {
           await sayResult('أحتاج إذن جهات الاتصال للعثور على الرقم.');
         } else {
           const phone = await EzraWakeWord.findContactPhone(contactName);
-          if (!phone) await sayResult(`لم أجد جهة اتصال باسم ${contactName}.`);
-          else {
-            const opened = await EzraWakeWord.composeSms(phone, smsBody);
-            await sayResult(opened ? 'فتحت تطبيق الرسائل والرسالة جاهزة. راجعيها واضغطي إرسال بنفسك.' : 'لم أتمكن من فتح تطبيق الرسائل.');
+          if (!phone) {
+            await sayResult(`لم أجد جهة اتصال باسم ${contactName}.`);
+          } else {
+            const smsPermission = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.SEND_SMS);
+            if (smsPermission !== PermissionsAndroid.RESULTS.GRANTED) {
+              await sayResult('أحتاج إذن إرسال الرسائل النصية حتى أرسل مباشرة. يمكنك تفعيله من إعدادات EZRA.');
+            } else {
+              const sent = await EzraWakeWord.sendSmsDirect(phone, smsBody);
+              await sayResult(sent ? `تم إرسال الرسالة إلى ${contactName}.` : 'تعذّر إرسال الرسالة. تحققي من الشبكة والشريحة.');
+            }
           }
         }
       } catch (error) {
-        console.warn('EZRA SMS compose failed:', error);
-        await sayResult('تعذّر تجهيز الرسالة. تحققي من صلاحية جهات الاتصال وتطبيق الرسائل.');
+        console.warn('EZRA direct SMS failed:', error);
+        await sayResult('تعذّر إرسال الرسالة. تحققي من أذونات الرسائل ووجود شريحة فعّالة.');
       } finally {
         setSending(false);
       }
+      return true;
+    }
+
+    const incompleteSmsMatch = normalized.match(/(?:ارسل|ابعث|ابعت|اكتب)\\s+(?:لي\\s+)?(?:رسالة|مسج|sms)\\s+(?:الى|ل)\\s+(.+)$/i);
+    if (incompleteSmsMatch) {
+      await sayResult(`ما النص الذي تريدين إرساله إلى ${incompleteSmsMatch[1].trim()}؟`);
       return true;
     }
 
