@@ -7,7 +7,7 @@ Deno.test('parses expanded Arabic and English phone settings commands', () => {
     ['افتح إعدادات التخزين', 'storage'], ['افتح مساحة التخزين', 'storage'],
     ['افتح إعدادات التاريخ والوقت', 'date'], ['open privacy settings', 'privacy'],
     ['افتح إعدادات الأمان', 'security'], ['افتح إعدادات اللغة', 'language'],
-    ['افتح التطبيقات الافتراضية', 'defaults'], ['إدارة أذونات التطبيقات', 'app_permissions'],
+    ['افتح التطبيقات الافتراضية', 'defaults'], ['إدارة أذونات EZRA', 'app_permissions'],
   ];
   for (const [command, expected] of cases) if (parsePhoneSettingsTarget(command) !== expected) throw new Error(`Failed to parse: ${command}`);
 });
