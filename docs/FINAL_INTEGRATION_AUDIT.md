@@ -2,7 +2,7 @@
 
 Date: 2026-11-12
 Branch: `ezra/habibi-android-spike`
-Audited application revision: `783f253bb2805fbef3b97c1abbe870d29e307494`
+Audited application revision: `b2d64db046d250a91ba34a9e441d32796503a227` (document-format source revision; CI pending)
 Phone parser helper: `f6f274f2b0fa906d44978c3bee6aa3ef2a6ed602`
 Phase 7 attachment storage migration: `202611120001_chat_attachment_storage.sql`
 Phone parser tests: `03bfe6929e43745572a080a882576e814dd14932`
@@ -12,7 +12,7 @@ Validation workflow test registration: `b07a50f511c71bd31260d9d21effce0537b985d8
 
 This is a source-level integration review of the Expo/React Native application, Supabase Edge Function, Android native modules, and study/knowledge flows. A source-level finding is not a claim that the feature has been exercised on a physical Android device.
 
-The current application source revision `9d4bb15d80fe9fe2710d000c72351abc124cad60` has a successful EZRA CI run. Documentation-only commits after that source revision are not expected to change build behavior.
+The previous application source revision `9d4bb15d80fe9fe2710d000c72351abc124cad60` has a successful EZRA CI run. The current document-format source revision `b2d64db046d250a91ba34a9e441d32796503a227` has a new validation run in progress.
 
 ## Integrated flows confirmed in source
 
@@ -51,7 +51,7 @@ The current application source revision `9d4bb15d80fe9fe2710d000c72351abc124cad6
 - Dentist/Study requests can retrieve relevant built-in dental reference notes.
 - The learning center includes dental references, flashcards, quiz questions, and clinical case simulations.
 - Study progress is stored locally and restored before persistence is allowed to write initial state.
-- The local knowledge library supports TXT, Markdown, CSV, and JSON; relevant excerpts are selected for a question and sent to the AI service.
+- The local knowledge library supports TXT, Markdown, CSV, JSON, PDF, DOCX, PPTX, and XLSX. Office/PDF files are parsed locally into text; question-relevant excerpts are selected and sent to the AI service.
 
 ## Integration repair in this audit
 
@@ -63,7 +63,7 @@ The current application source revision `9d4bb15d80fe9fe2710d000c72351abc124cad6
 
 1. **Previously stored metadata-only chat attachments cannot be restored.** New chat attachments use the private owner-scoped bucket and short-lived signed URLs; the storage migration is applied and its schema, bucket, and policies were verified.
 2. **Knowledge-library runtime sync is not end-to-end device-verified.** The account table and owner policies are installed, and source regression/build checks pass. A signed-in upload, sign-out/sign-in restore on a second device, and cross-user denial test have not been executed.
-3. **File formats are limited.** Message attachments and knowledge files support TXT, MD, CSV, and JSON text extraction. PDF and Word extraction are not implemented.
+3. **Document extraction has known limits.** Message attachments and the knowledge library now support TXT, MD, CSV, JSON, PDF, DOCX, PPTX, and XLSX. Extracted text is capped at 1 MiB per document; source files are capped at 5 MiB. Scanned/image-only PDFs do not receive OCR, and password-protected documents must be unlocked before import. Parser integration against real document fixtures still needs dedicated automated coverage.
 4. **Habibi inference is not runtime-verified.** Native compilation does not prove model compatibility, memory sufficiency, successful inference, or audio playback on the target device.
 5. **Wake-word reliability is device-dependent.** Android speech-recognition provider behavior, foreground-service restrictions, OEM battery management, and notification permission can affect background listening.
 6. **React Native behavioral test coverage is limited.** The repository has Deno tests for Edge Function auth/persona/Groq contracts and source/build checks, but no dedicated React Native component/integration test runner is configured.
@@ -88,9 +88,9 @@ A feature is marked **implemented** when its source integration exists. It is ma
 
 ## Phase 7 — persistent chat attachments (source implementation)
 
-- Chat image and supported text-file attachments are uploaded to the private `ezra-chat-attachments` bucket before the message is saved.
+- Chat image and supported document attachments (TXT/MD/CSV/JSON/PDF/DOCX/PPTX/XLSX) are uploaded to the private `ezra-chat-attachments` bucket before the message is saved. Office/PDF text is extracted locally for the current AI request.
 - Storage paths are namespaced by authenticated user ID, conversation ID, and message ID.
-- The migration creates the private bucket, limits objects to 5 MiB and the supported MIME types, adds attachment metadata columns, and scopes Storage select/insert/delete policies to the authenticated user's first path segment.
+- The migration creates the private bucket, limits objects to 5 MiB and the supported MIME types, adds attachment metadata columns, and scopes Storage select/insert/delete policies to the authenticated user's first path segment. Migration `ezra_document_format_support` expands the allowed MIME types for PDF/DOCX/PPTX/XLSX without changing the private owner-scoped policies.
 - Conversation restore requests one-hour signed URLs for stored attachments. The attachment chip opens the signed URL; image previews use the same private URL.
 - Deleting a conversation also attempts to remove its stored objects.
 - Upload failure prevents the message from being saved; a failed message insert triggers best-effort removal of the just-uploaded object.
@@ -103,10 +103,20 @@ A feature is marked **implemented** when its source integration exists. It is ma
 - The app keeps an owner-scoped AsyncStorage cache and synchronizes knowledge documents with `public.knowledge_documents` after authentication.
 - Cloud rows are filtered by the authenticated owner. The database enforces RLS for select/insert/update/delete and grants CRUD only to `authenticated`; anonymous access is revoked.
 - The local/cloud merge chooses the most recently updated copy, retains deletion tombstones so stale devices do not immediately resurrect deleted documents, and caps active documents at eight.
-- New files are written to the local cache first, then upserted to the account table. A temporary cloud failure leaves the local copy available and exposes a sync error/retry state.
+- New files are parsed locally and stored as extracted UTF-8 text. Source files are limited to 5 MiB, extracted text to 1 MiB per document, and active library items to eight. New documents are written to the local cache first, then upserted to the account table. A temporary cloud failure leaves the local copy available and exposes a sync error/retry state.
 - The legacy unscoped local library key is migrated into the signed-in user's scoped cache on first load.
 - Migration `20261112210427_knowledge_library_sync.sql` is present in the repository and was applied to the EZRA AI Supabase project (`qjqbgbbrzovimyutzvps`) as migration `ezra_knowledge_library_sync`.
 - Database verification confirmed the table, eight columns, RLS enabled, four owner-scoped policies, authenticated CRUD grants, and no anonymous SELECT grant.
-- Regression tests cover legacy normalization, cloud mapping, latest-copy merge, eight-document cap, owner payload mapping, and deletion tombstones.
+- Regression tests cover legacy normalization, cloud mapping, latest-copy merge, eight-document cap, owner payload mapping, and deletion tombstones. `src/documents/documentTextUtils_test.ts` covers HTML cleanup/entity decoding, supported format detection, and query-relevant excerpt selection.
 - CI run `43307038966` on `9d4bb15d80fe9fe2710d000c72351abc124cad60` passed the knowledge-sync test, Expo checks, TypeScript check, Android Kotlin compilation, and Android bundle export.
 - **Remaining verification boundary:** the authenticated app-level cloud upload/restore and cross-user denial flows have not been exercised end-to-end.
+
+
+## Phase 10 — PDF and Office document support (source implementation)
+
+- Added a shared local extraction path for PDF, DOCX, PPTX, and XLSX through the Ream parser; existing TXT, MD, CSV, and JSON support remains.
+- The knowledge library stores extracted text, not binary source files, with an eight-document cap, a 5 MiB source-file limit, and a 1 MiB extracted-text limit per document.
+- Chat attachments retain the original file in the private `ezra-chat-attachments` bucket (5 MiB maximum) while extracted text is supplied to the AI request. Relevant excerpts are selected against the user's question within a 12,000-character context budget.
+- Supabase migration `ezra_document_format_support` was applied to the correct `EZRA AI` project (`qjqbgbbrzovimyutzvps`). Verification confirmed the knowledge content/size checks are 1 MiB and the private attachment bucket allows PDF, DOCX, PPTX, and XLSX MIME types while retaining its 5 MiB limit.
+- **Known boundary:** scanned/image-only PDFs do not have OCR; password-protected documents must be unlocked before import. Parser coverage currently tests text cleanup and selection helpers, not full binary fixtures for every format.
+- **Validation:** GitHub Actions run `43317942617` on revision `b2d64db046d250a91ba34a9e441d32796503a227` was in progress at the time of this audit update.
