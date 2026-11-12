@@ -30,7 +30,7 @@ export function parseAccessibilityCommand(command: string): AccessibilityCommand
     return { kind: 'scroll', direction: 'up' };
   }
 
-  const click = value.match(/^(?:اضغط|انقر|اكبس|اختار|حدد|tap|click|press)\s+(?:على\s+)?(?:زر\s+)?(.{1,80})$/);
+  const click = value.match(/^(?:اضغط|انقر|اكبس|اختار|حدد|tap|click|press)\s+(?:على\s+|علي\s+)?(?:زر\s+)?(.{1,80})$/);
   if (click) {
     const target = click[1].trim().replace(/^(?:الزر|زر)\s+/, '');
     if (!target || /^(?:على|زر)$/.test(target)) return null;
