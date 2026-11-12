@@ -15,7 +15,8 @@ Private personal AI companion built with Expo SDK 54 and React Native, with Andr
 - Local knowledge library for TXT, Markdown, CSV, JSON, PDF, DOCX, PPTX, and XLSX documents (up to 8 files, with up to 5 MB per source file and 1 MB of extracted text per library item). Relevant excerpts may be sent with a question to the AI service.
 - One-off message attachments: images can be sent for AI image analysis; TXT, MD, CSV, JSON, PDF, DOCX, PPTX, and XLSX documents are text-extracted for the current request (up to 5 MB per source file and 1 MB of extracted text).
 - Arabic/English speech recognition, system text-to-speech fallback, and an optional local Habibi TTS native engine.
-- Android wake-word foreground service and phone actions including flashlight, volume/media controls, app/system settings, alarm/timer intents, and contact lookup. Calls and SMS open the relevant Android app for the user to review and confirm.
+- Android wake-word foreground service and phone actions including flashlight, volume/media controls, app/system settings, alarms/timers, contact lookup, direct phone calls, and direct SMS after the corresponding Android permissions are granted.
+- Voice screenshot commands (for example, “EZRA, take a screenshot”) launch Android's official screen-capture consent prompt, then save the approved capture to `Pictures/EZRA` in the device gallery.
 
 ## Important limitations
 
@@ -24,6 +25,7 @@ Private personal AI companion built with Expo SDK 54 and React Native, with Andr
 - The knowledge library keeps a local device cache and synchronizes extracted text with the `knowledge_documents` table. Row Level Security restricts each account to its own files. The database allows up to 1 MB of extracted text per document; signed-in multi-device restore and cross-account denial still need end-to-end runtime verification.
 - Habibi TTS requires a large model download and suitable free RAM/storage. Its Android native code is compiled by CI, but actual model inference and playback still require runtime verification on a device. Android system TTS remains the fallback.
 - Wake-word recognition depends on Android's speech-recognition provider, microphone/notification permissions, foreground-service rules, and manufacturer battery-management behavior.
+- Android requires the user to approve screen capture through its system prompt. The approval is session-scoped and may be requested again for later captures; protected app content may appear black. Calls and SMS require explicit permissions, and SMS submission does not guarantee carrier delivery.
 - The orb is an animated 2D React Native illustration, not a 3D model.
 - Groq free-tier availability and quotas can change. If the provider quota is exhausted, AI responses may be temporarily unavailable.
 
