@@ -298,6 +298,7 @@ export default function App() {
   const voiceTurnInProgressRef = useRef(false);
   const voiceRequestStartedRef = useRef(false);
   const interruptVoiceFramesRef = useRef(0);
+  const voiceRecognitionActiveRef = useRef(false);
   const voiceCaptureDuringSpeechRef = useRef(false);
   const voiceInterruptionConfirmedRef = useRef(false);
   const ignoreNextVoiceEndRef = useRef(false);
@@ -346,6 +347,7 @@ export default function App() {
         // Discard partial speech so background transitions can never submit an unfinished phrase.
         const hadPartialTranscript = !!voiceTranscriptRef.current;
         voiceTranscriptRef.current = '';
+        voiceRecognitionActiveRef.current = false;
         voiceCaptureDuringSpeechRef.current = false;
         voiceInterruptionConfirmedRef.current = false;
         interruptVoiceFramesRef.current = 0;
@@ -1406,6 +1408,7 @@ export default function App() {
   }, [session?.user.id, conversationId]);
 
   useSpeechRecognitionEvent('start', () => {
+    voiceRecognitionActiveRef.current = true;
     if (!voiceCaptureDuringSpeechRef.current) voiceInterruptionConfirmedRef.current = false;
     interruptVoiceFramesRef.current = 0;
     setVoiceRetrying(false);
@@ -1442,6 +1445,7 @@ export default function App() {
     setVoiceLevel(0);
   });
   useSpeechRecognitionEvent('end', () => {
+    voiceRecognitionActiveRef.current = false;
     setIsListening(false);
     setVoiceLevel(0);
     const spokenText = voiceTranscriptRef.current.trim();
@@ -1479,6 +1483,7 @@ export default function App() {
     }
   });
   useSpeechRecognitionEvent('error', event => {
+    voiceRecognitionActiveRef.current = false;
     setIsListening(false);
     setVoiceLevel(0);
     voiceTranscriptRef.current = '';
@@ -2531,9 +2536,12 @@ export default function App() {
     voiceInterruptionConfirmedRef.current = false;
     interruptVoiceFramesRef.current = 0;
     voiceTranscriptRef.current = '';
-    ignoreNextVoiceEndRef.current = true;
-    ExpoSpeechRecognitionModule.stop();
-    setIsListening(false);
+    if (voiceRecognitionActiveRef.current) {
+      ignoreNextVoiceEndRef.current = true;
+      ExpoSpeechRecognitionModule.stop();
+      voiceRecognitionActiveRef.current = false;
+      setIsListening(false);
+    }
   };
 
   const playNextHabibiChunk = async () => {
