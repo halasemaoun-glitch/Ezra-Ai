@@ -118,10 +118,15 @@ export default function LearningToolsModal({ visible, mode, onClose, onAskEzra, 
     const snapshot = { progress, updatedAt: new Date().toISOString() };
     const storageKey = `${STUDY_PROGRESS_KEY}:${userId}`;
     AsyncStorage.setItem(storageKey, JSON.stringify(snapshot)).catch(() => undefined);
-    supabase.from('study_progress')
-      .upsert(studyProgressToCloudRow(snapshot, userId), { onConflict: 'owner_id' })
-      .then(({ error }) => setSyncState(error ? 'error' : 'synced'))
-      .catch(() => setSyncState('error'));
+    void (async () => {
+      try {
+        const { error } = await supabase.from('study_progress')
+          .upsert(studyProgressToCloudRow(snapshot, userId), { onConflict: 'owner_id' });
+        setSyncState(error ? 'error' : 'synced');
+      } catch {
+        setSyncState('error');
+      }
+    })();
   }, [progress, progressLoaded, userId, loadedForUserId]);
 
   const saveProgress = (patch: Partial<StudyProgress>) => {
@@ -133,10 +138,15 @@ export default function LearningToolsModal({ visible, mode, onClose, onAskEzra, 
     const snapshot = { progress, updatedAt: new Date().toISOString() };
     setSyncState('loading');
     AsyncStorage.setItem(`${STUDY_PROGRESS_KEY}:${userId}`, JSON.stringify(snapshot)).catch(() => undefined);
-    supabase.from('study_progress')
-      .upsert(studyProgressToCloudRow(snapshot, userId), { onConflict: 'owner_id' })
-      .then(({ error }) => setSyncState(error ? 'error' : 'synced'))
-      .catch(() => setSyncState('error'));
+    void (async () => {
+      try {
+        const { error } = await supabase.from('study_progress')
+          .upsert(studyProgressToCloudRow(snapshot, userId), { onConflict: 'owner_id' });
+        setSyncState(error ? 'error' : 'synced');
+      } catch {
+        setSyncState('error');
+      }
+    })();
   };
 
   const selectedTopic = useMemo(
@@ -372,6 +382,8 @@ const styles = StyleSheet.create({
   studyProgressCard: { backgroundColor: '#211629', borderRadius: 14, borderWidth: 1, borderColor: '#5A3B55', padding: 12, gap: 5 },
   studyProgressTitle: { color: '#F0C5DF', fontSize: 11, fontWeight: '800', textAlign: 'right' },
   studyProgressText: { color: '#C7B8C7', fontSize: 10, textAlign: 'right' },
+  progressSyncRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  retrySyncText: { color: '#E8A6CE', fontSize: 10, fontWeight: '800' },
   contentInner: { padding: 16, gap: 12, paddingBottom: 28 },
   sectionTitle: { color: '#F5EAF3', fontSize: 15, fontWeight: '800', textAlign: 'right' },
   helper: { color: '#A99BAA', fontSize: 11, lineHeight: 17, textAlign: 'right' },
