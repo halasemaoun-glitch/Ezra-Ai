@@ -35,7 +35,7 @@ import { StatusBar } from 'expo-status-bar';
 import EzraOrb3D from './src/EzraOrb3D';
 import { EzraButton, EzraTextField } from './src/components/DesignSystem';
 import { colors, motion, radius, spacing, typography, shadows } from './src/theme';
-import { ASSISTANT_MODE_OPTIONS, getAssistantModeGuidance, type AssistantMode } from './src/modes/assistantModes';
+import { ASSISTANT_MODE_OPTIONS, getAssistantModeGuidance, getAssistantModeSuggestions, type AssistantMode } from './src/modes/assistantModes';
 import { supabase } from './src/lib/supabase';
 import { DEFAULT_EZRA_VOICE } from './src/voice/voiceProfile';
 import { requireNativeModule } from 'expo-modules-core';
@@ -3413,6 +3413,25 @@ export default function App() {
           scrollEventThrottle={100}
           showsVerticalScrollIndicator={false}
         >
+          {messages.length === 1 && messages[0]?.id === 'welcome' ? (
+            <View style={styles.modeSuggestions}>
+              <Text style={styles.modeSuggestionsTitle}>
+                {assistantMode === 'dentist' ? 'ابدأ استشارتك السنية' : assistantMode === 'study' ? 'ماذا تريد أن تتعلم اليوم؟' : 'كيف أستطيع مساعدتك؟'}
+              </Text>
+              <View style={styles.modeSuggestionsList}>
+                {getAssistantModeSuggestions(assistantMode).map(suggestion => (
+                  <TouchableOpacity
+                    key={suggestion}
+                    style={styles.modeSuggestionChip}
+                    onPress={() => setMessage(suggestion)}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.modeSuggestionText}>{suggestion}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          ) : null}
           {messages.map(item => (
             <View
               key={item.id}
@@ -3795,6 +3814,11 @@ const styles = StyleSheet.create({
   assistantModeChipText: { color: colors.textSecondary, fontSize: 10, fontWeight: '700', textAlign: 'center' },
   assistantModeChipTextActive: { color: colors.textPrimary },
   assistantModeSafety: { color: colors.textSecondary, fontSize: 9, lineHeight: 15, textAlign: 'right' },
+  modeSuggestions: { width: '100%', gap: spacing.sm, alignItems: 'flex-end', paddingHorizontal: spacing.xs },
+  modeSuggestionsTitle: { color: colors.textSecondary, fontSize: 11, fontWeight: '700', textAlign: 'right' },
+  modeSuggestionsList: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: spacing.xs },
+  modeSuggestionChip: { maxWidth: '100%', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  modeSuggestionText: { color: colors.textPrimary, fontSize: 10, textAlign: 'right' },
   line: { height: 1, backgroundColor: '#26242C' },
   welcome: { paddingHorizontal: 24, paddingTop: 22, paddingBottom: 6, alignItems: 'flex-end' },
   welcomeSmall: { color: '#B58DAE', fontSize: 10, marginBottom: 10, textAlign: 'right' },
