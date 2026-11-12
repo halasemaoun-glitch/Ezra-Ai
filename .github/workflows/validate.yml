@@ -38,6 +38,8 @@ jobs:
         run: deno test src/voice/voiceProfile_test.ts
       - name: Test EZRA assistant mode guidance and safety
         run: deno test src/modes/assistantModes_test.ts
+      - name: Test EZRA Android contact command parsing
+        run: deno test src/phone/commandParser_test.ts
       - name: Check Expo configuration and dependencies
         run: npx expo-doctor
       - name: Set up Java 17
