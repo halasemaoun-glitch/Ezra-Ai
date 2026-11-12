@@ -41,11 +41,14 @@ class EzraWakeWordModule : Module() {
       }
       pendingScreenCapturePromise = promise
       val manager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-      try {
-        appContext.throwingActivity.startActivityForResult(manager.createScreenCaptureIntent(), SCREEN_CAPTURE_REQUEST_CODE)
-      } catch (error: Exception) {
-        pendingScreenCapturePromise = null
-        promise.resolve("ERROR: تعذّر فتح إذن التقاط الشاشة: ${error.message ?: "unknown error"}")
+      val activity = appContext.throwingActivity
+      activity.runOnUiThread {
+        try {
+          activity.startActivityForResult(manager.createScreenCaptureIntent(), SCREEN_CAPTURE_REQUEST_CODE)
+        } catch (error: Exception) {
+          pendingScreenCapturePromise = null
+          promise.resolve("ERROR: تعذّر فتح إذن التقاط الشاشة: ${error.message ?: "unknown error"}")
+        }
       }
     }
 
