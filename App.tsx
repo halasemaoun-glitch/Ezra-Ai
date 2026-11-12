@@ -44,6 +44,14 @@ import { DEFAULT_EZRA_VOICE } from './src/voice/voiceProfile';
 import { parseCallContactName } from './src/phone/commandParser';
 import type { KnowledgeDocumentRecord } from './src/knowledge/knowledgeSync';
 import { knowledgeDocumentsFromCloud, knowledgeDocumentsToCloud, mergeKnowledgeDocuments, normalizeKnowledgeDocuments } from './src/knowledge/knowledgeSync';
+import {
+  DEFAULT_COMPANION_PROFILE,
+  companionProfileFromCloudRow,
+  companionProfileToCloudRow,
+  mergeCompanionProfileSnapshots,
+  normalizeCompanionSnapshot,
+  type CompanionProfile,
+} from './src/companion/companionProfileSync';
 import { requireNativeModule } from 'expo-modules-core';
 
 type EzraWakeWordNative = {
@@ -242,18 +250,11 @@ export default function App() {
   const [phonePermissions, setPhonePermissions] = useState({ contacts: false, camera: false, microphone: false, notifications: false });
   const [phonePermissionsLoading, setPhonePermissionsLoading] = useState(false);
   const [phoneTorchEnabled, setPhoneTorchEnabled] = useState(false);
-  const [companionProfile, setCompanionProfile] = useState({
-    personality: ['ودود', 'ذكي', 'هادئ'],
-    communicationStyle: 'متوازن',
-    preferredAddress: '',
-    affection: 2,
-    humor: 2,
-    userName: '',
-    occupation: '',
-    lifestyle: '',
-    extraInstructions: '',
-  });
+  const [companionProfile, setCompanionProfile] = useState<CompanionProfile>(DEFAULT_COMPANION_PROFILE);
   const [companionProfileLoaded, setCompanionProfileLoaded] = useState(false);
+  const [companionProfileLoadedUserId, setCompanionProfileLoadedUserId] = useState<string | null>(null);
+  const [companionProfileUpdatedAt, setCompanionProfileUpdatedAt] = useState('1970-01-01T00:00:00.000Z');
+  const [companionSyncStatus, setCompanionSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
   const [aiPreferences, setAiPreferences] = useState({ responseDepth: 'متوازن', answerStyle: 'دقيق ومتوازن', stepByStep: true });
   const [aiPreferencesLoaded, setAiPreferencesLoaded] = useState(false);
   const [assistantMode, setAssistantMode] = useState<AssistantMode>('companion');
@@ -624,35 +625,146 @@ export default function App() {
   }, [voicePrefsLoaded, session?.user.id, habibiModelPath, habibiReferencePath, habibiReferenceTranscript, habibiDialect]);
 
   useEffect(() => {
-    AsyncStorage.getItem('ezra:companionProfile').then(raw => {
-      if (!raw) return;
-      try {
-        const saved = JSON.parse(raw);
-        if (saved && typeof saved === 'object') {
-          setCompanionProfile(previous => ({
-            ...previous,
-            ...saved,
-            personality: Array.isArray(saved.personality)
-              ? saved.personality.filter((item: unknown) => typeof item === 'string').slice(0, 8)
-              : previous.personality,
-            affection: Number.isFinite(saved.affection) ? Math.max(0, Math.min(4, saved.affection)) : previous.affection,
-            humor: Number.isFinite(saved.humor) ? Math.max(0, Math.min(4, saved.humor)) : previous.humor,
-          }));
-        }
-      } catch (error) {
-        console.warn('Could not restore EZRA companion profile:', error);
-      }
-    }).catch(error => console.warn('Could not load EZRA companion profile:', error))
-      .finally(() => setCompanionProfileLoaded(true));
-  }, []);
+    const userId = session?.user.id ?? null;
+    if (!userId) {
+      setCompanionProfile(DEFAULT_COMPANION_PROFILE);
+      setCompanionProfileLoaded(false);
+      setCompanionProfileLoadedUserId(null);
+      setCompanionProfileUpdatedAt('1970-01-01T00:00:00.000Z');
+      setCompanionSyncStatus('idle');
+      return;
+    }
 
-  const updateCompanionProfile = (patch: Partial<typeof companionProfile>) => {
-    setCompanionProfile(previous => {
-      const next = { ...previous, ...patch };
-      AsyncStorage.setItem('ezra:companionProfile', JSON.stringify(next))
-        .catch(error => console.warn('Could not save EZRA companion profile:', error));
-      return next;
+    let active = true;
+    const localKey = `ezra:companionProfile:v1:${userId}`;
+    const legacyKey = 'ezra:companionProfile';
+    setCompanionProfile(DEFAULT_COMPANION_PROFILE);
+    setCompanionProfileLoaded(false);
+    setCompanionProfileLoadedUserId(null);
+    setCompanionSyncStatus('syncing');
+
+    const loadProfile = async () => {
+      let localSnapshot = normalizeCompanionSnapshot(null);
+      try {
+        let localRaw = await AsyncStorage.getItem(localKey);
+        if (!localRaw) {
+          const legacyRaw = await AsyncStorage.getItem(legacyKey);
+          if (legacyRaw) {
+            try {
+              localSnapshot = normalizeCompanionSnapshot(JSON.parse(legacyRaw), new Date().toISOString());
+              await AsyncStorage.setItem(localKey, JSON.stringify(localSnapshot));
+              await AsyncStorage.removeItem(legacyKey);
+              localRaw = JSON.stringify(localSnapshot);
+            } catch (migrationError) {
+              console.warn('Could not migrate legacy EZRA companion profile:', migrationError);
+            }
+          }
+        }
+        if (localRaw) localSnapshot = normalizeCompanionSnapshot(JSON.parse(localRaw));
+      } catch (error) {
+        console.warn('Could not load local EZRA companion profile:', error);
+      }
+
+      if (!active) return;
+      setCompanionProfile(localSnapshot.profile);
+      setCompanionProfileUpdatedAt(localSnapshot.updatedAt);
+      setCompanionProfileLoaded(true);
+      setCompanionProfileLoadedUserId(userId);
+
+      try {
+        const { data, error } = await supabase
+          .from('companion_profiles')
+          .select('profile, updated_at')
+          .eq('owner_id', userId)
+          .maybeSingle();
+        if (error) throw error;
+
+        const cloudSnapshot = data
+          ? companionProfileFromCloudRow({ profile: data.profile, updated_at: data.updated_at })
+          : null;
+        const merged = mergeCompanionProfileSnapshots(localSnapshot, cloudSnapshot);
+        if (!active) return;
+
+        setCompanionProfile(merged.profile);
+        setCompanionProfileUpdatedAt(merged.updatedAt);
+        await AsyncStorage.setItem(localKey, JSON.stringify(merged));
+
+        if (!cloudSnapshot || Date.parse(merged.updatedAt) > Date.parse(cloudSnapshot.updatedAt)) {
+          const { error: saveError } = await supabase
+            .from('companion_profiles')
+            .upsert(companionProfileToCloudRow(merged, userId), { onConflict: 'owner_id' });
+          if (saveError) throw saveError;
+        }
+        if (active) setCompanionSyncStatus('synced');
+      } catch (error) {
+        console.warn('Could not synchronize EZRA companion profile:', error);
+        if (active) setCompanionSyncStatus('error');
+      }
+    };
+
+    loadProfile().catch(error => {
+      console.warn('Could not initialize EZRA companion profile:', error);
+      if (active) {
+        setCompanionProfileLoaded(true);
+        setCompanionProfileLoadedUserId(userId);
+        setCompanionSyncStatus('error');
+      }
     });
+    return () => { active = false; };
+  }, [session?.user.id]);
+
+  useEffect(() => {
+    const userId = session?.user.id ?? null;
+    if (!userId || !companionProfileLoaded || companionProfileLoadedUserId !== userId) return;
+    const snapshot = { profile: companionProfile, updatedAt: companionProfileUpdatedAt };
+    const localKey = `ezra:companionProfile:v1:${userId}`;
+    AsyncStorage.setItem(localKey, JSON.stringify(snapshot))
+      .catch(error => console.warn('Could not save local EZRA companion profile:', error));
+
+    const timeout = setTimeout(async () => {
+      if (session?.user.id !== userId) return;
+      setCompanionSyncStatus('syncing');
+      const { error } = await supabase
+        .from('companion_profiles')
+        .upsert(companionProfileToCloudRow(snapshot, userId), { onConflict: 'owner_id' });
+      if (session?.user.id !== userId) return;
+      if (error) {
+        console.warn('Could not sync EZRA companion profile:', error);
+        setCompanionSyncStatus('error');
+      } else {
+        setCompanionSyncStatus('synced');
+      }
+    }, 700);
+    return () => clearTimeout(timeout);
+  }, [companionProfile, companionProfileLoaded, companionProfileLoadedUserId, companionProfileUpdatedAt, session?.user.id]);
+
+  const updateCompanionProfile = (patch: Partial<CompanionProfile>) => {
+    setCompanionProfile(previous => ({ ...previous, ...patch }));
+    setCompanionProfileUpdatedAt(new Date().toISOString());
+  };
+
+  const saveCompanionProfile = async () => {
+    const userId = session?.user.id;
+    if (!userId) {
+      Alert.alert('يلزم تسجيل الدخول', 'سجّلي الدخول لمزامنة تفضيلات الرفيق مع حسابك.');
+      return;
+    }
+    const snapshot = { profile: companionProfile, updatedAt: new Date().toISOString() };
+    setCompanionProfileUpdatedAt(snapshot.updatedAt);
+    setCompanionSyncStatus('syncing');
+    try {
+      await AsyncStorage.setItem(`ezra:companionProfile:v1:${userId}`, JSON.stringify(snapshot));
+      const { error } = await supabase
+        .from('companion_profiles')
+        .upsert(companionProfileToCloudRow(snapshot, userId), { onConflict: 'owner_id' });
+      if (error) throw error;
+      setCompanionSyncStatus('synced');
+      Alert.alert('تم الحفظ والمزامنة', 'حُفظت تفضيلات رفيقك على هذا الجهاز ومزامنتها مع حسابك.');
+    } catch (error) {
+      console.warn('Could not save EZRA companion profile:', error);
+      setCompanionSyncStatus('error');
+      Alert.alert('تعذّرت المزامنة', 'احتفظنا بنسختك على الجهاز، ويمكنك إعادة المحاولة عند توفر الاتصال.');
+    }
   };
 
   useEffect(() => {
@@ -2759,8 +2871,8 @@ export default function App() {
                   <View style={{ gap: 16, paddingBottom: 22 }}>
                     <View style={{ padding: 16, borderRadius: 18, backgroundColor: '#241625', borderWidth: 1, borderColor: '#68435F', gap: 6 }}>
                       <Text style={{ color: '#F5DDED', fontSize: 17, fontWeight: '800', textAlign: 'right' }}>شخصية EZRA تبدأ من هنا</Text>
-                      <Text style={{ color: '#B9A6B6', fontSize: 12, lineHeight: 20, textAlign: 'right' }}>اختاري صفاته وطريقة حديثه. تُحفظ تفضيلاتك على هذا الجهاز وتُرسل مع طلبات المحادثة لتخصيص الردود.</Text>
-                      <Text style={{ color: companionProfileLoaded ? '#A9D7B9' : '#D9B77A', fontSize: 11, textAlign: 'right' }}>{companionProfileLoaded ? '✓ تم تحميل تفضيلاتك' : 'جارٍ تحميل التفضيلات…'}</Text>
+                      <Text style={{ color: '#B9A6B6', fontSize: 12, lineHeight: 20, textAlign: 'right' }}>اختاري صفاته وطريقة حديثه. تُحفظ التفضيلات محلياً وتُزامن تلقائياً مع حسابك لترافقك على أجهزتك.</Text>
+                      <Text style={{ color: companionSyncStatus === 'synced' ? '#A9D7B9' : companionSyncStatus === 'error' ? '#E7A2A2' : '#D9B77A', fontSize: 11, textAlign: 'right' }}>{!companionProfileLoaded ? 'جارٍ تحميل التفضيلات…' : companionSyncStatus === 'synced' ? '✓ تفضيلاتك محفوظة ومتزامنة مع الحساب' : companionSyncStatus === 'error' ? 'تعذّرت المزامنة · ستبقى النسخة المحلية محفوظة' : 'جارٍ مزامنة تفضيلاتك…'}</Text>
                     </View>
                     <View style={{ gap: 10 }}>
                       <Text style={{ color: '#F2D9E9', fontSize: 15, fontWeight: '800', textAlign: 'right' }}>سمات شخصية EZRA</Text>
@@ -2808,8 +2920,8 @@ export default function App() {
                       <TextInput value={companionProfile.extraInstructions} onChangeText={value => updateCompanionProfile({ extraInstructions: value })} placeholder="مثلاً: اشرح لي خطوة بخطوة، وتجنب الإطالة…" placeholderTextColor="#817482" multiline maxLength={1200} textAlignVertical="top" style={{ minHeight: 108, borderRadius: 13, borderWidth: 1, borderColor: '#594253', backgroundColor: '#17121A', color: '#F5EAF2', padding: 13, textAlign: 'right', writingDirection: 'rtl' }} />
                       <Text style={{ color: '#827583', fontSize: 10, textAlign: 'right' }}>{companionProfile.extraInstructions.length}/1200</Text>
                     </View>
-                    <TouchableOpacity onPress={() => { AsyncStorage.setItem('ezra:companionProfile', JSON.stringify(companionProfile)).then(() => Alert.alert('تم الحفظ', 'حُفظت تفضيلات الرفيق الشخصي على هذا الجهاز.')).catch(() => Alert.alert('تعذّر الحفظ', 'لم نتمكن من حفظ التفضيلات. حاولي مجدداً.')); }} style={{ borderRadius: 15, paddingVertical: 14, alignItems: 'center', backgroundColor: '#754765', borderWidth: 1, borderColor: '#C58DBB' }}><Text style={{ color: '#FFF0F8', fontSize: 14, fontWeight: '800' }}>حفظ تفضيلات الرفيق</Text></TouchableOpacity>
-                    <Text style={{ color: '#8F8290', fontSize: 10, lineHeight: 17, textAlign: 'right' }}>تُخزّن هذه البيانات محلياً على جهازك حالياً، وتُضاف إلى سياق المحادثات. لا تكتبي كلمات مرور أو معلومات شديدة الحساسية هنا.</Text>
+                    <TouchableOpacity onPress={saveCompanionProfile} disabled={!companionProfileLoaded || companionSyncStatus === 'syncing'} style={{ borderRadius: 15, paddingVertical: 14, alignItems: 'center', backgroundColor: '#754765', borderWidth: 1, borderColor: '#C58DBB', opacity: !companionProfileLoaded || companionSyncStatus === 'syncing' ? 0.65 : 1 }}><Text style={{ color: '#FFF0F8', fontSize: 14, fontWeight: '800' }}>{companionSyncStatus === 'syncing' ? 'جارٍ الحفظ والمزامنة…' : 'حفظ ومزامنة تفضيلات الرفيق'}</Text></TouchableOpacity>
+                    <Text style={{ color: '#8F8290', fontSize: 10, lineHeight: 17, textAlign: 'right' }}>تُضاف تفضيلاتك إلى سياق المحادثات، وتُحفظ في مساحة خاصة بحسابك لا يستطيع المستخدمون الآخرون قراءتها. لا تكتبي كلمات مرور أو معلومات شديدة الحساسية هنا.</Text>
                   </View>
                 ) : settingsSection === 'الذاكرة' ? (
                   <View style={{ gap: 15, paddingBottom: 22 }}>
