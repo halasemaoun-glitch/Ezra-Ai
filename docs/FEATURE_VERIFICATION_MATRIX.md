@@ -45,3 +45,5 @@ This matrix separates implementation evidence from proof of behavior. A componen
 ## Acceptance rule
 
 A feature is marked **verified** only when its behavior has a repeatable automated test or an explicitly recorded runtime check. Source presence and static inspection remain useful evidence, but are not substitutes for behavioral verification. Any unverified behavior must remain visibly marked as pending.
+
+| Expanded Android phone actions | phoneActionCommands.ts, EzraWakeWordModule.kt, App.tsx | Deno tests cover Arabic/English file manager, downloads, notification shade/settings, and media transport parsing; CI compiles Kotlin and checks TypeScript/bundle | Verify file picker/downloads UI, notification shade with Accessibility opt-in, Clock confirmation, and media-session behavior across Android apps |
