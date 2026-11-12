@@ -45,6 +45,7 @@ import { parseCallContactName } from './src/phone/commandParser';
 import { isScreenCaptureCommand } from './src/phone/screenCaptureCommands';
 import { isSensitiveAccessibilityTarget, parseAccessibilityCommand } from './src/phone/accessibilityCommands';
 import { PHONE_SETTINGS_COMMANDS, parsePhoneSettingsTarget, type PhoneSettingsTarget } from './src/phone/phoneControlCommands';
+import { parsePhoneActionCommand } from './src/phone/phoneActionCommands';
 import type { KnowledgeDocumentRecord } from './src/knowledge/knowledgeSync';
 import { knowledgeDocumentsFromCloud, knowledgeDocumentsToCloud, mergeKnowledgeDocuments, normalizeKnowledgeDocuments } from './src/knowledge/knowledgeSync';
 import { extractDocumentText, MAX_DOCUMENT_SOURCE_BYTES, MAX_EXTRACTED_DOCUMENT_BYTES } from './src/documents/documentExtractor';
@@ -87,6 +88,8 @@ type EzraWakeWordNative = {
   launchApp: (name: string) => Promise<boolean>;
   adjustVolume: (direction: string) => Promise<boolean>;
   mediaControl: (action: string) => Promise<boolean>;
+  openFilePicker: () => Promise<boolean>;
+  openDownloads: () => Promise<boolean>;
 };
 
 const EzraWakeWord = Platform.OS === 'android'
@@ -1867,6 +1870,31 @@ export default function App() {
         setSending(false);
       }
     };
+
+    const phoneAction = parsePhoneActionCommand(commandText);
+    if (phoneAction) {
+      if (phoneAction.kind === 'open_files') {
+        await run(() => EzraWakeWord!.openFilePicker(), 'فتحت مدير الملفات. اختاري الملف الذي تريدين التعامل معه.', 'لم أتمكن من فتح منتقي الملفات.');
+      } else if (phoneAction.kind === 'open_downloads') {
+        await run(() => EzraWakeWord!.openDownloads(), 'فتحت التنزيلات على هاتفك.', 'لم أتمكن من فتح مجلد التنزيلات.');
+      } else if (phoneAction.kind === 'show_notifications') {
+        await run(
+          () => EzraWakeWord!.performAccessibilityGlobalAction('notifications'),
+          'فتحت لوحة إشعارات الهاتف.',
+          'لم أتمكن من عرض الإشعارات. فعّلي خدمة إمكانية الوصول من إعدادات EZRA أولاً.'
+        );
+      } else if (phoneAction.kind === 'notification_settings') {
+        await run(() => EzraWakeWord!.openSystemSettings('notifications'), 'فتحت إعدادات إشعارات EZRA.', 'لم أتمكن من فتح إعدادات الإشعارات.');
+      } else {
+        const labels: Record<string, string> = { play: 'استئناف التشغيل', pause: 'إيقاف مؤقت', stop: 'إيقاف الوسائط', next: 'المقطع التالي', previous: 'المقطع السابق' };
+        await run(
+          () => EzraWakeWord!.mediaControl(phoneAction.action),
+          `تم إرسال أمر ${labels[phoneAction.action]} إلى مشغل الوسائط.`,
+          'لم يستجب مشغل الوسائط لهذا الأمر.'
+        );
+      }
+      return true;
+    }
 
     const extraSettingsTarget = parsePhoneSettingsTarget(commandText);
     if (extraSettingsTarget) {
