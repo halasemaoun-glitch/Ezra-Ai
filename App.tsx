@@ -42,6 +42,7 @@ import { DENTAL_REFERENCE_LIBRARY } from './src/study/studyLibrary';
 import { supabase } from './src/lib/supabase';
 import { DEFAULT_EZRA_VOICE } from './src/voice/voiceProfile';
 import { parseCallContactName } from './src/phone/commandParser';
+import { PHONE_SETTINGS_COMMANDS, parsePhoneSettingsTarget, type PhoneSettingsTarget } from './src/phone/phoneControlCommands';
 import type { KnowledgeDocumentRecord } from './src/knowledge/knowledgeSync';
 import { knowledgeDocumentsFromCloud, knowledgeDocumentsToCloud, mergeKnowledgeDocuments, normalizeKnowledgeDocuments } from './src/knowledge/knowledgeSync';
 import { extractDocumentText, MAX_DOCUMENT_SOURCE_BYTES, MAX_EXTRACTED_DOCUMENT_BYTES } from './src/documents/documentExtractor';
@@ -57,7 +58,10 @@ import {
 } from './src/companion/companionProfileSync';
 import { requireNativeModule } from 'expo-modules-core';
 
+type EzraPhoneOverview = { deviceModel: string; androidVersion: string; androidApi: number; batteryPercent: number; isCharging: boolean; availableStorageBytes: number; totalStorageBytes: number; mediaVolume: number; maxMediaVolume: number };
+
 type EzraWakeWordNative = {
+  getDeviceOverview: () => Promise<EzraPhoneOverview>;
   // Start the microphone foreground service only from a visible, foreground Activity (Android 12+ restriction).
   start: () => Promise<boolean>;
   stop: () => Promise<boolean>;
@@ -253,6 +257,8 @@ export default function App() {
   const [phonePermissions, setPhonePermissions] = useState({ contacts: false, camera: false, microphone: false, notifications: false });
   const [phonePermissionsLoading, setPhonePermissionsLoading] = useState(false);
   const [phoneTorchEnabled, setPhoneTorchEnabled] = useState(false);
+  const [phoneOverview, setPhoneOverview] = useState<EzraPhoneOverview | null>(null);
+  const [phoneOverviewLoading, setPhoneOverviewLoading] = useState(false);
   const [companionProfile, setCompanionProfile] = useState<CompanionProfile>(DEFAULT_COMPANION_PROFILE);
   const [companionProfileLoaded, setCompanionProfileLoaded] = useState(false);
   const [companionProfileLoadedUserId, setCompanionProfileLoadedUserId] = useState<string | null>(null);
@@ -1757,6 +1763,21 @@ export default function App() {
       }
     };
 
+    const extraSettingsTarget = parsePhoneSettingsTarget(commandText);
+    if (extraSettingsTarget) {
+      const labels: Record<PhoneSettingsTarget, string> = {
+        storage: 'مساحة التخزين', date: 'التاريخ والوقت', privacy: 'الخصوصية',
+        security: 'الأمان', language: 'اللغة', defaults: 'التطبيقات الافتراضية',
+        app_permissions: 'أذونات التطبيقات',
+      };
+      await run(
+        () => EzraWakeWord!.openSystemSettings(extraSettingsTarget),
+        `فتحت إعدادات ${labels[extraSettingsTarget]}.`,
+        `لم أتمكن من فتح إعدادات ${labels[extraSettingsTarget]} على هذا الهاتف.`
+      );
+      return true;
+    }
+
     const timerMatch = normalized.match(/(?:اضبط\s+)?(?:مؤقت|تايمر|timer)\s*(?:لمدة)?\s*(\d+)\s*(ثاني(?:ة|تين)?|دقيق(?:ة|تين)|ساع(?:ة|تين)|second(?:s)?|minute(?:s)?|hour(?:s)?)/i);
     if (timerMatch) {
       const amount = Number(timerMatch[1]);
@@ -1796,12 +1817,12 @@ export default function App() {
       return true;
     }
 
-    const mediaRequested = /(?:الموسيقى|الاغنية|المقطع|الوسائط|media|music|song)/i.test(normalized)
-      || /^(?:التالي|السابق|pause|resume|stop|play|next|previous)$/i.test(normalized);
+    const mediaRequested = /(?:الموسيقى|الاغنية|المقطع|الوسائط|البودكاست|الراديو|media|music|song|podcast|radio)/i.test(normalized)
+      || /^(?:التالي|السابق|تخطي|كمل|استأنف|وقف|توقف|ايقاف|شغل|pause|resume|stop|play|next|previous|skip)$/i.test(normalized);
     if (mediaRequested) {
-      const action = /التالي|next/i.test(normalized) ? 'next'
+      const action = /التالي|تخطي|next|skip/i.test(normalized) ? 'next'
         : /السابق|previous/i.test(normalized) ? 'previous'
-        : /وقف|اوقف|ايقاف|pause|stop/i.test(normalized) ? 'pause'
+        : /وقف|اوقف|ايقاف|توقف|pause|stop/i.test(normalized) ? 'pause'
         : 'play';
       await run(() => EzraWakeWord!.mediaControl(action), 'نفذت أمر التحكم بالوسائط. قد يعتمد التأثير على التطبيق الذي يشغّل الصوت.', 'لم يستجب مشغل الوسائط لأمر التحكم.');
       return true;
@@ -1831,7 +1852,13 @@ export default function App() {
         'انستغرام': 'Instagram', 'انستجرام': 'Instagram', 'فيسبوك': 'Facebook',
         'تيك توك': 'TikTok', 'تيليجرام': 'Telegram', 'تلغرام': 'Telegram',
         'خرائط': 'Maps', 'الخرائط': 'Maps', 'الكاميرا': 'Camera',
-        'الساعة': 'Clock', 'الاعدادات': 'Settings'
+        'الساعة': 'Clock', 'الاعدادات': 'Settings', 'جيميل': 'Gmail',
+        'البريد': 'Gmail', 'الهاتف': 'Phone', 'المكالمات': 'Phone',
+        'الرسائل': 'Messages', 'جهات الاتصال': 'Contacts', 'الاسماء': 'Contacts',
+        'التقويم': 'Calendar', 'الروزنامة': 'Calendar', 'الملفات': 'Files',
+        'مدير الملفات': 'Files', 'المعرض': 'Photos', 'الصور': 'Photos',
+        'متجر بلاي': 'Play Store', 'بلاي ستور': 'Play Store',
+        'سبوتيفاي': 'Spotify', 'الحاسبة': 'Calculator', 'الالة الحاسبة': 'Calculator'
       };
       const appName = aliases[requestedApp] || requestedApp;
       if (!/^(الفلاش|الكشاف|المنبه|المؤقت)$/.test(requestedApp)) {
@@ -2241,6 +2268,33 @@ export default function App() {
     }
   };
 
+  const refreshPhoneOverview = async () => {
+    if (Platform.OS !== 'android' || !EzraWakeWord) return;
+    setPhoneOverviewLoading(true);
+    try {
+      setPhoneOverview(await EzraWakeWord.getDeviceOverview());
+    } catch (error) {
+      console.warn('Could not refresh EZRA phone overview:', error);
+      Alert.alert('تعذّر قراءة معلومات الهاتف', 'تحققي من أن خدمات Android متاحة ثم حاولي التحديث مجددًا.');
+    } finally {
+      setPhoneOverviewLoading(false);
+    }
+  };
+
+  const openPhoneSettings = async (target: string, label: string) => {
+    if (Platform.OS !== 'android' || !EzraWakeWord) {
+      Alert.alert('غير متاح', 'اختصارات إعدادات الهاتف متاحة على Android فقط.');
+      return;
+    }
+    try {
+      const opened = await EzraWakeWord.openSystemSettings(target);
+      if (!opened) Alert.alert('الإعداد غير متاح', `لم يتمكن Android من فتح إعدادات ${label} على هذا الهاتف.`);
+    } catch (error) {
+      console.warn('EZRA could not open phone settings:', error);
+      Alert.alert('تعذّر فتح الإعدادات', `لم أتمكن من فتح إعدادات ${label}.`);
+    }
+  };
+
   const requestPhonePermission = async (kind: 'contacts' | 'camera' | 'microphone' | 'notifications') => {
     if (Platform.OS !== 'android') return;
     const permission = kind === 'contacts' ? PermissionsAndroid.PERMISSIONS.READ_CONTACTS
@@ -2284,6 +2338,7 @@ export default function App() {
   useEffect(() => {
     if (settingsVisible && settingsSection === 'التحكم بالهاتف') {
       void refreshPhonePermissions();
+      void refreshPhoneOverview();
     }
   }, [settingsVisible, settingsSection]);
 
@@ -3171,6 +3226,56 @@ export default function App() {
                       <Text style={{ color: '#F5DDED', fontSize: 18, fontWeight: '800', textAlign: 'right' }}>مركز التحكم بالهاتف</Text>
                       <Text style={{ color: '#B9A6B6', fontSize: 12, lineHeight: 20, textAlign: 'right' }}>تحكّمي في أذونات Android والاختصارات التي يستخدمها EZRA. كل إذن اختياري، ولا تُنفّذ الإجراءات الحساسة دون تأكيدك.</Text>
                       <Text style={{ color: '#A9D7B9', fontSize: 11, lineHeight: 18, textAlign: 'right' }}>المكالمات تفتح شاشة الاتصال فقط، والرسائل تُجهّز في تطبيق الرسائل لتراجعيها وترسليها بنفسك. لا يحتاج EZRA إلى صلاحية الاتصال المباشر أو إرسال SMS.</Text>
+                    </View>
+                    <View style={{ padding: 14, borderRadius: 16, backgroundColor: '#1B151E', borderWidth: 1, borderColor: '#493747', gap: 11 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Text style={{ color: '#F2D9E9', fontSize: 13, fontWeight: '800' }}>حالة الهاتف</Text>
+                        <TouchableOpacity onPress={() => { void refreshPhoneOverview(); }} disabled={phoneOverviewLoading} accessibilityRole="button">
+                          <Text style={{ color: '#DCA8CA', fontSize: 10, fontWeight: '700' }}>{phoneOverviewLoading ? 'جارٍ التحديث…' : 'تحديث ↻'}</Text>
+                        </TouchableOpacity>
+                      </View>
+                      {phoneOverview ? (
+                        <>
+                          <Text style={{ color: '#A99AA8', fontSize: 10, textAlign: 'right' }}>{phoneOverview.deviceModel} · Android {phoneOverview.androidVersion} · API {phoneOverview.androidApi}</Text>
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                            {[
+                              { label: 'البطارية', value: phoneOverview.batteryPercent >= 0 ? `${phoneOverview.batteryPercent}%${phoneOverview.isCharging ? ' · يشحن' : ''}` : 'غير متاح' },
+                              { label: 'التخزين المتاح', value: formatBytes(phoneOverview.availableStorageBytes) },
+                              { label: 'صوت الوسائط', value: `${phoneOverview.mediaVolume} / ${phoneOverview.maxMediaVolume}` },
+                            ].map(item => (
+                              <View key={item.label} style={{ flexGrow: 1, minWidth: '30%', padding: 10, borderRadius: 11, backgroundColor: '#261D2A', borderWidth: 1, borderColor: '#493747', gap: 5 }}>
+                                <Text style={{ color: '#A99AA8', fontSize: 9, textAlign: 'right' }}>{item.label}</Text>
+                                <Text style={{ color: '#F5EAF2', fontSize: 12, fontWeight: '800', textAlign: 'right' }}>{item.value}</Text>
+                              </View>
+                            ))}
+                          </View>
+                        </>
+                      ) : (
+                        <Text style={{ color: '#A99AA8', fontSize: 10, textAlign: 'right' }}>{phoneOverviewLoading ? 'جارٍ قراءة حالة الهاتف…' : 'اضغطي تحديث لعرض معلومات الجهاز.'}</Text>
+                      )}
+                    </View>
+                    <View style={{ padding: 14, borderRadius: 16, backgroundColor: '#1B151E', borderWidth: 1, borderColor: '#493747', gap: 10 }}>
+                      <Text style={{ color: '#F2D9E9', fontSize: 13, fontWeight: '800', textAlign: 'right' }}>اختصارات إعدادات الهاتف</Text>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                        {[
+                          { target: 'wifi', label: 'Wi-Fi' }, { target: 'internet', label: 'الإنترنت' },
+                          { target: 'bluetooth', label: 'Bluetooth' }, { target: 'sound', label: 'الصوت' },
+                          { target: 'display', label: 'الشاشة' }, { target: 'location', label: 'الموقع' },
+                          { target: 'battery', label: 'البطارية' }, { target: 'storage', label: 'التخزين' },
+                          { target: 'date', label: 'التاريخ والوقت' }, { target: 'privacy', label: 'الخصوصية' },
+                          { target: 'security', label: 'الأمان' }, { target: 'language', label: 'اللغة' },
+                          { target: 'defaults', label: 'التطبيقات الافتراضية' }, { target: 'app_permissions', label: 'أذونات EZRA' },
+                          { target: 'notifications', label: 'الإشعارات' }, { target: 'accessibility', label: 'إمكانية الوصول' },
+                        ].map(item => (
+                          <TouchableOpacity key={item.target} onPress={() => { void openPhoneSettings(item.target, item.label); }} accessibilityRole="button" style={{ flexGrow: 1, minWidth: '30%', paddingHorizontal: 10, paddingVertical: 10, borderRadius: 10, backgroundColor: '#261D2A', borderWidth: 1, borderColor: '#594253', alignItems: 'center' }}>
+                            <Text style={{ color: '#E9CDE0', fontSize: 10, fontWeight: '700' }}>{item.label}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                    <View style={{ padding: 14, borderRadius: 14, backgroundColor: '#241925', borderWidth: 1, borderColor: '#69465F', gap: 7 }}>
+                      <Text style={{ color: '#F2D9E9', fontSize: 13, fontWeight: '800', textAlign: 'right' }}>أوامر إضافية يفهمها EZRA</Text>
+                      <Text style={{ color: '#B9AAB7', fontSize: 10, lineHeight: 18, textAlign: 'right' }}>«افتح مساحة التخزين» · «افتح إعدادات الخصوصية» · «افتح إعدادات الأمان» · «افتح إعدادات اللغة» · «افتح التاريخ والوقت» · «افتح أذونات التطبيقات» · «افتح التقويم» · «افتح جيميل» · «التالي في الموسيقى» · «استأنف الموسيقى»</Text>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                       <Text style={{ color: '#F2D9E9', fontSize: 14, fontWeight: '800' }}>أذونات الميزات</Text>
