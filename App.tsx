@@ -2485,14 +2485,14 @@ export default function App() {
           </View>
           <View style={styles.mainTabBar} accessibilityRole="tablist">
             <TouchableOpacity
-              style={[styles.mainTab, styles.mainTabActive]}
+              style={[styles.mainTab, !settingsVisible && styles.mainTabActive]}
               accessibilityRole="tab"
-              accessibilityState={{ selected: true }}
+              accessibilityState={{ selected: !settingsVisible }}
               accessibilityLabel="الرئيسية"
               onPress={() => { setSettingsVisible(false); setVoiceHome(true); }}
             >
-              <Text style={[styles.mainTabIcon, styles.mainTabIconActive]}>✦</Text>
-              <Text style={[styles.mainTabLabel, styles.mainTabLabelActive]}>الرئيسية</Text>
+              <Text style={[styles.mainTabIcon, !settingsVisible && styles.mainTabIconActive]}>✦</Text>
+              <Text style={[styles.mainTabLabel, !settingsVisible && styles.mainTabLabelActive]}>الرئيسية</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.mainTab}
