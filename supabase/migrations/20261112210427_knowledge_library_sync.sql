@@ -5,12 +5,16 @@ create table public.knowledge_documents (
   id text not null,
   owner_id uuid not null references auth.users(id) on delete cascade,
   name text not null check (char_length(trim(name)) between 1 and 255),
-  content text not null check (octet_length(content) between 1 and 262144),
+  content text not null,
   size_bytes integer not null check (size_bytes between 0 and 262144),
   added_at timestamptz not null,
   updated_at timestamptz not null default now(),
   deleted_at timestamptz,
-  primary key (owner_id, id)
+  primary key (owner_id, id),
+  constraint knowledge_documents_content_size_check check (
+    (deleted_at is null and octet_length(content) between 1 and 262144)
+    or (deleted_at is not null and octet_length(content) = 0)
+  )
 );
 
 create index knowledge_documents_owner_updated_idx
