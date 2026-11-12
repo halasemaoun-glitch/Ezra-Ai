@@ -2,8 +2,10 @@
 
 Date: 2026-11-12
 Branch: `ezra/habibi-android-spike`
-Audited application revision: `1da56b28340027d74ba71b6bc45443e313adcbea`
-Documentation refresh: `0a41467b6fc44504c67ffb25943c8a770025d027`
+Audited application revision: `1017ab85ac8304dcd0bef5dbc174d7f5a4747025`
+Phone parser helper: `f6f274f2b0fa906d44978c3bee6aa3ef2a6ed602`
+Phone parser tests: `03bfe6929e43745572a080a882576e814dd14932`
+Validation workflow test registration: `b07a50f511c71bd31260d9d21effce0537b985d8`
 
 ## Scope and evidence standard
 
@@ -27,6 +29,7 @@ The most recent successful CI baseline before the memory-flow cleanup was `02940
 - Text requests route to `openai/gpt-oss-120b`; image requests route to `qwen/qwen3.8-27b`.
 - The app supplies recent conversation context, current assistant mode, response preferences, companion profile, relevant local knowledge excerpts, and relevant dental learning references.
 - Approved memories are now loaded once by the authenticated Edge Function using the caller's JWT and owner ID. The redundant client-side approved-memory query and duplicate prompt injection were removed in revision `1da56b2`.
+- Android contact-call command parsing now lives in a pure helper. The prior call-name regex had double-escaped whitespace tokens and could fail to match normal phrases; revision `1017ab8` uses the helper, with Arabic/English regression cases added and registered in CI.
 - AI request timeouts, provider errors, empty replies, and message-save failures have explicit UI error paths in the app.
 
 ### Memories and privacy
@@ -52,7 +55,8 @@ The most recent successful CI baseline before the memory-flow cleanup was `02940
 ## Integration repair in this audit
 
 1. Removed the second approved-memory fetch from `App.tsx`. Previously, the client embedded approved memories in the user input while the Edge Function independently fetched and added the same approved memories to the system prompt. The server is now the single source for approved-memory prompt injection, reducing duplicate context and an unnecessary database request.
-2. Updated `README.md` so feature descriptions and limitations match the current source implementation rather than the earlier project baseline.
+2. Fixed the Android contact-call parser by replacing the double-escaped whitespace regex with a reusable tested parser; added tests for Arabic, English, incomplete, and self-directed phrases.
+3. Updated `README.md` so feature descriptions and limitations match the current source implementation rather than the earlier project baseline.
 
 ## Known limitations and open verification items
 
@@ -70,7 +74,7 @@ The last confirmed successful validation baseline is revision `0294013a0abe6129e
 - EZRA checks: success.
 - Habibi Android native engine cross-compile: success.
 
-Revision `1da56b2` changes the mobile AI request assembly; rerun the validation workflow and require success on the final branch head before marking this audit's application change build-verified.
+The current application and workflow changes (`1017ab8` through `b07a50f`) are undergoing fresh GitHub Actions validation. Require success on the final branch head, including the new phone-parser Deno test, before marking these changes build-verified.
 
 ## Acceptance rule
 
