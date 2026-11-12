@@ -46,6 +46,7 @@ import type { KnowledgeDocumentRecord } from './src/knowledge/knowledgeSync';
 import { knowledgeDocumentsFromCloud, knowledgeDocumentsToCloud, mergeKnowledgeDocuments, normalizeKnowledgeDocuments } from './src/knowledge/knowledgeSync';
 import { extractDocumentText, MAX_DOCUMENT_SOURCE_BYTES, MAX_EXTRACTED_DOCUMENT_BYTES } from './src/documents/documentExtractor';
 import { getDocumentExtension, getDocumentMimeType, isSupportedDocumentExtension, selectRelevantDocumentText } from './src/documents/documentTextUtils';
+import { filterAndSortKnowledgeDocuments, getKnowledgeCategoryLabel, KNOWLEDGE_CATEGORY_OPTIONS, type KnowledgeCategory, type KnowledgeSort } from './src/knowledge/knowledgeLibraryTools';
 import {
   DEFAULT_COMPANION_PROFILE,
   companionProfileFromCloudRow,
@@ -335,6 +336,9 @@ export default function App() {
   const [knowledgeLoaded, setKnowledgeLoaded] = useState(false);
   const [knowledgeLoading, setKnowledgeLoading] = useState(false);
   const [knowledgeSearch, setKnowledgeSearch] = useState('');
+  const [knowledgeCategory, setKnowledgeCategory] = useState<KnowledgeCategory>('all');
+  const [knowledgeSort, setKnowledgeSort] = useState<KnowledgeSort>('newest');
+  const [previewKnowledgeDocument, setPreviewKnowledgeDocument] = useState<KnowledgeDocument | null>(null);
   const [knowledgeError, setKnowledgeError] = useState('');
   const [knowledgeSyncStatus, setKnowledgeSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
   const [historySearch, setHistorySearch] = useState('');
@@ -1120,9 +1124,7 @@ export default function App() {
     }
   };
 
-  const visibleKnowledgeDocuments = knowledgeDocuments.filter(item =>
-    !item.deletedAt && item.name.toLowerCase().includes(knowledgeSearch.trim().toLowerCase())
-  );
+  const visibleKnowledgeDocuments = filterAndSortKnowledgeDocuments(knowledgeDocuments, knowledgeSearch, knowledgeCategory, knowledgeSort);
 
   const saveMemory = async () => {
     const content = memoryDraft.trim();
@@ -3093,7 +3095,27 @@ export default function App() {
                     <TouchableOpacity onPress={addKnowledgeDocument} disabled={!knowledgeLoaded || knowledgeLoading || !!knowledgeError || knowledgeDocuments.filter(item => !item.deletedAt).length >= 8} style={{ borderRadius: 15, paddingVertical: 14, alignItems: 'center', backgroundColor: '#754765', borderWidth: 1, borderColor: '#C58DBB', opacity: !knowledgeLoaded || knowledgeLoading || !!knowledgeError || knowledgeDocuments.filter(item => !item.deletedAt).length >= 8 ? 0.55 : 1 }}>
                       <Text style={{ color: '#FFF0F8', fontSize: 14, fontWeight: '800' }}>{knowledgeLoading ? 'جارٍ تحميل المكتبة…' : '＋ إضافة ملف إلى مكتبة المعرفة'}</Text>
                     </TouchableOpacity>
-                    <TextInput value={knowledgeSearch} onChangeText={setKnowledgeSearch} placeholder="ابحث عن ملف باسمه…" placeholderTextColor="#817482" style={{ minHeight: 46, borderRadius: 13, borderWidth: 1, borderColor: '#594253', backgroundColor: '#17121A', color: '#F5EAF2', paddingHorizontal: 13, textAlign: 'right', writingDirection: 'rtl' }} />
+                    <TextInput value={knowledgeSearch} onChangeText={setKnowledgeSearch} placeholder="ابحث باسم الملف أو داخل محتواه…" placeholderTextColor="#817482" style={{ minHeight: 46, borderRadius: 13, borderWidth: 1, borderColor: '#594253', backgroundColor: '#17121A', color: '#F5EAF2', paddingHorizontal: 13, textAlign: 'right', writingDirection: 'rtl' }} accessibilityLabel="البحث في أسماء الملفات ومحتوياتها" />
+                    <View style={{ gap: 8 }}>
+                      <Text style={{ color: '#B9AAB7', fontSize: 10, textAlign: 'right' }}>تصنيف الملفات</Text>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 7 }}>
+                        {KNOWLEDGE_CATEGORY_OPTIONS.map(option => (
+                          <TouchableOpacity key={option.id} onPress={() => setKnowledgeCategory(option.id)} accessibilityRole="button" accessibilityState={{ selected: knowledgeCategory === option.id }} style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 11, backgroundColor: knowledgeCategory === option.id ? '#68435F' : '#211923', borderWidth: 1, borderColor: knowledgeCategory === option.id ? '#C58DBB' : '#493747' }}>
+                            <Text style={{ color: knowledgeCategory === option.id ? '#FFF0F8' : '#B9AAB7', fontSize: 10, fontWeight: '700' }}>{option.label}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                      <Text style={{ color: '#B9AAB7', fontSize: 10 }}>ترتيب حسب</Text>
+                      <View style={{ flexDirection: 'row', gap: 6 }}>
+                        {([{ id: 'newest', label: 'الأحدث' }, { id: 'oldest', label: 'الأقدم' }, { id: 'name', label: 'الاسم' }] as const).map(option => (
+                          <TouchableOpacity key={option.id} onPress={() => setKnowledgeSort(option.id)} accessibilityRole="button" accessibilityState={{ selected: knowledgeSort === option.id }} style={{ paddingHorizontal: 10, paddingVertical: 7, borderRadius: 9, backgroundColor: knowledgeSort === option.id ? '#3B3040' : '#17121A', borderWidth: 1, borderColor: knowledgeSort === option.id ? '#B58DAE' : '#493747' }}>
+                            <Text style={{ color: knowledgeSort === option.id ? '#F0C9E4' : '#A99AA8', fontSize: 10 }}>{option.label}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
                     <View style={{ gap: 9 }}>
                       <Text style={{ color: '#F2D9E9', fontSize: 14, fontWeight: '800', textAlign: 'right' }}>ملفاتك المحفوظة</Text>
                       {knowledgeError ? (
@@ -3125,10 +3147,18 @@ export default function App() {
                               </View>
                               <Text style={{ color: '#D58AB8', fontSize: 22 }}>▤</Text>
                             </View>
-                            <Text numberOfLines={2} style={{ color: '#B9AAB7', fontSize: 10, lineHeight: 16, textAlign: 'right' }}>{document.content.slice(0, 180)}</Text>
-                            <TouchableOpacity onPress={() => Alert.alert('حذف الملف من المكتبة؟', `سيُزال "${document.name}" من مكتبة المعرفة على هذا الجهاز.`, [{ text: 'إلغاء', style: 'cancel' }, { text: 'حذف', style: 'destructive', onPress: () => removeKnowledgeDocument(document.id) }])} accessibilityRole="button" accessibilityLabel={`حذف ${document.name}`} style={{ alignSelf: 'flex-start', borderRadius: 10, paddingHorizontal: 13, paddingVertical: 7, backgroundColor: '#38202D', borderWidth: 1, borderColor: '#75465D' }}>
-                              <Text style={{ color: '#E5A9C4', fontSize: 11, fontWeight: '700' }}>حذف من المكتبة</Text>
-                            </TouchableOpacity>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <Text style={{ color: '#D5A9CC', fontSize: 9, fontWeight: '700', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: '#30202D' }}>{getKnowledgeCategoryLabel(document.name)}</Text>
+                              <Text numberOfLines={2} style={{ flex: 1, color: '#B9AAB7', fontSize: 10, lineHeight: 16, textAlign: 'right' }}>{document.content.slice(0, 180)}</Text>
+                            </View>
+                            <View style={{ flexDirection: 'row', justifyContent: 'flex-start', flexWrap: 'wrap', gap: 7 }}>
+                              <TouchableOpacity onPress={() => setPreviewKnowledgeDocument(document)} accessibilityRole="button" accessibilityLabel={`معاينة ${document.name}`} style={{ borderRadius: 10, paddingHorizontal: 13, paddingVertical: 7, backgroundColor: '#30243A', borderWidth: 1, borderColor: '#80618B' }}>
+                                <Text style={{ color: '#E6C9F2', fontSize: 11, fontWeight: '700' }}>معاينة المحتوى</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity onPress={() => Alert.alert('حذف الملف من المكتبة؟', `سيُزال "${document.name}" من مكتبة المعرفة على هذا الجهاز.`, [{ text: 'إلغاء', style: 'cancel' }, { text: 'حذف', style: 'destructive', onPress: () => removeKnowledgeDocument(document.id) }])} accessibilityRole="button" accessibilityLabel={`حذف ${document.name}`} style={{ borderRadius: 10, paddingHorizontal: 13, paddingVertical: 7, backgroundColor: '#38202D', borderWidth: 1, borderColor: '#75465D' }}>
+                                <Text style={{ color: '#E5A9C4', fontSize: 11, fontWeight: '700' }}>حذف من المكتبة</Text>
+                              </TouchableOpacity>
+                            </View>
                           </View>
                         ))
                       )}
@@ -3671,6 +3701,34 @@ export default function App() {
                 </View>
               )}
             </ScrollView>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal visible={!!previewKnowledgeDocument} transparent animationType="slide" onRequestClose={() => setPreviewKnowledgeDocument(null)}>
+          <View style={styles.historyBackdrop}>
+            <View style={[styles.historyPanel, { height: '88%', gap: 12 }]}>
+              <View style={styles.historyHeader}>
+                <TouchableOpacity onPress={() => setPreviewKnowledgeDocument(null)} style={styles.historyClose} accessibilityRole="button" accessibilityLabel="إغلاق المعاينة">
+                  <Text style={styles.historyCloseText}>×</Text>
+                </TouchableOpacity>
+                <View style={styles.historyHeadingWrap}>
+                  <Text style={styles.historyTitle}>معاينة المستند</Text>
+                  <Text numberOfLines={1} style={styles.historySubtitle}>{previewKnowledgeDocument?.name ?? ''}</Text>
+                </View>
+              </View>
+              {previewKnowledgeDocument && (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 11, borderRadius: 12, backgroundColor: '#211923', borderWidth: 1, borderColor: '#493747' }}>
+                  <Text style={{ color: '#D5A9CC', fontSize: 10 }}>{(previewKnowledgeDocument.sizeBytes / 1024).toFixed(1)} KB</Text>
+                  <Text style={{ color: '#D5A9CC', fontSize: 10 }}>{getKnowledgeCategoryLabel(previewKnowledgeDocument.name)}</Text>
+                </View>
+              )}
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, gap: 8 }} nestedScrollEnabled showsVerticalScrollIndicator keyboardShouldPersistTaps="handled">
+                <Text selectable style={{ color: '#F5EAF2', fontSize: 13, lineHeight: 23, textAlign: 'right', writingDirection: 'auto' }}>{previewKnowledgeDocument?.content ?? ''}</Text>
+              </ScrollView>
+              <TouchableOpacity onPress={() => setPreviewKnowledgeDocument(null)} style={{ borderRadius: 12, paddingVertical: 12, alignItems: 'center', backgroundColor: '#754765', borderWidth: 1, borderColor: '#C58DBB' }}>
+                <Text style={{ color: '#FFF0F8', fontSize: 12, fontWeight: '800' }}>إغلاق المعاينة</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Modal>
