@@ -23,10 +23,10 @@ export function parseAccessibilityCommand(command: string): AccessibilityCommand
   if (/^(?:افتح الاشعارات|اعرض الاشعارات|اسحب الاشعارات|notifications)$/.test(value)) return { kind: 'global', action: 'notifications' };
   if (/^(?:الاعدادات السريعه|افتح الاعدادات السريعه|quick settings)$/.test(value)) return { kind: 'global', action: 'quick_settings' };
 
-  if (/(?:مرر|اسحب|انزل|انزلي|scroll)\s*(?:الى\s*)?(?:الاسفل|لتحت|down|للأسفل)/.test(value) || /^(?:انزل|انزلي|مرر للاسفل|scroll down)$/.test(value)) {
+  if (/(?:مرر|اسحب|انزل|انزلي|scroll)\s*(?:الى\s*)?(?:الاسفل|للاسفل|لتحت|down)/.test(value) || /^(?:انزل|انزلي|مرر للاسفل|scroll down)$/.test(value)) {
     return { kind: 'scroll', direction: 'down' };
   }
-  if (/(?:مرر|اسحب|اصعد|اطلع|scroll)\s*(?:الى\s*)?(?:الاعلى|لفوق|up|للأعلى)/.test(value) || /^(?:اصعد|اطلع|مرر للاعلى|scroll up)$/.test(value)) {
+  if (/(?:مرر|اسحب|اصعد|اطلع|scroll)\s*(?:الى\s*)?(?:الاعلى|للاعلى|لفوق|up)/.test(value) || /^(?:اصعد|اطلع|مرر للاعلى|scroll up)$/.test(value)) {
     return { kind: 'scroll', direction: 'up' };
   }
 
