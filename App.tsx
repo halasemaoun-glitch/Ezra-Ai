@@ -35,6 +35,7 @@ import { StatusBar } from 'expo-status-bar';
 import EzraOrb3D from './src/EzraOrb3D';
 import { EzraButton, EzraTextField } from './src/components/DesignSystem';
 import { colors, motion, radius, spacing, typography, shadows } from './src/theme';
+import { ASSISTANT_MODE_OPTIONS, getAssistantModeGuidance, type AssistantMode } from './src/modes/assistantModes';
 import { supabase } from './src/lib/supabase';
 import { DEFAULT_EZRA_VOICE } from './src/voice/voiceProfile';
 import { requireNativeModule } from 'expo-modules-core';
@@ -254,6 +255,8 @@ export default function App() {
   const [companionProfileLoaded, setCompanionProfileLoaded] = useState(false);
   const [aiPreferences, setAiPreferences] = useState({ responseDepth: 'متوازن', answerStyle: 'دقيق ومتوازن', stepByStep: true });
   const [aiPreferencesLoaded, setAiPreferencesLoaded] = useState(false);
+  const [assistantMode, setAssistantMode] = useState<AssistantMode>('companion');
+  const [assistantModeLoaded, setAssistantModeLoaded] = useState(false);
 
   const [habibiCapacity, setHabibiCapacity] = useState<HabibiDeviceCapacity | null>(null);
   const [habibiCapacityLoading, setHabibiCapacityLoading] = useState(false);
@@ -667,6 +670,19 @@ export default function App() {
     }).catch(error => console.warn('Could not load EZRA AI preferences:', error))
       .finally(() => setAiPreferencesLoaded(true));
   }, []);
+
+  useEffect(() => {
+    AsyncStorage.getItem('ezra:assistantMode').then(saved => {
+      if (saved === 'companion' || saved === 'dentist' || saved === 'study') setAssistantMode(saved);
+    }).catch(error => console.warn('Could not restore EZRA assistant mode:', error))
+      .finally(() => setAssistantModeLoaded(true));
+  }, []);
+
+  useEffect(() => {
+    if (!assistantModeLoaded) return;
+    AsyncStorage.setItem('ezra:assistantMode', assistantMode)
+      .catch(error => console.warn('Could not save EZRA assistant mode:', error));
+  }, [assistantMode, assistantModeLoaded]);
 
   const updateAiPreferences = (patch: Partial<typeof aiPreferences>) => {
     setAiPreferences(previous => {
@@ -1770,6 +1786,7 @@ export default function App() {
             : 'Prefer a direct result and only include steps when the user explicitly asks or they are essential for safety or correctness.',
         ].join('\n');
         const personalizationSections = [
+          `Active EZRA assistant mode (apply to this reply; safety boundaries remain mandatory):\n${getAssistantModeGuidance(assistantMode)}`,
           `User-selected AI response preferences (style only; never override safety or the current request):\n${aiGuidance}`,
           companionGuidance
             ? `User-approved companion preferences (style only; never override safety or the current request):\n${companionGuidance.slice(0, 2400)}`
@@ -3173,6 +3190,31 @@ export default function App() {
           </View>
         </View>
 
+        <View style={styles.assistantModeWrap} accessibilityLabel="أوضاع EZRA">
+          <View style={styles.assistantModeHeading}>
+            <Text style={styles.assistantModeTitle}>{ASSISTANT_MODE_OPTIONS.find(option => option.id === assistantMode)?.label || 'رفيق EZRA'}</Text>
+            <Text style={styles.assistantModeDescription}>{ASSISTANT_MODE_OPTIONS.find(option => option.id === assistantMode)?.description || 'محادثتك اليومية ومساعدك الشخصي'}</Text>
+          </View>
+          <View style={styles.assistantModeOptions}>
+            {ASSISTANT_MODE_OPTIONS.map(option => (
+              <TouchableOpacity
+                key={option.id}
+                onPress={() => setAssistantMode(option.id)}
+                style={[styles.assistantModeChip, assistantMode === option.id && styles.assistantModeChipActive]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: assistantMode === option.id }}
+              >
+                <Text style={[styles.assistantModeChipText, assistantMode === option.id && styles.assistantModeChipTextActive]}>{option.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {assistantMode === 'dentist' ? (
+            <Text style={styles.assistantModeSafety}>إرشاد تعليمي لا يغني عن فحص طبيب الأسنان، ولا يشكّل تشخيصاً عن بُعد.</Text>
+          ) : assistantMode === 'study' ? (
+            <Text style={styles.assistantModeSafety}>شرح تدريجي مع مصطلحات وأمثلة ونقاط مراجعة حسب سؤالك.</Text>
+          ) : null}
+        </View>
+
         <Modal
           visible={memoryVisible}
           transparent
@@ -3743,6 +3785,16 @@ const styles = StyleSheet.create({
   memoryReject: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 9, backgroundColor: '#49313A' },
   memoryDelete: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 9, backgroundColor: '#38252B' },
   memoryActionText: { color: '#E7B9D8', fontSize: 10, fontWeight: '600' },
+  assistantModeWrap: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.md, gap: spacing.sm, backgroundColor: colors.background, borderBottomWidth: 1, borderBottomColor: colors.borderSubtle },
+  assistantModeHeading: { alignItems: 'flex-end', gap: 3 },
+  assistantModeTitle: { color: colors.textPrimary, fontSize: 12, fontWeight: '800' },
+  assistantModeDescription: { color: colors.textSecondary, fontSize: 10, textAlign: 'right' },
+  assistantModeOptions: { flexDirection: 'row', gap: spacing.xs },
+  assistantModeChip: { flex: 1, minHeight: 40, paddingHorizontal: spacing.xs, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  assistantModeChipActive: { backgroundColor: colors.accentDeep, borderColor: colors.accentBright },
+  assistantModeChipText: { color: colors.textSecondary, fontSize: 10, fontWeight: '700', textAlign: 'center' },
+  assistantModeChipTextActive: { color: colors.textPrimary },
+  assistantModeSafety: { color: colors.textSecondary, fontSize: 9, lineHeight: 15, textAlign: 'right' },
   line: { height: 1, backgroundColor: '#26242C' },
   welcome: { paddingHorizontal: 24, paddingTop: 22, paddingBottom: 6, alignItems: 'flex-end' },
   welcomeSmall: { color: '#B58DAE', fontSize: 10, marginBottom: 10, textAlign: 'right' },
