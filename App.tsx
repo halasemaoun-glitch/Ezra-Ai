@@ -256,7 +256,7 @@ export default function App() {
   const appIsActiveRef = useRef(AppState.currentState === 'active');
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [settingsSection, setSettingsSection] = useState<string | null>(null);
-  const [phonePermissions, setPhonePermissions] = useState({ contacts: false, camera: false, microphone: false, notifications: false });
+  const [phonePermissions, setPhonePermissions] = useState({ contacts: false, camera: false, microphone: false, notifications: false, calls: false, sms: false });
   const [phonePermissionsLoading, setPhonePermissionsLoading] = useState(false);
   const [phoneTorchEnabled, setPhoneTorchEnabled] = useState(false);
   const [phoneOverview, setPhoneOverview] = useState<EzraPhoneOverview | null>(null);
@@ -2251,15 +2251,17 @@ export default function App() {
     if (Platform.OS !== 'android') return;
     setPhonePermissionsLoading(true);
     try {
-      const [contacts, camera, microphone, notifications] = await Promise.all([
+      const [contacts, camera, microphone, notifications, calls, sms] = await Promise.all([
         PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.READ_CONTACTS),
         PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.CAMERA),
         PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO),
         Number(Platform.Version) >= 33
           ? PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS)
           : Promise.resolve(true),
+        PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.CALL_PHONE),
+        PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.SEND_SMS),
       ]);
-      setPhonePermissions({ contacts, camera, microphone, notifications });
+      setPhonePermissions({ contacts, camera, microphone, notifications, calls, sms });
     } catch (error) {
       console.warn('Could not refresh EZRA phone permissions:', error);
     } finally {
@@ -2294,11 +2296,13 @@ export default function App() {
     }
   };
 
-  const requestPhonePermission = async (kind: 'contacts' | 'camera' | 'microphone' | 'notifications') => {
+  const requestPhonePermission = async (kind: 'contacts' | 'camera' | 'microphone' | 'notifications' | 'calls' | 'sms') => {
     if (Platform.OS !== 'android') return;
     const permission = kind === 'contacts' ? PermissionsAndroid.PERMISSIONS.READ_CONTACTS
       : kind === 'camera' ? PermissionsAndroid.PERMISSIONS.CAMERA
       : kind === 'microphone' ? PermissionsAndroid.PERMISSIONS.RECORD_AUDIO
+      : kind === 'calls' ? PermissionsAndroid.PERMISSIONS.CALL_PHONE
+      : kind === 'sms' ? PermissionsAndroid.PERMISSIONS.SEND_SMS
       : PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS;
     try {
       const result = Number(Platform.Version) < 33 && kind === 'notifications'
@@ -3286,7 +3290,9 @@ export default function App() {
                       </TouchableOpacity>
                     </View>
                     {([
-                      { key: 'contacts', title: 'جهات الاتصال', detail: 'للعثور على رقم جهة اتصال عند طلب الاتصال أو تجهيز رسالة', permission: 'contacts' as const },
+                      { key: 'contacts', title: 'جهات الاتصال', detail: 'للعثور على رقم جهة اتصال عند طلب الاتصال أو إرسال رسالة', permission: 'contacts' as const },
+                      { key: 'calls', title: 'إجراء المكالمات مباشرة', detail: 'للاتصال بجهة الاتصال فور طلبك دون فتح شاشة الاتصال', permission: 'calls' as const },
+                      { key: 'sms', title: 'إرسال الرسائل النصية مباشرة', detail: 'لإرسال SMS من شريحة الهاتف بعد تحديد المستلم ونص الرسالة', permission: 'sms' as const },
                       { key: 'camera', title: 'الكاميرا والفلاش', detail: 'للتأكد من إذن التحكم بكشاف الهاتف فقط؛ لا يلتقط EZRA صورًا من هذا الاختصار', permission: 'camera' as const },
                       { key: 'microphone', title: 'الميكروفون', detail: 'للتفاعل الصوتي والتعرّف على أوامرك', permission: 'microphone' as const },
                       { key: 'notifications', title: 'الإشعارات', detail: 'لإظهار إشعار خدمة كلمة التنبيه على Android 13 وما بعده', permission: 'notifications' as const },
