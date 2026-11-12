@@ -86,6 +86,14 @@ export default function LearningToolsModal({ visible, mode, onClose, onAskEzra }
     onAskEzra(`اشرح لي موضوع «${selectedTopic.title}» شرحاً منظماً، مع أمثلة سريرية تعليمية وأسئلة مراجعة. وضّح حدود المعلومات وما يحتاج إلى مرجع دراسي أو تقييم سريري.`);
   };
 
+  const askForCustomCards = () => {
+    onAskEzra('حوّل موضوعنا الحالي أو الدرس الذي أرسله إلى 10 بطاقات مراجعة. اكتب السؤال في جهة والإجابة المختصرة في الجهة الأخرى، وركّز على الفهم والمصطلحات المهمة.');
+  };
+
+  const askForCustomQuiz = () => {
+    onAskEzra('اختبرني في موضوعنا الحالي باختبار تفاعلي من 5 أسئلة اختيار من متعدد. اطرح سؤالاً واحداً في كل مرة، وانتظر إجابتي قبل كشف الحل، ثم اشرح سبب الإجابة الصحيحة.');
+  };
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.backdrop}>
@@ -154,6 +162,9 @@ export default function LearningToolsModal({ visible, mode, onClose, onAskEzra }
                     <Text style={styles.flashcardText}>{cardRevealed ? currentCard.answer : currentCard.question}</Text>
                     <Text style={styles.tapHint}>{cardRevealed ? 'اضغط لإظهار السؤال' : 'اضغط لكشف الإجابة'}</Text>
                   </TouchableOpacity>
+                  <TouchableOpacity style={styles.askButton} onPress={askForCustomCards} accessibilityRole="button">
+                    <Text style={styles.askButtonText}>أنشئ بطاقات من درسي الحالي</Text>
+                  </TouchableOpacity>
                   <View style={styles.actionsRow}>
                     <TouchableOpacity style={styles.secondaryButton} onPress={() => { setCardIndex(previous => (previous - 1 + DENTAL_STUDY_CARDS.length) % DENTAL_STUDY_CARDS.length); setCardRevealed(false); }}>
                       <Text style={styles.secondaryButtonText}>السابق</Text>
@@ -166,6 +177,9 @@ export default function LearningToolsModal({ visible, mode, onClose, onAskEzra }
               ) : (
                 <>
                   <Text style={styles.sectionTitle}>اختبار المعرفة السنية</Text>
+                  <TouchableOpacity style={styles.askButton} onPress={askForCustomQuiz} accessibilityRole="button">
+                    <Text style={styles.askButtonText}>اختبار تفاعلي من موضوع محادثتي</Text>
+                  </TouchableOpacity>
                   {quizFinished ? (
                     <View style={styles.resultCard}>
                       <Text style={styles.resultTitle}>انتهى الاختبار</Text>
@@ -237,7 +251,7 @@ const styles = StyleSheet.create({
   tabActive: { backgroundColor: '#532642', borderWidth: 1, borderColor: '#B75B91' },
   tabText: { color: '#B9ABB9', fontSize: 10, fontWeight: '700', textAlign: 'center' },
   tabTextActive: { color: '#FFF0FA' },
-  content: { flexGrow: 0 },
+  content: { flex: 1 },
   contentInner: { padding: 16, gap: 12, paddingBottom: 28 },
   sectionTitle: { color: '#F5EAF3', fontSize: 15, fontWeight: '800', textAlign: 'right' },
   helper: { color: '#A99BAA', fontSize: 11, lineHeight: 17, textAlign: 'right' },
