@@ -1,7 +1,12 @@
 package expo.modules.ezrawakeword
 
 import android.accessibilityservice.AccessibilityService
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.accessibilityservice.AccessibilityServiceInfo
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
@@ -13,9 +18,103 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 class EzraAccessibilityService : AccessibilityService() {
   companion object {
+    private const val ACTION_CHANNEL_ID = "ezra_accessibility_actions"
+    private const val ACTION_NOTIFICATION_ID = 7312
     @Volatile private var instance: EzraAccessibilityService? = null
 
     fun isConnected(): Boolean = instance != null
+
+    fun executeWakeCommand(context: Context, command: String): Boolean {
+      val value = normalize(command)
+      val click = Regex("""^(?:اضغط|انقر|اكبس|اختار|حدد|tap|click|press)\s+(?:على\s+)?(?:زر\s+)?(.{1,80})$""").matchEntire(value)
+      if (click != null) {
+        val target = click.groupValues[1].trim()
+        if (target.isBlank()) return false
+        val sensitive = Regex("""(?:حذف|احذف|مسح|الغاء الحساب|شراء|اشتر|ادفع|دفع|تحويل|ارسال|ابعث|نشر|موافق|تاكيد|اتصال|اتصل|مكالمة|اشتراك|confirm|delete|remove|buy|purchase|pay|payment|transfer|send|post|submit|call|dial|subscribe)""")
+          .containsMatchIn(target)
+        if (sensitive) {
+          postConfirmationNotification(context, target)
+        } else {
+          val success = clickText(target)
+          postActionResult(context, if (success) "تم تنفيذ الضغط على «$target»." else "لم أجد زراً قابلاً للضغط باسم «$target» في التطبيق المفتوح.")
+        }
+        return true
+      }
+
+      val scrollDown = Regex("""(?:مرر|اسحب|انزل|انزلي|scroll)\s*(?:الى\s*)?(?:الاسفل|للاسفل|لتحت|down)""").containsMatchIn(value)
+      val scrollUp = Regex("""(?:مرر|اسحب|اصعد|اطلع|scroll)\s*(?:الى\s*)?(?:الاعلى|للاعلى|لفوق|up)""").containsMatchIn(value)
+      if (scrollDown || scrollUp) {
+        val success = scroll(if (scrollDown) "down" else "up")
+        postActionResult(context, if (success) "تم تنفيذ التمرير." else "لم أجد قائمة قابلة للتمرير في التطبيق المفتوح.")
+        return true
+      }
+
+      val action = when (value) {
+        "ارجع", "رجوع", "عود", "back", "go back" -> "back"
+        "الرئيسيه", "الشاشه الرئيسيه", "اذهب للرئيسيه", "home", "go home" -> "home"
+        "افتح الاشعارات", "اعرض الاشعارات", "اسحب الاشعارات", "notifications" -> "notifications"
+        "الاعدادات السريعه", "افتح الاعدادات السريعه", "quick settings" -> "quick_settings"
+        else -> return false
+      }
+      val success = globalAction(action)
+      postActionResult(context, if (success) "تم تنفيذ أمر التنقل." else "تعذّر تنفيذ أمر التنقل.")
+      return true
+    }
+
+    fun postActionResult(context: Context, message: String) {
+      val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+      ensureNotificationChannel(context, manager)
+      val builder = notificationBuilder(context)
+        .setSmallIcon(android.R.drawable.ic_menu_view)
+        .setContentTitle("EZRA نفّذ الأمر")
+        .setContentText(message.take(120))
+        .setAutoCancel(true)
+        .setVisibility(Notification.VISIBILITY_PRIVATE)
+      manager.notify(ACTION_NOTIFICATION_ID, builder.build())
+    }
+
+    private fun postConfirmationNotification(context: Context, target: String) {
+      val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+      ensureNotificationChannel(context, manager)
+      val intent = Intent(context, EzraAccessibilityActionReceiver::class.java).apply {
+        action = EzraAccessibilityActionReceiver.ACTION_CONFIRM
+        putExtra(EzraAccessibilityActionReceiver.EXTRA_TARGET, target)
+      }
+      val pendingIntent = PendingIntent.getBroadcast(
+        context,
+        target.hashCode(),
+        intent,
+        PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0)
+      )
+      val action = Notification.Action.Builder(android.R.drawable.ic_menu_view, "تأكيد", pendingIntent).build()
+      val notification = notificationBuilder(context)
+        .setSmallIcon(android.R.drawable.ic_menu_view)
+        .setContentTitle("تأكيد إجراء EZRA")
+        .setContentText("هل تريدين الضغط على «$target»؟")
+        .setVisibility(Notification.VISIBILITY_PRIVATE)
+        .setAutoCancel(true)
+        .addAction(action)
+        .build()
+      manager.notify(ACTION_NOTIFICATION_ID, notification)
+    }
+
+    private fun ensureNotificationChannel(context: Context, manager: NotificationManager) {
+      if (Build.VERSION.SDK_INT >= 26) {
+        manager.createNotificationChannel(
+          NotificationChannel(ACTION_CHANNEL_ID, "إجراءات EZRA", NotificationManager.IMPORTANCE_HIGH).apply {
+            description = "نتائج أو تأكيدات أوامر التحكم بالتطبيقات"
+            lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+          }
+        )
+      }
+    }
+
+    private fun notificationBuilder(context: Context): Notification.Builder =
+      if (Build.VERSION.SDK_INT >= 26) Notification.Builder(context, ACTION_CHANNEL_ID)
+      else {
+        @Suppress("DEPRECATION")
+        Notification.Builder(context)
+      }
 
     fun clickText(target: String): Boolean {
       val service = instance ?: return false
