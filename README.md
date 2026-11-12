@@ -1,45 +1,43 @@
-# EZRA
+# EZRA AI
 
-Private personal AI companion built with Expo and React Native.
+Private personal AI companion built with Expo SDK 54 and React Native, with Android native modules for Habibi TTS and wake-word/phone integration.
 
-## Current app foundation
+## Current application
 
-- Android and iOS app configuration through Expo SDK 54.
-- Dark, burgundy and pink EZRA chat interface with an animated 2D orb.
-- Email/password sign-in through Supabase Auth.
-- AI text replies through the private `smart-service` Supabase Edge Function (Groq provider key stays server-side).
-- Conversation messages stored in Supabase and separated by conversation ID.
-- Conversation history screen.
-- Arabic speech-to-text input through the device speech-recognition service.
-- Text-to-speech playback for EZRA messages using the device voice engine.
-- Photo and document selection; currently only the attachment name and type are stored with the message.
-- User-controlled memory center: users can add memory suggestions, approve or reject them, and delete memories; only approved memories are retrieved for that authenticated owner and supplied to EZRA when generating replies.
-- Android preview APK build profile through EAS Build.
-- GitHub Actions checks for Expo configuration, TypeScript, and Android bundling.
+- Android app identity: `com.halasemaoun.ezra`.
+- Dark burgundy/pink interface with Home, Chat, and Settings destinations and an animated orb.
+- Supabase email/password authentication and owner-scoped conversation and memory data.
+- AI replies through the authenticated `smart-service` Supabase Edge Function. The Groq provider key stays server-side.
+- Text chat uses `openai/gpt-oss-120b`; image requests use the configured vision model `qwen/qwen3.8-27b`.
+- Conversation history and user-approved memory personalization.
+- Companion, Dentist, and Study modes with mode-specific guidance.
+- Dental learning references, flashcards, quizzes, and clinical case simulations. These are educational tools, not remote diagnosis or treatment.
+- Local knowledge library for TXT, Markdown, CSV, and JSON files (up to 8 files, with a 256 KB per-file library limit). Relevant excerpts may be sent with a question to the AI service.
+- One-off message attachments: images can be sent for AI image analysis; TXT, MD, CSV, and JSON documents can be read as text for the current request.
+- Arabic/English speech recognition, system text-to-speech fallback, and an optional local Habibi TTS native engine.
+- Android wake-word foreground service and phone actions including flashlight, volume/media controls, app/system settings, alarm/timer intents, and contact lookup. Calls and SMS open the relevant Android app for the user to review and confirm.
 
-## Current limitations
+## Important limitations
 
-- Selected photos and documents are not uploaded or analyzed by the AI yet.
-- Voice input depends on the device speech-recognition service; native speech modules require an EAS build and are not supported by standard Expo Go.
-- The orb is currently a 2D animated React Native illustration, not a 3D model.
-- Some planned EZRA areas (phone controls, Dental AI, advanced voice conversation, and full personalization) are not implemented yet.
-- No API keys or private service credentials belong in this repository or in the mobile app.
+- Message attachment files are not uploaded to persistent object storage. Conversation history stores attachment name/type metadata, not the original image or document bytes; old attachments cannot be reopened from history.
+- Message-level document attachments currently support TXT, MD, CSV, and JSON only. PDF and Word extraction are not implemented.
+- The knowledge library is stored locally on the device and is not synchronized to the user's account.
+- Habibi TTS requires a large model download and suitable free RAM/storage. Its Android native code is compiled by CI, but actual model inference and playback still require runtime verification on a device. Android system TTS remains the fallback.
+- Wake-word recognition depends on Android's speech-recognition provider, microphone/notification permissions, foreground-service rules, and manufacturer battery-management behavior.
+- The orb is an animated 2D React Native illustration, not a 3D model.
+- Groq free-tier availability and quotas can change. If the provider quota is exhausted, AI responses may be temporarily unavailable.
 
 ## Privacy and cost
 
-- User data is protected by Supabase Row Level Security owner policies.
-- Provider credentials are kept in server-side Supabase function secrets.
-- The app uses the configured provider's available free quota; free-tier limits can change and service may pause when quota is exhausted.
-- No paid plan or billing upgrade is required or enabled by this repository.
-
-## Requirements
-
-- Node.js 20.19.4 or newer in the Node 20 line.
-- npm.
-- An Expo account for EAS cloud builds.
-- An Android device for installing the preview APK.
+- Supabase Row Level Security policies scope private chat and memory rows to their owner.
+- The mobile app uses a Supabase publishable key. Never place a Supabase secret/service-role key or provider API key in the app or repository.
+- Only approved memories are loaded by the authenticated Edge Function for AI personalization.
+- Knowledge-library excerpts and current message attachments are sent to the AI provider when needed to answer a request.
+- No paid plan or billing upgrade is enabled or required by this repository. Free-tier limits are controlled by the service providers and may change.
 
 ## Install and validate
+
+Requirements: Node.js 20.19.4 (Node 20 line), npm, and Android SDK tooling for local Android compilation.
 
 ```bash
 npm install
@@ -48,12 +46,8 @@ npm run typecheck
 npx expo export --platform android
 ```
 
-Because EZRA uses native speech recognition, create and install an EAS preview build rather than relying on Expo Go:
+The GitHub Actions validation workflow also checks the Supabase Edge Function and its Deno tests, Expo configuration, Android Kotlin compilation, and Android JS bundle export.
 
-```bash
-npx eas-cli login
-npx eas-cli build:configure
-npx eas-cli build --platform android --profile preview
-```
+An installable Android preview build can be configured through EAS using the `preview` profile in `eas.json`. Native speech modules require a development/preview build; Expo Go alone does not include these custom native modules.
 
-Keep the generated Expo project ID in the repository. Never commit provider keys, Supabase service-role keys, or other private credentials.
+Never commit provider keys, Supabase secret/service-role keys, signing credentials, or other private credentials.
