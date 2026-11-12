@@ -1665,7 +1665,7 @@ export default function App() {
           .match(/[a-z0-9\u0600-\u06ff]{3,}/g) ?? [];
         const knowledgeStopWords = new Set(['the','and','for','with','this','that','from','what','when','where','which','كيف','ماذا','هذا','هذه','على','الى','إلى','من','عن','هل','ما','لماذا','متى','اين','أين','انا','أنا','انت','أنت']);
         const queryTerms = [...new Set(knowledgeTerms.filter(term => !knowledgeStopWords.has(term)))].slice(0, 40);
-        const relevantKnowledge = knowledgeDocuments
+        const relevantKnowledge = conversationInput.length <= 7000 ? knowledgeDocuments
           .map(document => {
             const normalizedContent = document.content.toLowerCase().replace(/[\u064B-\u065F\u0670]/g, '');
             const score = queryTerms.reduce((total, term) => total + (normalizedContent.split(term).length - 1), 0);
@@ -1673,9 +1673,9 @@ export default function App() {
           })
           .filter(item => item.score > 0)
           .sort((a, b) => b.score - a.score)
-          .slice(0, 2);
+          .slice(0, 2) : [];
         const knowledgeGuidance = relevantKnowledge.length
-          ? relevantKnowledge.map(({ document }) => `Source: ${document.name}\n${document.content.slice(0, 3500)}`).join('\n\n').slice(0, 7000)
+          ? relevantKnowledge.map(({ document }) => `Source: ${document.name}\n${document.content.slice(0, 1100)}`).join('\n\n').slice(0, 2200)
           : '';
 
         let approvedMemoryGuidance = '';
