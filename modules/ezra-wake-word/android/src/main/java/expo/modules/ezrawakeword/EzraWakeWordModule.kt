@@ -8,22 +8,46 @@ import android.content.pm.PackageManager
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.media.AudioManager
+import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Build
 import android.os.BatteryManager
 import android.os.StatFs
+import android.os.Handler
+import android.os.Looper
 import android.telephony.SmsManager
 import android.provider.AlarmClock
 import android.provider.ContactsContract
 import android.provider.Settings
 import android.view.KeyEvent
+import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.util.Locale
 
 class EzraWakeWordModule : Module() {
+  private var pendingScreenCapturePromise: Promise? = null
+  private companion object { const val SCREEN_CAPTURE_REQUEST_CODE = 7311 }
+
   override fun definition() = ModuleDefinition {
     Name("EzraWakeWord")
+
+    AsyncFunction("captureScreen") { promise: Promise ->
+      val context = appContext.reactContext?.applicationContext
+        ?: throw IllegalStateException("EZRA Android context is unavailable")
+      if (pendingScreenCapturePromise != null) {
+        promise.resolve("ERROR: يوجد طلب التقاط شاشة قيد التنفيذ.")
+        return@AsyncFunction
+      }
+      pendingScreenCapturePromise = promise
+      val manager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+      try {
+        appContext.throwingActivity.startActivityForResult(manager.createScreenCaptureIntent(), SCREEN_CAPTURE_REQUEST_CODE)
+      } catch (error: Exception) {
+        pendingScreenCapturePromise = null
+        promise.resolve("ERROR: تعذّر فتح إذن التقاط الشاشة: ${error.message ?: "unknown error"}")
+      }
+    }
 
     AsyncFunction("start") {
       val context = appContext.reactContext?.applicationContext
@@ -300,6 +324,57 @@ class EzraWakeWordModule : Module() {
         "mediaVolume" to audio.getStreamVolume(AudioManager.STREAM_MUSIC),
         "maxMediaVolume" to audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
       )
+    }
+
+    OnActivityResult { _, payload ->
+      if (payload.requestCode != SCREEN_CAPTURE_REQUEST_CODE) return@OnActivityResult
+      val promise = pendingScreenCapturePromise ?: return@OnActivityResult
+      if (payload.resultCode != android.app.Activity.RESULT_OK || payload.data == null) {
+        pendingScreenCapturePromise = null
+        promise.resolve("")
+        return@OnActivityResult
+      }
+
+      val context = appContext.reactContext?.applicationContext
+      if (context == null) {
+        pendingScreenCapturePromise = null
+        promise.resolve("ERROR: EZRA Android context is unavailable.")
+        return@OnActivityResult
+      }
+
+      context.getSharedPreferences(EzraScreenCaptureService.PREFERENCES, 0)
+        .edit().remove(EzraScreenCaptureService.RESULT).apply()
+      val serviceIntent = Intent(context, EzraScreenCaptureService::class.java).apply {
+        action = EzraScreenCaptureService.ACTION_CAPTURE
+        putExtra(EzraScreenCaptureService.EXTRA_RESULT_CODE, payload.resultCode)
+        putExtra(EzraScreenCaptureService.EXTRA_RESULT_DATA, payload.data)
+      }
+      try {
+        androidx.core.content.ContextCompat.startForegroundService(context, serviceIntent)
+        val handler = Handler(Looper.getMainLooper())
+        var attempts = 0
+        val poll = object : Runnable {
+          override fun run() {
+            val result = context.getSharedPreferences(EzraScreenCaptureService.PREFERENCES, 0)
+              .getString(EzraScreenCaptureService.RESULT, null)
+            if (result != null) {
+              context.getSharedPreferences(EzraScreenCaptureService.PREFERENCES, 0)
+                .edit().remove(EzraScreenCaptureService.RESULT).apply()
+              pendingScreenCapturePromise = null
+              promise.resolve(result)
+            } else if (++attempts >= 60) {
+              pendingScreenCapturePromise = null
+              promise.resolve("ERROR: انتهت مهلة انتظار لقطة الشاشة.")
+            } else {
+              handler.postDelayed(this, 200)
+            }
+          }
+        }
+        handler.postDelayed(poll, 200)
+      } catch (error: Exception) {
+        pendingScreenCapturePromise = null
+        promise.resolve("ERROR: تعذّر بدء خدمة التقاط الشاشة: ${error.message ?: "unknown error"}")
+      }
     }
 
     AsyncFunction("isAvailable") {
