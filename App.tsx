@@ -1673,7 +1673,7 @@ export default function App() {
       if (!result) {
         reply = 'تم إلغاء التقاط الشاشة. لم يتم حفظ أي صورة.';
       } else if (result.startsWith('ERROR:')) {
-        reply = result.replace(/^ERROR:\\s*/, '') || 'تعذّر التقاط الشاشة.';
+        reply = result.replace(/^ERROR:\s*/, '') || 'تعذّر التقاط الشاشة.';
       } else {
         reply = 'تم التقاط الشاشة وحفظ الصورة في معرض الصور داخل مجلد EZRA.';
       }
