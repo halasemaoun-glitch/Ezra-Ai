@@ -1048,7 +1048,7 @@ export default function App() {
   };
 
   const selectConversation = async (selectedId: string) => {
-    if (!session) return;
+    if (!session || sending) return;
     try {
       await AsyncStorage.setItem(`ezra:conversation:${session.user.id}`, selectedId);
       setConversationId(selectedId);
@@ -1063,7 +1063,7 @@ export default function App() {
   };
 
   const startNewConversation = async () => {
-    if (!session) return;
+    if (!session || sending) return;
     const nextId = createConversationId();
     try {
       await AsyncStorage.setItem(`ezra:conversation:${session.user.id}`, nextId);
@@ -1078,7 +1078,7 @@ export default function App() {
   };
 
   const deleteConversation = (selectedId: string) => {
-    if (!session) return;
+    if (!session || sending) return;
     Alert.alert('حذف المحادثة', 'سيتم حذف رسائل هذه المحادثة نهائيًا. هل تريد المتابعة؟', [
       { text: 'إلغاء', style: 'cancel' },
       {
