@@ -37,11 +37,11 @@ class EzraScreenCaptureService : Service() {
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, 0) ?: 0
-    val resultData = if (Build.VERSION.SDK_INT >= 33) {
+    val resultData: Intent? = if (Build.VERSION.SDK_INT >= 33) {
       intent?.getParcelableExtra(EXTRA_RESULT_DATA, Intent::class.java)
     } else {
       @Suppress("DEPRECATION")
-      intent?.getParcelableExtra(EXTRA_RESULT_DATA)
+      intent?.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
     }
     if (resultData == null) {
       saveResult("ERROR: لم يصل إذن التقاط الشاشة من Android.")
