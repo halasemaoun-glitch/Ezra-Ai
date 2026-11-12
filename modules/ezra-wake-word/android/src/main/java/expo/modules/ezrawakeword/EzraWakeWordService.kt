@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.app.KeyguardManager
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -22,7 +23,9 @@ class EzraWakeWordService : Service(), RecognitionListener {
     const val PREFERENCES = "ezra_wake_word"
     const val PENDING_COMMAND = "pending_command"
     private const val CHANNEL_ID = "ezra_voice_assistant"
+    private const val WAKE_CHANNEL_ID = "ezra_wake_command"
     private const val NOTIFICATION_ID = 7301
+    private const val WAKE_NOTIFICATION_ID = 7302
     private const val WAKE_OPEN_ACTION = "com.halasemaoun.ezra.OPEN_FROM_WAKE_WORD"
   }
 
@@ -44,6 +47,7 @@ class EzraWakeWordService : Service(), RecognitionListener {
         acquire()
       }
     createNotificationChannel()
+    createWakeNotificationChannel()
     startAsForeground()
   }
 
@@ -189,15 +193,83 @@ class EzraWakeWordService : Service(), RecognitionListener {
       .apply()
 
     handler.post {
-      val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
-      if (launchIntent != null) {
-        launchIntent.action = WAKE_OPEN_ACTION
-        launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        launchIntent.putExtra("ezra_wake_command", command)
-        startActivity(launchIntent)
+      val powerManager = getSystemService(POWER_SERVICE) as PowerManager
+      val keyguardManager = getSystemService(KEYGUARD_SERVICE) as KeyguardManager
+      val screenLockedOrOff = keyguardManager.isKeyguardLocked || !powerManager.isInteractive
+      if (screenLockedOrOff) {
+        // Android restricts background activity launches over the lock screen.
+        // Keep the recognized command and let the user explicitly resume from a notification.
+        postWakeCommandNotification()
+      } else {
+        openPendingCommand()
       }
       stopSelf()
     }
+  }
+
+  private fun createWakeNotificationChannel() {
+    if (Build.VERSION.SDK_INT >= 26) {
+      val channel = NotificationChannel(
+        WAKE_CHANNEL_ID,
+        "طلبات EZRA الصوتية",
+        NotificationManager.IMPORTANCE_HIGH
+      ).apply {
+        description = "إشعار لاستكمال الأمر الصوتي عندما تكون الشاشة مقفلة"
+        lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+        setShowBadge(false)
+      }
+      getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+    }
+  }
+
+  private fun buildWakeLaunchIntent(): PendingIntent? {
+    val launchIntent = packageManager.getLaunchIntentForPackage(packageName) ?: return null
+    launchIntent.action = WAKE_OPEN_ACTION
+    launchIntent.addFlags(
+      Intent.FLAG_ACTIVITY_NEW_TASK or
+        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+        Intent.FLAG_ACTIVITY_SINGLE_TOP
+    )
+    return PendingIntent.getActivity(
+      this,
+      WAKE_NOTIFICATION_ID,
+      launchIntent,
+      PendingIntent.FLAG_UPDATE_CURRENT or
+        (if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0)
+    )
+  }
+
+  private fun postWakeCommandNotification() {
+    val pendingIntent = buildWakeLaunchIntent()
+    if (pendingIntent == null) return
+    val builder = if (Build.VERSION.SDK_INT >= 26) {
+      Notification.Builder(this, WAKE_CHANNEL_ID)
+    } else {
+      @Suppress("DEPRECATION")
+      Notification.Builder(this)
+    }
+    val notification = builder
+      .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+      .setContentTitle("لديك طلب صوتي من EZRA")
+      .setContentText("افتح EZRA لمتابعة طلبك")
+      .setContentIntent(pendingIntent)
+      .setAutoCancel(true)
+      .setCategory(Notification.CATEGORY_MESSAGE)
+      .setVisibility(Notification.VISIBILITY_PRIVATE)
+      .build()
+    getSystemService(NotificationManager::class.java)
+      .notify(WAKE_NOTIFICATION_ID, notification)
+  }
+
+  private fun openPendingCommand() {
+    val launchIntent = packageManager.getLaunchIntentForPackage(packageName) ?: return
+    launchIntent.action = WAKE_OPEN_ACTION
+    launchIntent.addFlags(
+      Intent.FLAG_ACTIVITY_NEW_TASK or
+        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+        Intent.FLAG_ACTIVITY_SINGLE_TOP
+    )
+    startActivity(launchIntent)
   }
 
   override fun onReadyForSpeech(params: android.os.Bundle?) {}
