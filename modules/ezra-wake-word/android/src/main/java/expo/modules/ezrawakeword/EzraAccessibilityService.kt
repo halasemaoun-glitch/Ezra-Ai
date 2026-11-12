@@ -2,7 +2,6 @@ package expo.modules.ezrawakeword
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
-import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
@@ -44,10 +43,10 @@ class EzraAccessibilityService : AccessibilityService() {
     fun globalAction(action: String): Boolean {
       val service = instance ?: return false
       val androidAction = when (action.lowercase(Locale.ROOT)) {
-        "back", "رجوع", "ارجع" -> GLOBAL_ACTION_BACK
-        "home", "الرئيسية", "الشاشة الرئيسية" -> GLOBAL_ACTION_HOME
-        "notifications", "الإشعارات" -> GLOBAL_ACTION_NOTIFICATIONS
-        "quick_settings", "الإعدادات السريعة" -> GLOBAL_ACTION_QUICK_SETTINGS
+        "back", "رجوع", "ارجع" -> AccessibilityService.GLOBAL_ACTION_BACK
+        "home", "الرئيسية", "الشاشة الرئيسية" -> AccessibilityService.GLOBAL_ACTION_HOME
+        "notifications", "الإشعارات" -> AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS
+        "quick_settings", "الإعدادات السريعة" -> AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS
         else -> return false
       }
       return service.runOnMain { service.performGlobalAction(androidAction) }
