@@ -1667,7 +1667,7 @@ export default function App() {
         const queryTerms = [...new Set(knowledgeTerms.filter(term => !knowledgeStopWords.has(term)))].slice(0, 40);
         const relevantKnowledge = knowledgeDocuments
           .map(document => {
-            const normalizedContent = document.content.toLowerCase().replace(/[\\u064B-\\u065F\\u0670]/g, '');
+            const normalizedContent = document.content.toLowerCase().replace(/[\u064B-\u065F\u0670]/g, '');
             const score = queryTerms.reduce((total, term) => total + (normalizedContent.split(term).length - 1), 0);
             return { document, score };
           })
