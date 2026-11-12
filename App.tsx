@@ -42,6 +42,7 @@ import { DENTAL_REFERENCE_LIBRARY } from './src/study/studyLibrary';
 import { supabase } from './src/lib/supabase';
 import { DEFAULT_EZRA_VOICE } from './src/voice/voiceProfile';
 import { parseCallContactName } from './src/phone/commandParser';
+import { parseSmsCommand, parseIncompleteSmsCommand } from './src/phone/smsCommandParser';
 import { isScreenCaptureCommand } from './src/phone/screenCaptureCommands';
 import { isSensitiveAccessibilityTarget, parseAccessibilityCommand } from './src/phone/accessibilityCommands';
 import { PHONE_SETTINGS_COMMANDS, parsePhoneSettingsTarget, type PhoneSettingsTarget } from './src/phone/phoneControlCommands';
@@ -2000,9 +2001,9 @@ export default function App() {
       }
     }
 
-    const smsMatch = normalized.match(/(?:ارسل|ابعث|ابعت|اكتب)\\s+(?:لي\\s+)?(?:رسالة|مسج|sms)\\s+(?:الى|ل)\\s+(.+?)\\s+(?:تقول|قولي\\s+لها|قل\\s+له|محتواها|نصها)\\s+(.+)$/i);
+    const smsMatch = parseSmsCommand(commandText);
     if (smsMatch) {
-      const contactName = smsMatch[1].trim();
+      const { contactName, message: smsBody } = smsMatch;
       const smsBody = smsMatch[2].trim();
       setSending(true);
       try {
@@ -2032,9 +2033,9 @@ export default function App() {
       return true;
     }
 
-    const incompleteSmsMatch = normalized.match(/(?:ارسل|ابعث|ابعت|اكتب)\\s+(?:لي\\s+)?(?:رسالة|مسج|sms)\\s+(?:الى|ل)\\s+(.+)$/i);
+    const incompleteSmsMatch = parseIncompleteSmsCommand(commandText);
     if (incompleteSmsMatch) {
-      await sayResult(`ما النص الذي تريدين إرساله إلى ${incompleteSmsMatch[1].trim()}؟`);
+      await sayResult(`ما النص الذي تريدين إرساله إلى ${incompleteSmsMatch}؟`);
       return true;
     }
 
