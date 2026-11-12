@@ -1,0 +1,45 @@
+# EZRA Feature Verification Matrix
+
+Branch: `ezra/habibi-android-spike`
+Baseline revision: `2803b8544e69fa153125d38cead26e3e31b066cf`
+
+This matrix separates implementation evidence from proof of behavior. A component, native-module manifest, or UI control is not considered verified merely because it exists in source.
+
+## Verification levels
+
+- **Implemented**: source code and integration path exist.
+- **Automated**: a repeatable test exercises the behavior or contract.
+- **Build-verified**: the relevant TypeScript/Android compilation or bundle step passes.
+- **Runtime-verified**: the behavior has been observed running in the target environment.
+
+## Feature matrix
+
+| Feature | Implementation evidence | Automated coverage at baseline | Additional verification required |
+|---|---|---|---|
+| AI request, response parsing, Groq contract | `supabase/functions/smart-service/groq.ts` | Deno contract tests | Expand edge cases; verify app-to-function request integration |
+| Session authentication and ownership | `auth.ts`, `index.ts` | Deno auth tests | Verify unauthorized, expired, malformed, and cross-user requests |
+| EZRA persona and mode guidance | `persona.ts`, `src/modes/assistantModes.ts` | Deno persona tests; no dedicated mobile mode tests | Verify all three mode prompts and mode persistence |
+| Home and 3D orb states | `App.tsx`, `src/EzraOrb3D.tsx` | No dedicated component tests | Verify idle/listening/thinking/speaking state transitions and reduced-motion behavior |
+| Chat and conversation history | `App.tsx` | No dedicated mobile tests | Verify send/error/retry, new chat, history load/select, ownership and persistence |
+| Voice input and speech output | `App.tsx`, `src/voice/voiceProfile.ts`, native modules | No dedicated voice-flow tests | Verify permissions, Arabic/English recognition, interruption, fallback TTS and playback lifecycle |
+| Habibi TTS native engine | `modules/ezra-habibi-tts` | Module/config presence only | Verify model loading, synthesis, playback, stop/error events on Android |
+| Wake word and phone actions | `modules/ezra-wake-word`, config plugin | Module/config presence only | Verify foreground service, permission denial, command parsing and safe intents on Android |
+| Memory | `App.tsx`, Supabase tables/functions | Backend auth tests only | Verify approval states, user isolation, save/edit/reject and approved-only prompt injection |
+| Knowledge files | `App.tsx` local document handling/retrieval | No dedicated tests | Verify supported formats, size/count limits, persistence, ranking and prompt context |
+| Dentist/study modes and dental references | `assistantModes.ts`, `studyLibrary.ts`, `LearningToolsModal.tsx` | Source audit only | Verify mode switching, reference retrieval, card/quiz flows and progress restoration |
+| Clinical case simulator | `ClinicalCaseSimulator.tsx` | Source-level scenario checks only | Verify answer lock, feedback, completion callback and navigation |
+| Settings and phone controls | `App.tsx`, native wake-word module | No dedicated mobile tests | Verify each setting persists and each action handles unavailable/denied permissions |
+| Navigation and RTL/LTR | `App.tsx`, theme tokens | Source audit only | Verify all tabs, language direction and narrow-screen layouts |
+| Accessibility and reduced motion | `App.tsx`, design system | Source audit only | Verify labels, touch targets, focus/contrast and reduced-motion behavior |
+
+## Baseline gaps
+
+1. The repository has dedicated Deno tests for the Supabase smart-service auth, persona, and Groq contracts.
+2. The React Native application currently has no dedicated component/integration test runner configured in `package.json`.
+3. Most client-side features live in the large `App.tsx` module. This makes isolated behavioral tests difficult and increases the risk of treating source inspection as proof.
+4. Native TTS and wake-word behavior requires Android runtime verification; compiling their Kotlin code alone cannot prove model inference, microphone lifecycle, or audio playback.
+5. The existing Android validation workflow compiles Kotlin and exports the Android JS bundle. It does not currently assemble a signed or installable APK.
+
+## Acceptance rule
+
+A feature is marked **verified** only when its behavior has a repeatable automated test or an explicitly recorded runtime check. Source presence and static inspection remain useful evidence, but are not substitutes for behavioral verification. Any unverified behavior must remain visibly marked as pending.
