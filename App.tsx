@@ -3465,7 +3465,7 @@ export default function App() {
                     ))}
                     <View style={{ padding: 14, borderRadius: 14, backgroundColor: '#1B151E', borderWidth: 1, borderColor: '#493747', gap: 7 }}>
                       <Text style={{ color: '#F2D9E9', fontSize: 13, fontWeight: '800', textAlign: 'right' }}>جرّبي هذه الأوامر الصوتية</Text>
-                      <Text style={{ color: '#B9AAB7', fontSize: 11, lineHeight: 19, textAlign: 'right' }}>«اتصل بأمي» · «أرسل رسالة إلى سارة تقول وصلت» · «اضبط منبه الساعة 7 صباحًا» · «شغّل الفلاش» · «ارفع صوت الوسائط» · «افتح إعدادات Wi-Fi»</Text>
+                      <Text style={{ color: '#B9AAB7', fontSize: 11, lineHeight: 19, textAlign: 'right' }}>«اتصل بأمي» · «أرسل رسالة إلى سارة تقول وصلت» · «اضبط منبه الساعة 7 صباحًا» · «شغّل الفلاش» · «ارفع صوت الوسائط» · «افتح إعدادات Wi-Fi» · «اضغط على بحث» · «انزل للأسفل» · «ارجع»</Text>
                     </View>
                     <Text style={{ color: '#F2D9E9', fontSize: 14, fontWeight: '800', textAlign: 'right', marginTop: 3 }}>اختصارات التحكم</Text>
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 9 }}>
