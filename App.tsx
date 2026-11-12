@@ -800,7 +800,7 @@ export default function App() {
   }, []);
 
   const addKnowledgeDocument = async () => {
-    if (!knowledgeLoaded || knowledgeLoading) return;
+    if (!knowledgeLoaded || knowledgeLoading || !!knowledgeError) return;
     if (knowledgeDocuments.length >= 8) {
       Alert.alert('وصلت إلى الحد الأقصى', 'يمكنك حفظ 8 ملفات نصية حالياً. احذف ملفاً قديماً لإضافة ملف جديد.');
       return;
@@ -1661,8 +1661,8 @@ export default function App() {
           companionProfile.extraInstructions.trim() ? `Additional user instructions: ${companionProfile.extraInstructions.trim()}.` : '',
         ].filter(Boolean).join('\n');
         const knowledgeTerms = userInput.toLowerCase()
-          .replace(/[\\u064B-\\u065F\\u0670]/g, '')
-          .match(/[a-z0-9\\u0600-\\u06ff]{3,}/g) ?? [];
+          .replace(/[\u064B-\u065F\u0670]/g, '')
+          .match(/[a-z0-9\u0600-\u06ff]{3,}/g) ?? [];
         const knowledgeStopWords = new Set(['the','and','for','with','this','that','from','what','when','where','which','كيف','ماذا','هذا','هذه','على','الى','إلى','من','عن','هل','ما','لماذا','متى','اين','أين','انا','أنا','انت','أنت']);
         const queryTerms = [...new Set(knowledgeTerms.filter(term => !knowledgeStopWords.has(term)))].slice(0, 40);
         const relevantKnowledge = knowledgeDocuments
@@ -1675,7 +1675,7 @@ export default function App() {
           .sort((a, b) => b.score - a.score)
           .slice(0, 2);
         const knowledgeGuidance = relevantKnowledge.length
-          ? relevantKnowledge.map(({ document }) => `Source: ${document.name}\\n${document.content.slice(0, 3500)}`).join('\\n\\n').slice(0, 7000)
+          ? relevantKnowledge.map(({ document }) => `Source: ${document.name}\n${document.content.slice(0, 3500)}`).join('\n\n').slice(0, 7000)
           : '';
 
         let approvedMemoryGuidance = '';
@@ -2571,7 +2571,7 @@ export default function App() {
                       <Text style={{ color: '#B9AAB7', fontSize: 12, textAlign: 'right' }}>TXT · Markdown · CSV · JSON</Text>
                       <Text style={{ color: '#8F8290', fontSize: 10, lineHeight: 17, textAlign: 'right' }}>حتى 8 ملفات، وبحد أقصى 256 كيلوبايت لكل ملف. دعم PDF وWord والفهرسة المتقدمة لاحقاً.</Text>
                     </View>
-                    <TouchableOpacity onPress={addKnowledgeDocument} disabled={!knowledgeLoaded || knowledgeLoading || knowledgeDocuments.length >= 8} style={{ borderRadius: 15, paddingVertical: 14, alignItems: 'center', backgroundColor: '#754765', borderWidth: 1, borderColor: '#C58DBB', opacity: !knowledgeLoaded || knowledgeLoading || knowledgeDocuments.length >= 8 ? 0.55 : 1 }}>
+                    <TouchableOpacity onPress={addKnowledgeDocument} disabled={!knowledgeLoaded || knowledgeLoading || !!knowledgeError || knowledgeDocuments.length >= 8} style={{ borderRadius: 15, paddingVertical: 14, alignItems: 'center', backgroundColor: '#754765', borderWidth: 1, borderColor: '#C58DBB', opacity: !knowledgeLoaded || knowledgeLoading || !!knowledgeError || knowledgeDocuments.length >= 8 ? 0.55 : 1 }}>
                       <Text style={{ color: '#FFF0F8', fontSize: 14, fontWeight: '800' }}>{knowledgeLoading ? 'جارٍ تحميل المكتبة…' : '＋ إضافة ملف إلى مكتبة المعرفة'}</Text>
                     </TouchableOpacity>
                     <TextInput value={knowledgeSearch} onChangeText={setKnowledgeSearch} placeholder="ابحث عن ملف باسمه…" placeholderTextColor="#817482" style={{ minHeight: 46, borderRadius: 13, borderWidth: 1, borderColor: '#594253', backgroundColor: '#17121A', color: '#F5EAF2', paddingHorizontal: 13, textAlign: 'right', writingDirection: 'rtl' }} />
