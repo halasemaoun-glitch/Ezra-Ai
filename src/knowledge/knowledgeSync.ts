@@ -16,6 +16,7 @@ export type KnowledgeCloudRow = {
   size_bytes: number;
   added_at: string;
   updated_at: string;
+  deleted_at: string | null;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -23,7 +24,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 export function normalizeKnowledgeDocuments(value: unknown): KnowledgeDocumentRecord[] {
   if (!Array.isArray(value)) return [];
-  return value
+  const normalized = value
     .filter((item): item is Record<string, unknown> =>
       isRecord(item) &&
       typeof item.id === 'string' &&
@@ -41,8 +42,10 @@ export function normalizeKnowledgeDocuments(value: unknown): KnowledgeDocumentRe
       updatedAt: typeof item.updatedAt === 'string' ? item.updatedAt : item.addedAt as string,
       deletedAt: typeof item.deletedAt === 'string' ? item.deletedAt : null,
     }))
-    .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
-    .filter((item, index, all) => item.deletedAt !== null || all.filter(candidate => candidate.deletedAt === null).indexOf(item) < 8);
+    .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+  const active = normalized.filter(item => item.deletedAt === null).slice(0, 8);
+  const tombstones = normalized.filter(item => item.deletedAt !== null);
+  return [...active, ...tombstones].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
 }
 
 export function knowledgeDocumentsFromCloud(rows: unknown): KnowledgeDocumentRecord[] {
@@ -72,9 +75,10 @@ export function mergeKnowledgeDocuments(
       merged.set(document.id, document);
     }
   }
-  return [...merged.values()]
-    .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
-    .slice(0, 8);
+  const sorted = [...merged.values()].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+  const active = sorted.filter(item => item.deletedAt === null).slice(0, 8);
+  const tombstones = sorted.filter(item => item.deletedAt !== null);
+  return [...active, ...tombstones].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
 }
 
 export function knowledgeDocumentsToCloud(
