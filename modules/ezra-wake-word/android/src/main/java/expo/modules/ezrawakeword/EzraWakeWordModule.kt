@@ -12,6 +12,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.BatteryManager
 import android.os.StatFs
+import android.telephony.SmsManager
 import android.provider.AlarmClock
 import android.provider.ContactsContract
 import android.provider.Settings
@@ -94,6 +95,20 @@ class EzraWakeWordModule : Module() {
       true
     }
 
+    AsyncFunction("placeCall") { requestedNumber: String ->
+      val context = appContext.reactContext?.applicationContext
+        ?: throw IllegalStateException("EZRA Android context is unavailable")
+      if (context.checkSelfPermission(Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
+        throw SecurityException("Call permission is required")
+      }
+      val number = requestedNumber.filter { it.isDigit() || it == '+' || it == '*' || it == '#' }
+      if (number.isBlank()) return@AsyncFunction false
+      val intent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$number")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      if (intent.resolveActivity(context.packageManager) == null) return@AsyncFunction false
+      context.startActivity(intent)
+      true
+    }
+
     AsyncFunction("composeSms") { requestedNumber: String, body: String ->
       val context = appContext.reactContext?.applicationContext
         ?: throw IllegalStateException("EZRA Android context is unavailable")
@@ -104,6 +119,30 @@ class EzraWakeWordModule : Module() {
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
       }
       context.startActivity(intent)
+      true
+    }
+
+    AsyncFunction("sendSmsDirect") { requestedNumber: String, body: String ->
+      val context = appContext.reactContext?.applicationContext
+        ?: throw IllegalStateException("EZRA Android context is unavailable")
+      if (context.checkSelfPermission(Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
+        throw SecurityException("SMS permission is required")
+      }
+      val number = requestedNumber.trim()
+      val message = body.trim().take(4000)
+      if (number.isBlank() || message.isBlank()) return@AsyncFunction false
+      val manager = if (Build.VERSION.SDK_INT >= 31) {
+        context.getSystemService(SmsManager::class.java)
+      } else {
+        @Suppress("DEPRECATION")
+        SmsManager.getDefault()
+      } ?: return@AsyncFunction false
+      val parts = manager.divideMessage(message)
+      if (parts.size > 1) {
+        manager.sendMultipartTextMessage(number, null, parts, null, null)
+      } else {
+        manager.sendTextMessage(number, null, message, null, null)
+      }
       true
     }
 
