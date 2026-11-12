@@ -231,6 +231,8 @@ export default function App() {
     extraInstructions: '',
   });
   const [companionProfileLoaded, setCompanionProfileLoaded] = useState(false);
+  const [aiPreferences, setAiPreferences] = useState({ responseDepth: 'متوازن', answerStyle: 'دقيق ومتوازن', stepByStep: true });
+  const [aiPreferencesLoaded, setAiPreferencesLoaded] = useState(false);
 
   const [habibiCapacity, setHabibiCapacity] = useState<HabibiDeviceCapacity | null>(null);
   const [habibiCapacityLoading, setHabibiCapacityLoading] = useState(false);
@@ -622,6 +624,34 @@ export default function App() {
       const next = { ...previous, ...patch };
       AsyncStorage.setItem('ezra:companionProfile', JSON.stringify(next))
         .catch(error => console.warn('Could not save EZRA companion profile:', error));
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    AsyncStorage.getItem('ezra:aiPreferences').then(raw => {
+      if (!raw) return;
+      try {
+        const saved = JSON.parse(raw);
+        if (saved && typeof saved === 'object') {
+          setAiPreferences(previous => ({
+            responseDepth: ['مختصر', 'متوازن', 'مفصل'].includes(saved.responseDepth) ? saved.responseDepth : previous.responseDepth,
+            answerStyle: ['دقيق ومتوازن', 'إبداعي', 'تحليلي'].includes(saved.answerStyle) ? saved.answerStyle : previous.answerStyle,
+            stepByStep: typeof saved.stepByStep === 'boolean' ? saved.stepByStep : previous.stepByStep,
+          }));
+        }
+      } catch (error) {
+        console.warn('Could not restore EZRA AI preferences:', error);
+      }
+    }).catch(error => console.warn('Could not load EZRA AI preferences:', error))
+      .finally(() => setAiPreferencesLoaded(true));
+  }, []);
+
+  const updateAiPreferences = (patch: Partial<typeof aiPreferences>) => {
+    setAiPreferences(previous => {
+      const next = { ...previous, ...patch };
+      AsyncStorage.setItem('ezra:aiPreferences', JSON.stringify(next))
+        .catch(error => console.warn('Could not save EZRA AI preferences:', error));
       return next;
     });
   };
@@ -1703,7 +1733,23 @@ export default function App() {
           console.warn('Approved memory context unavailable; continuing without it:', memoryContextError);
         }
 
+        const aiGuidance = [
+          aiPreferences.responseDepth === 'مختصر'
+            ? 'Answer length preference: concise. Give the direct answer first and omit unnecessary detail.'
+            : aiPreferences.responseDepth === 'مفصل'
+              ? 'Answer length preference: detailed. Explain important concepts fully, with useful examples when appropriate.'
+              : 'Answer length preference: balanced. Be clear and sufficiently detailed without unnecessary repetition.',
+          aiPreferences.answerStyle === 'إبداعي'
+            ? 'Answer approach: allow original ideas and creative alternatives when useful, while clearly separating suggestions from facts.'
+            : aiPreferences.answerStyle === 'تحليلي'
+              ? 'Answer approach: be systematic, compare relevant options, check assumptions, and explain the practical conclusion.'
+              : 'Answer approach: prioritize factual accuracy, clarity, and practical usefulness; do not speculate.',
+          aiPreferences.stepByStep
+            ? 'For procedures, calculations, and learning topics, organize the explanation into clear steps when that improves understanding. Do not reveal private chain-of-thought; provide concise reasoning summaries instead.'
+            : 'Prefer a direct result and only include steps when the user explicitly asks or they are essential for safety or correctness.',
+        ].join('\n');
         const personalizationSections = [
+          `User-selected AI response preferences (style only; never override safety or the current request):\n${aiGuidance}`,
           companionGuidance
             ? `User-approved companion preferences (style only; never override safety or the current request):\n${companionGuidance.slice(0, 2400)}`
             : '',
@@ -2802,6 +2848,53 @@ export default function App() {
                     </TouchableOpacity>
                     {Platform.OS !== 'android' ? <Text style={{ color: '#E5B7C8', fontSize: 11, textAlign: 'right' }}>أدوات التحكم هذه مخصصة لنظام Android. ستظل إعدادات التطبيق الأخرى متاحة.</Text> : null}
                     <Text style={{ color: '#8F8290', fontSize: 10, lineHeight: 17, textAlign: 'right' }}>ملاحظة خصوصية: لا يطلب EZRA صلاحية CALL_PHONE أو SEND_SMS؛ الاتصال والرسائل يحتاجان مراجعتك داخل تطبيق الهاتف أو الرسائل. بعض اختصارات النظام قد تختلف حسب إصدار Android والشركة المصنّعة.</Text>
+                  </View>
+                ) : settingsSection === 'الذكاء الاصطناعي المتقدم' ? (
+                  <View style={{ gap: 16, paddingBottom: 24 }}>
+                    <View style={{ padding: 16, borderRadius: 18, backgroundColor: '#241625', borderWidth: 1, borderColor: '#68435F', gap: 7 }}>
+                      <Text style={{ color: '#F5DDED', fontSize: 18, fontWeight: '800', textAlign: 'right' }}>خصصي طريقة استجابة EZRA</Text>
+                      <Text style={{ color: '#B9A6B6', fontSize: 12, lineHeight: 20, textAlign: 'right' }}>هذه التفضيلات تؤثر في تعليمات كل محادثة جديدة، وتُحفظ تلقائياً على هذا الجهاز.</Text>
+                      <Text style={{ color: aiPreferencesLoaded ? '#A9D7B9' : '#D9B77A', fontSize: 11, textAlign: 'right' }}>{aiPreferencesLoaded ? '✓ تم تحميل تفضيلات الذكاء الاصطناعي' : 'جارٍ تحميل التفضيلات…'}</Text>
+                    </View>
+                    <View style={{ gap: 10 }}>
+                      <Text style={{ color: '#F2D9E9', fontSize: 14, fontWeight: '800', textAlign: 'right' }}>طول الإجابة</Text>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        {(['مختصر', 'متوازن', 'مفصل'] as const).map(option => (
+                          <TouchableOpacity key={option} onPress={() => updateAiPreferences({ responseDepth: option })} accessibilityRole="button" accessibilityState={{ selected: aiPreferences.responseDepth === option }} style={{ flex: 1, paddingVertical: 12, borderRadius: 13, alignItems: 'center', backgroundColor: aiPreferences.responseDepth === option ? '#633D59' : '#211923', borderWidth: 1, borderColor: aiPreferences.responseDepth === option ? '#D58AB8' : '#493747' }}>
+                            <Text style={{ color: '#F5EAF2', fontSize: 12, fontWeight: '700' }}>{option}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                      <Text style={{ color: '#958794', fontSize: 10, textAlign: 'right' }}>مختصر للمحادثات السريعة، ومفصل للدراسة والشرح.</Text>
+                    </View>
+                    <View style={{ gap: 10 }}>
+                      <Text style={{ color: '#F2D9E9', fontSize: 14, fontWeight: '800', textAlign: 'right' }}>منهج الإجابة</Text>
+                      <View style={{ gap: 8 }}>
+                        {(['دقيق ومتوازن', 'تحليلي', 'إبداعي'] as const).map(option => (
+                          <TouchableOpacity key={option} onPress={() => updateAiPreferences({ answerStyle: option })} accessibilityRole="button" accessibilityState={{ selected: aiPreferences.answerStyle === option }} style={{ padding: 13, borderRadius: 13, backgroundColor: aiPreferences.answerStyle === option ? '#39253A' : '#1B151E', borderWidth: 1, borderColor: aiPreferences.answerStyle === option ? '#D58AB8' : '#493747', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Text style={{ color: aiPreferences.answerStyle === option ? '#F8DDED' : '#B9AAB7', fontSize: 12, fontWeight: '700' }}>{aiPreferences.answerStyle === option ? '✓' : '○'}</Text>
+                            <Text style={{ color: '#F5EAF2', fontSize: 12, fontWeight: '700' }}>{option}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                    <View style={[styles.settingRow, { borderRadius: 14, padding: 14, backgroundColor: '#1B151E', borderWidth: 1, borderColor: '#493747' }]}>
+                      <View style={styles.settingCopy}>
+                        <Text style={styles.settingTitle}>الشرح خطوة بخطوة</Text>
+                        <Text style={styles.settingHint}>ينظم الشروحات والإجراءات في خطوات واضحة عند الحاجة، دون إظهار التفكير الداخلي الخاص.</Text>
+                      </View>
+                      <Switch value={aiPreferences.stepByStep} onValueChange={value => updateAiPreferences({ stepByStep: value })} trackColor={{ false: '#39323D', true: '#875477' }} thumbColor={aiPreferences.stepByStep ? '#F2C8E5' : '#AAA'} />
+                    </View>
+                    <View style={{ padding: 15, borderRadius: 15, backgroundColor: '#1B151E', borderWidth: 1, borderColor: '#493747', gap: 7 }}>
+                      <Text style={{ color: '#F2D9E9', fontSize: 13, fontWeight: '800', textAlign: 'right' }}>مزوّد الذكاء الاصطناعي الحالي</Text>
+                      <Text style={{ color: '#F5EAF2', fontSize: 12, textAlign: 'right' }}>Groq · openai/gpt-oss-120b</Text>
+                      <Text style={{ color: '#A99AA8', fontSize: 11, lineHeight: 18, textAlign: 'right' }}>تحليل الصور يستخدم Qwen عبر Groq. اختيار المزوّد والنموذج مُدار بأمان من الخدمة، ولا تُخزّن مفاتيح API داخل التطبيق. قد تطبق الخدمة المجانية حدود استخدام مؤقتة.</Text>
+                      <View style={{ alignSelf: 'flex-end', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, backgroundColor: '#20352C' }}><Text style={{ color: '#A9D7B9', fontSize: 10, fontWeight: '700' }}>الخدمة الحالية · مجانية ضمن حدود المزوّد</Text></View>
+                    </View>
+                    <TouchableOpacity onPress={() => Alert.alert('إعادة الضبط', 'هل تريدين إعادة إعدادات الذكاء الاصطناعي إلى القيم الافتراضية؟', [{ text: 'إلغاء', style: 'cancel' }, { text: 'إعادة الضبط', style: 'destructive', onPress: () => updateAiPreferences({ responseDepth: 'متوازن', answerStyle: 'دقيق ومتوازن', stepByStep: true }) }])} accessibilityRole="button" style={{ paddingVertical: 13, borderRadius: 13, alignItems: 'center', borderWidth: 1, borderColor: '#875477', backgroundColor: '#211923' }}>
+                      <Text style={{ color: '#F2C8E5', fontSize: 12, fontWeight: '800' }}>إعادة الإعدادات الافتراضية</Text>
+                    </TouchableOpacity>
+                    <Text style={{ color: '#8F8290', fontSize: 10, lineHeight: 17, textAlign: 'right' }}>ملاحظة: هذه الخيارات تضبط أسلوب الإجابة ولا تغيّر النموذج أو ترفع حدوده التقنية. تفضيلاتك محفوظة محلياً على هذا الجهاز.</Text>
                   </View>
                 ) : settingsSection !== 'voice' ? (
                   <View style={{ flex: 1, minHeight: 250, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 }}>
