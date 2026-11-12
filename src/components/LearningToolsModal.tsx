@@ -1,5 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../lib/supabase';
+import {
+  EMPTY_STUDY_PROGRESS,
+  mergeStudyProgressSnapshots,
+  normalizeStudySnapshot,
+  studyProgressFromCloudRow,
+  studyProgressToCloudRow,
+  type StudyProgress,
+} from '../study/studyProgressSync';
 import ClinicalCaseSimulator from './ClinicalCaseSimulator';
 import {
   Modal,
@@ -19,27 +28,17 @@ import type { AssistantMode } from '../modes/assistantModes';
 
 type ToolTab = 'library' | 'cards' | 'quiz' | 'cases';
 
-type StudyProgress = {
-  reviewedCardIds: string[];
-  completedCaseIds: string[];
-  quizAttempts: number;
-  bestQuizScore: number;
-  lastQuizScore: number;
-};
-
 const STUDY_PROGRESS_KEY = 'ezra:studyProgress:v1';
-const EMPTY_PROGRESS: StudyProgress = {
-  reviewedCardIds: [], completedCaseIds: [], quizAttempts: 0, bestQuizScore: 0, lastQuizScore: 0,
-};
 
 type Props = {
   visible: boolean;
   mode: AssistantMode;
   onClose: () => void;
   onAskEzra: (prompt: string) => void;
+  userId: string | null;
 };
 
-export default function LearningToolsModal({ visible, mode, onClose, onAskEzra }: Props) {
+export default function LearningToolsModal({ visible, mode, onClose, onAskEzra, userId }: Props) {
   const [tab, setTab] = useState<ToolTab>('library');
   const [topicId, setTopicId] = useState(DENTAL_REFERENCE_LIBRARY[0].id);
   const [cardIndex, setCardIndex] = useState(0);
@@ -49,37 +48,90 @@ export default function LearningToolsModal({ visible, mode, onClose, onAskEzra }
   const [score, setScore] = useState(0);
   const [answeredCount, setAnsweredCount] = useState(0);
   const [quizFinished, setQuizFinished] = useState(false);
-  const [progress, setProgress] = useState<StudyProgress>(EMPTY_PROGRESS);
+  const [progress, setProgress] = useState<StudyProgress>(EMPTY_STUDY_PROGRESS);
   const [progressLoaded, setProgressLoaded] = useState(false);
+  const [syncState, setSyncState] = useState<'loading' | 'synced' | 'error' | 'local'>('loading');
 
   useEffect(() => {
     let active = true;
-    AsyncStorage.getItem(STUDY_PROGRESS_KEY).then(raw => {
-      if (!active) return;
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw) as Partial<StudyProgress>;
-          setProgress({
-            reviewedCardIds: Array.isArray(parsed.reviewedCardIds) ? parsed.reviewedCardIds.filter((id): id is string => typeof id === 'string') : [],
-            completedCaseIds: Array.isArray(parsed.completedCaseIds) ? parsed.completedCaseIds.filter((id): id is string => typeof id === 'string') : [],
-            quizAttempts: Number.isFinite(parsed.quizAttempts) ? Math.max(0, Number(parsed.quizAttempts)) : 0,
-            bestQuizScore: Number.isFinite(parsed.bestQuizScore) ? Math.max(0, Number(parsed.bestQuizScore)) : 0,
-            lastQuizScore: Number.isFinite(parsed.lastQuizScore) ? Math.max(0, Number(parsed.lastQuizScore)) : 0,
-          });
-        } catch { setProgress(EMPTY_PROGRESS); }
+    if (!userId) {
+      setProgress(EMPTY_STUDY_PROGRESS);
+      setProgressLoaded(false);
+      setSyncState('local');
+      return () => { active = false; };
+    }
+    setProgressLoaded(false);
+    setSyncState('loading');
+    (async () => {
+      const storageKey = `${STUDY_PROGRESS_KEY}:${userId}`;
+      const scopedRaw = await AsyncStorage.getItem(storageKey);
+      let localSnapshot = scopedRaw
+        ? normalizeStudySnapshot(JSON.parse(scopedRaw))
+        : normalizeStudySnapshot(EMPTY_STUDY_PROGRESS);
+
+      if (!scopedRaw) {
+        const legacyRaw = await AsyncStorage.getItem(STUDY_PROGRESS_KEY);
+        if (legacyRaw) {
+          localSnapshot = normalizeStudySnapshot(JSON.parse(legacyRaw));
+          await AsyncStorage.removeItem(STUDY_PROGRESS_KEY);
+        }
       }
+
+      const { data, error } = await supabase
+        .from('study_progress')
+        .select('progress, updated_at')
+        .eq('owner_id', userId)
+        .maybeSingle();
+
+      if (!active) return;
+      if (error) {
+        setProgress(localSnapshot.progress);
+        await AsyncStorage.setItem(storageKey, JSON.stringify(localSnapshot));
+        setProgressLoaded(true);
+        setSyncState('error');
+        return;
+      }
+
+      const cloudSnapshot = data
+        ? studyProgressFromCloudRow({ owner_id: userId, progress: data.progress, updated_at: data.updated_at })
+        : null;
+      const merged = mergeStudyProgressSnapshots(localSnapshot, cloudSnapshot);
+      setProgress(merged.progress);
+      await AsyncStorage.setItem(storageKey, JSON.stringify(merged));
       setProgressLoaded(true);
-    }).catch(() => { if (active) setProgressLoaded(true); });
+      setSyncState('synced');
+    })().catch(async () => {
+      if (!active) return;
+      setSyncState('error');
+      setProgressLoaded(true);
+    });
     return () => { active = false; };
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
-    if (!progressLoaded) return;
-    AsyncStorage.setItem(STUDY_PROGRESS_KEY, JSON.stringify(progress)).catch(() => undefined);
-  }, [progress, progressLoaded]);
+    if (!progressLoaded || !userId) return;
+    const snapshot = { progress, updatedAt: new Date().toISOString() };
+    const storageKey = `${STUDY_PROGRESS_KEY}:${userId}`;
+    AsyncStorage.setItem(storageKey, JSON.stringify(snapshot)).catch(() => undefined);
+    supabase.from('study_progress')
+      .upsert(studyProgressToCloudRow(snapshot, userId), { onConflict: 'owner_id' })
+      .then(({ error }) => setSyncState(error ? 'error' : 'synced'))
+      .catch(() => setSyncState('error'));
+  }, [progress, progressLoaded, userId]);
 
   const saveProgress = (patch: Partial<StudyProgress>) => {
     setProgress(previous => ({ ...previous, ...patch }));
+  };
+
+  const retrySync = () => {
+    if (!userId) return;
+    const snapshot = { progress, updatedAt: new Date().toISOString() };
+    setSyncState('loading');
+    AsyncStorage.setItem(`${STUDY_PROGRESS_KEY}:${userId}`, JSON.stringify(snapshot)).catch(() => undefined);
+    supabase.from('study_progress')
+      .upsert(studyProgressToCloudRow(snapshot, userId), { onConflict: 'owner_id' })
+      .then(({ error }) => setSyncState(error ? 'error' : 'synced'))
+      .catch(() => setSyncState('error'));
   };
 
   const selectedTopic = useMemo(
@@ -173,6 +225,10 @@ export default function LearningToolsModal({ visible, mode, onClose, onAskEzra }
             <ScrollView style={styles.content} contentContainerStyle={styles.contentInner} showsVerticalScrollIndicator={false}>
               <View style={styles.studyProgressCard}>
                 <Text style={styles.studyProgressTitle}>تقدّمك المحفوظ</Text>
+                <View style={styles.progressSyncRow}>
+                  <Text style={styles.studyProgressText}>{syncState === 'loading' ? 'جارٍ مزامنة تقدّمك…' : syncState === 'synced' ? 'متزامن مع حسابك' : syncState === 'error' ? 'تعذّرت المزامنة؛ تقدّمك محفوظ محلياً' : 'سجّل الدخول لمزامنة تقدّمك'}</Text>
+                  {syncState === 'error' ? <TouchableOpacity onPress={retrySync} accessibilityRole="button"><Text style={styles.retrySyncText}>إعادة المحاولة</Text></TouchableOpacity> : null}
+                </View>
                 <Text style={styles.studyProgressText}>بطاقات راجعتها: {progress.reviewedCardIds.length}/{DENTAL_STUDY_CARDS.length}  ·  حالات أكملتها: {progress.completedCaseIds.length}/4</Text>
                 <Text style={styles.studyProgressText}>محاولات الاختبار: {progress.quizAttempts}  ·  أفضل نتيجة: {progress.bestQuizScore}/{DENTAL_QUIZ.length}</Text>
               </View>
