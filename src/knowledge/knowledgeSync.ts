@@ -5,6 +5,7 @@ export type KnowledgeDocumentRecord = {
   sizeBytes: number;
   addedAt: string;
   updatedAt: string;
+  deletedAt: string | null;
 };
 
 export type KnowledgeCloudRow = {
@@ -38,9 +39,10 @@ export function normalizeKnowledgeDocuments(value: unknown): KnowledgeDocumentRe
       sizeBytes: item.sizeBytes as number,
       addedAt: item.addedAt as string,
       updatedAt: typeof item.updatedAt === 'string' ? item.updatedAt : item.addedAt as string,
+      deletedAt: typeof item.deletedAt === 'string' ? item.deletedAt : null,
     }))
     .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
-    .slice(0, 8);
+    .filter((item, index, all) => item.deletedAt !== null || all.filter(candidate => candidate.deletedAt === null).indexOf(item) < 8);
 }
 
 export function knowledgeDocumentsFromCloud(rows: unknown): KnowledgeDocumentRecord[] {
@@ -54,6 +56,7 @@ export function knowledgeDocumentsFromCloud(rows: unknown): KnowledgeDocumentRec
       sizeBytes: row.size_bytes,
       addedAt: row.added_at,
       updatedAt: row.updated_at,
+      deletedAt: row.deleted_at,
     };
   }));
 }
@@ -86,5 +89,6 @@ export function knowledgeDocumentsToCloud(
     size_bytes: document.sizeBytes,
     added_at: document.addedAt,
     updated_at: document.updatedAt || document.addedAt,
+    deleted_at: document.deletedAt,
   }));
 }
