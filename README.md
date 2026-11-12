@@ -19,7 +19,7 @@ Private personal AI companion built with Expo SDK 54 and React Native, with Andr
 
 ## Important limitations
 
-- New chat attachments are designed to use a private, owner-scoped Supabase Storage bucket with short-lived signed URLs. The migration `202611120001_chat_attachment_storage.sql` must be applied to the Supabase project before this feature is available at runtime. Previously saved metadata-only attachments cannot be restored.
+- New chat attachments use a private, owner-scoped Supabase Storage bucket with short-lived signed URLs. Migration `ezra_private_chat_attachment_storage` has been applied to the EZRA AI Supabase project and its schema, bucket, and owner-scoped policies were verified. Previously saved metadata-only attachments cannot be restored.
 - Message-level document attachments currently support TXT, MD, CSV, and JSON only, up to 5 MB for persistent chat storage. PDF and Word extraction are not implemented.
 - The knowledge library is stored locally on the device and is not synchronized to the user's account.
 - Habibi TTS requires a large model download and suitable free RAM/storage. Its Android native code is compiled by CI, but actual model inference and playback still require runtime verification on a device. Android system TTS remains the fallback.
