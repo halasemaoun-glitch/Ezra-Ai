@@ -24,6 +24,9 @@ export const colors = {
   success: '#9EBD9D',
   warning: '#D9B77A',
   danger: '#F0A4A4',
+  info: '#A9B9E8',
+  focus: '#F09ACD',
+  overlay: 'rgba(5,2,8,0.76)',
   onAccent: '#171219',
   orbIdleBase: '#350A2C',
   orbIdleAccent: '#D65BAF',
@@ -73,6 +76,10 @@ export const typography = {
   secondary: { fontSize: 12, lineHeight: 19, fontWeight: '400' as const },
   caption: { fontSize: 10, lineHeight: 16, fontWeight: '500' as const, letterSpacing: 0.25 },
   micro: { fontSize: 9, lineHeight: 14, fontWeight: '600' as const, letterSpacing: 0.45 },
+  /** Small uppercase/technical labels; pair with LTR writingDirection for codes and IDs. */
+  overline: { fontSize: 9, lineHeight: 14, fontWeight: '700' as const, letterSpacing: 1.1 },
+  button: { fontSize: 14, lineHeight: 20, fontWeight: '700' as const },
+  input: { fontSize: 14, lineHeight: 22, fontWeight: '400' as const },
 } as const;
 
 export const shadows = {
@@ -102,13 +109,16 @@ export const motion = {
 } as const;
 
 export const iconography = {
+  style: 'minimal-geometric' as const,
   strokeWidth: 1.7,
   opticalSize: 22,
   touchTarget: 48,
+  selectedOpacity: 1,
+  idleOpacity: 0.72,
   glyphs: {
     home: '⌂',
     chat: '◌',
-    settings: '⚙',
+    settings: '⛭',
     history: '◷',
     add: '+',
     close: '×',
@@ -124,6 +134,13 @@ export const iconography = {
     search: '⌕',
     more: '···',
   },
+} as const;
+
+export const componentTokens = {
+  button: { minTouchTarget: 48, pressedScale: 0.985, disabledOpacity: 0.48 },
+  field: { minHeight: 52, focusedBorderWidth: 1.5 },
+  card: { borderWidth: 1, contentGap: spacing.md },
+  navigation: { destinations: ['home', 'chat', 'settings'] as const, minHeight: 64, itemMinHeight: 48, selectedOpacity: 1, idleOpacity: 0.72 },
 } as const;
 
 export type EzraTextVariant = keyof typeof typography;
