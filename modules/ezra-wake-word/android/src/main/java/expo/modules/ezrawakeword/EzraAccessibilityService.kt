@@ -29,7 +29,7 @@ class EzraAccessibilityService : AccessibilityService() {
     fun executeWakeCommand(context: Context, command: String): Boolean {
       if (instance == null) return false
       val value = normalize(command)
-      val click = Regex("""^(?:اضغط|انقر|اكبس|اختار|حدد|tap|click|press)\s+(?:على\s+)?(?:زر\s+)?(.{1,80})$""").matchEntire(value)
+      val click = Regex("""^(?:اضغط|انقر|اكبس|اختار|حدد|tap|click|press)\s+(?:على\s+|علي\s+)?(?:زر\s+)?(.{1,80})$""").matchEntire(value)
       if (click != null) {
         val target = click.groupValues[1].trim()
         if (target.isBlank()) return false
