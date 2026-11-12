@@ -4,8 +4,11 @@ export function isScreenCaptureCommand(value: string): boolean {
     .replace(/[\u064B-\u065F\u0670\u0640]/g, "")
     .replace(/[إأآ]/g, "ا")
     .replace(/ى/g, "ي")
+    .replace(/ة/g, "ه")
     .replace(/\s+/g, " ")
     .trim();
 
-  return /(?:سكرين(?:\s*شوت)?|لقطه\s*(?:الشاشه|شاشه)|صوره\s*الشاشه|تصوير\s*الشاشه|صور\s*الشاشه|خذ\s*لقطه|التقط\s*الشاشه|screenshot|screen\s*shot|take\s+(?:a\s+)?screenshot)/i.test(normalized);
+  const arabicCommand = /(?:^|\s)(?:يا\s*)?(?:ازرا\s*)?(?:سوي|اعمل|اعملي|خذ|خدي|التقط|صور|صوري|التقاط|تصوير)\s+(?:لي\s+)?(?:سكرين(?:\s*شوت)?|لقطه(?:\s*(?:ال)?شاشه)?|صوره\s*(?:ال)?شاشه|الشاشه)(?:$|\s)/i;
+  const englishCommand = /(?:^|\s)(?:screenshot|screen\s*shot|take\s+(?:a\s+)?screenshot)(?:$|\s)/i;
+  return normalized === "سكرين" || arabicCommand.test(normalized) || englishCommand.test(normalized);
 }
