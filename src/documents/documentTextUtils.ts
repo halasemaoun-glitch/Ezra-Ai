@@ -52,6 +52,23 @@ export function isSupportedDocumentExtension(value: string): value is SupportedD
   return (SUPPORTED_DOCUMENT_EXTENSIONS as readonly string[]).includes(value.toLowerCase());
 }
 
+const DOCUMENT_MIME_TYPES: Record<SupportedDocumentExtension, string> = {
+  txt: 'text/plain',
+  md: 'text/markdown',
+  csv: 'text/csv',
+  json: 'application/json',
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+};
+
+export function getDocumentMimeType(extension: string): string {
+  return isSupportedDocumentExtension(extension)
+    ? DOCUMENT_MIME_TYPES[extension]
+    : 'application/octet-stream';
+}
+
 export function selectRelevantDocumentText(
   content: string,
   query: string,
