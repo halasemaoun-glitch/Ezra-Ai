@@ -3268,6 +3268,7 @@ export default function App() {
                 </View>
               </View>
 
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 16 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
               <Text style={styles.memoryNotice}>
                 أضف ما تريد أن تتذكره إزرا. لن تُعتمد أي ذكرى إلا بعد موافقتك.
               </Text>
@@ -3328,7 +3329,7 @@ export default function App() {
               ) : visibleMemories.length === 0 ? (
                 <Text style={styles.historyEmpty}>لا توجد ذكريات تطابق البحث أو التصفية.</Text>
               ) : (
-                <ScrollView style={{ flex: 1 }} nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.memoryList}>
+                <View style={styles.memoryList}>
                   {visibleMemories.map(item => (
                     <View key={item.id} style={styles.memoryItem}>
                       <Text style={styles.memoryItemText}>{item.content}</Text>
@@ -3363,6 +3364,7 @@ export default function App() {
                   ))}
                 </ScrollView>
               )}
+            </ScrollView>
             </View>
           </View>
         </Modal>
