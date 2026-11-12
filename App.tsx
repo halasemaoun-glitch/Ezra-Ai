@@ -3275,7 +3275,10 @@ export default function App() {
                     </View>
                     <View style={{ padding: 14, borderRadius: 14, backgroundColor: '#241925', borderWidth: 1, borderColor: '#69465F', gap: 7 }}>
                       <Text style={{ color: '#F2D9E9', fontSize: 13, fontWeight: '800', textAlign: 'right' }}>أوامر إضافية يفهمها EZRA</Text>
-                      <Text style={{ color: '#B9AAB7', fontSize: 10, lineHeight: 18, textAlign: 'right' }}>«افتح مساحة التخزين» · «افتح إعدادات الخصوصية» · «افتح إعدادات الأمان» · «افتح إعدادات اللغة» · «افتح التاريخ والوقت» · «افتح أذونات التطبيقات» · «افتح التقويم» · «افتح جيميل» · «التالي في الموسيقى» · «استأنف الموسيقى»</Text>
+                      {PHONE_SETTINGS_COMMANDS.map(item => (
+                        <Text key={item.target} style={{ color: '#B9AAB7', fontSize: 10, lineHeight: 18, textAlign: 'right' }}>{item.label}: «{item.examples[0]}»</Text>
+                      ))}
+                      <Text style={{ color: '#B9AAB7', fontSize: 10, lineHeight: 18, textAlign: 'right' }}>«افتح التقويم» · «افتح جيميل» · «التالي في الموسيقى» · «استأنف الموسيقى» · «افتح البلوتوث»</Text>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                       <Text style={{ color: '#F2D9E9', fontSize: 14, fontWeight: '800' }}>أذونات الميزات</Text>
