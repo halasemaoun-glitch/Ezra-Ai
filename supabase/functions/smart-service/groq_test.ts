@@ -22,7 +22,7 @@ Deno.test("English selection is passed into the actual provider system message",
 Deno.test("voice mode uses concise speech limits while retaining EZRA persona", () => {
   const payload = buildGroqChatPayload({ ...base, voiceMode: true });
   assertEquals(payload.temperature, 0.65);
-  assertEquals(payload.max_completion_tokens, 420);
+  assertEquals(payload.max_completion_tokens, 280);
   assertStringIncludes(payload.messages[0].content, "VOICE CONVERSATION MODE");
   assertStringIncludes(payload.messages[0].content, "CORE PERSONALITY");
 });
