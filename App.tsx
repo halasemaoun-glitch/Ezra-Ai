@@ -871,10 +871,10 @@ export default function App() {
     try {
       const { data, error } = await supabase
         .from('knowledge_documents')
-        .select('id, name, content, size_bytes, added_at, updated_at')
+        .select('id, name, content, size_bytes, added_at, updated_at, deleted_at')
         .eq('owner_id', userId)
         .order('updated_at', { ascending: false })
-        .limit(8);
+        .limit(100);
       if (error) throw error;
       const cloudDocuments = knowledgeDocumentsFromCloud(data ?? []);
       const mergedDocuments = mergeKnowledgeDocuments(localDocuments, cloudDocuments);
@@ -915,7 +915,7 @@ export default function App() {
 
   const addKnowledgeDocument = async () => {
     if (!session || !knowledgeLoaded || knowledgeLoading || !!knowledgeError) return;
-    if (knowledgeDocuments.length >= 8) {
+    if (knowledgeDocuments.filter(item => !item.deletedAt).length >= 8) {
       Alert.alert('وصلت إلى الحد الأقصى', 'يمكنك حفظ 8 ملفات نصية حالياً. احذف ملفاً قديماً لإضافة ملف جديد.');
       return;
     }
@@ -943,7 +943,7 @@ export default function App() {
         Alert.alert('الملف كبير', 'الحد الأقصى لمحتوى الملف 256 كيلوبايت.');
         return;
       }
-      if (knowledgeDocuments.some(item => item.name.toLowerCase() === file.name.toLowerCase())) {
+      if (knowledgeDocuments.some(item => !item.deletedAt && item.name.toLowerCase() === file.name.toLowerCase())) {
         Alert.alert('الملف موجود مسبقاً', 'احذف النسخة القديمة أولاً إذا أردت استبدال هذا الملف.');
         return;
       }
@@ -955,6 +955,7 @@ export default function App() {
         sizeBytes: typeof file.size === 'number' ? file.size : content.length,
         addedAt: now,
         updatedAt: now,
+        deletedAt: null,
       }, ...knowledgeDocuments];
       await AsyncStorage.setItem(`ezra:knowledgeLibrary:${session.user.id}`, JSON.stringify(next));
       setKnowledgeDocuments(next);
@@ -977,27 +978,30 @@ export default function App() {
 
   const removeKnowledgeDocument = async (documentId: string) => {
     if (!session) return;
+    const now = new Date().toISOString();
+    const next = knowledgeDocuments.map(item => item.id === documentId
+      ? { ...item, content: '', sizeBytes: 0, deletedAt: now, updatedAt: now }
+      : item);
+    const tombstone = next.find(item => item.id === documentId);
+    if (!tombstone) return;
     try {
-      const { error } = await supabase
-        .from('knowledge_documents')
-        .delete()
-        .eq('owner_id', session.user.id)
-        .eq('id', documentId);
-      if (error) throw error;
-      const next = knowledgeDocuments.filter(item => item.id !== documentId);
       await AsyncStorage.setItem(`ezra:knowledgeLibrary:${session.user.id}`, JSON.stringify(next));
       setKnowledgeDocuments(next);
+      const { error } = await supabase
+        .from('knowledge_documents')
+        .upsert(knowledgeDocumentsToCloud([tombstone], session.user.id), { onConflict: 'owner_id,id' });
+      if (error) throw error;
       setKnowledgeSyncStatus('synced');
       setKnowledgeError('');
     } catch (error) {
-      console.error('Could not delete synchronized knowledge document:', error);
+      console.error('Could not synchronize knowledge document deletion:', error);
       setKnowledgeSyncStatus('error');
-      Alert.alert('تعذّر حذف الملف', 'لم نحذف الملف لأن التغيير لم يصل إلى حسابك. تحقق من الاتصال وحاول مرة أخرى.');
+      Alert.alert('حُذف الملف من هذه القائمة', 'تعذّرت مزامنة الحذف الآن. سيُحفظ طلب الحذف محلياً ويُعاد إرساله عند المزامنة.');
     }
   };
 
   const visibleKnowledgeDocuments = knowledgeDocuments.filter(item =>
-    item.name.toLowerCase().includes(knowledgeSearch.trim().toLowerCase())
+    !item.deletedAt && item.name.toLowerCase().includes(knowledgeSearch.trim().toLowerCase())
   );
 
   const saveMemory = async () => {
@@ -1871,7 +1875,7 @@ export default function App() {
           .match(/[a-z0-9\u0600-\u06ff]{3,}/g) ?? [];
         const knowledgeStopWords = new Set(['the','and','for','with','this','that','from','what','when','where','which','كيف','ماذا','هذا','هذه','على','الى','إلى','من','عن','هل','ما','لماذا','متى','اين','أين','انا','أنا','انت','أنت']);
         const queryTerms = [...new Set(knowledgeTerms.filter(term => !knowledgeStopWords.has(term)))].slice(0, 40);
-        const relevantKnowledge = conversationInput.length <= 7000 ? knowledgeDocuments
+        const relevantKnowledge = conversationInput.length <= 7000 ? knowledgeDocuments.filter(document => !document.deletedAt)
           .map(document => {
             const normalizedContent = document.content.toLowerCase().replace(/[\u064B-\u065F\u0670]/g, '');
             const score = queryTerms.reduce((total, term) => total + (normalizedContent.split(term).length - 1), 0);
@@ -2873,16 +2877,24 @@ export default function App() {
                   <View style={{ gap: 15, paddingBottom: 22 }}>
                     <View style={{ padding: 17, borderRadius: 18, backgroundColor: '#241625', borderWidth: 1, borderColor: '#68435F', gap: 7 }}>
                       <Text style={{ color: '#F5DDED', fontSize: 18, fontWeight: '800', textAlign: 'right' }}>مكتبة معرفة EZRA</Text>
-                      <Text style={{ color: '#B9A6B6', fontSize: 12, lineHeight: 20, textAlign: 'right' }}>أضف مستنداتك النصية ليبحث EZRA في محتواها عند طرح سؤال ذي صلة. تُحفظ الملفات داخل مساحة التطبيق على هذا الجهاز فقط.</Text>
-                      <Text style={{ color: '#A9D7B9', fontSize: 11, textAlign: 'right' }}>لا تُرفع المكتبة كاملة إلى الخادم؛ تُرسل مقتطفات مرتبطة بالسؤال فقط ضمن طلب الرد.</Text>
+                      <Text style={{ color: '#B9A6B6', fontSize: 12, lineHeight: 20, textAlign: 'right' }}>أضف مستنداتك النصية ليبحث EZRA في محتواها عند طرح سؤال ذي صلة. تُحفظ نسخة محلية وتُزامن مع حسابك الخاص.</Text>
+                      <Text style={{ color: '#A9D7B9', fontSize: 11, textAlign: 'right' }}>يمكنك استعادتها على أجهزتك الأخرى؛ ويرسل EZRA المقتطفات المرتبطة بالسؤال فقط إلى خدمة الذكاء الاصطناعي.</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                        <Text style={{ color: knowledgeSyncStatus === 'error' ? '#E5B7C8' : '#A9D7B9', fontSize: 10, textAlign: 'right', flex: 1 }}>
+                          {knowledgeSyncStatus === 'syncing' ? 'جارٍ مزامنة المكتبة…' : knowledgeSyncStatus === 'synced' ? 'المكتبة متزامنة مع حسابك' : knowledgeSyncStatus === 'error' ? 'المزامنة متوقفة مؤقتاً؛ النسخة المحلية محفوظة' : 'بانتظار المزامنة'}
+                        </Text>
+                        <TouchableOpacity onPress={() => session && loadKnowledgeLibrary(session.user.id)} disabled={!session || knowledgeLoading} style={{ paddingHorizontal: 10, paddingVertical: 7, borderRadius: 9, backgroundColor: '#30202D', opacity: knowledgeLoading ? 0.5 : 1 }}>
+                          <Text style={{ color: '#F2C8E5', fontSize: 10, fontWeight: '700' }}>مزامنة الآن</Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
                     <View style={{ flexDirection: 'row', gap: 8 }}>
                       <View style={{ flex: 1, padding: 13, borderRadius: 14, backgroundColor: '#1B151E', borderWidth: 1, borderColor: '#493747', alignItems: 'center', gap: 4 }}>
-                        <Text style={{ color: '#E9C3DF', fontSize: 22, fontWeight: '800' }}>{knowledgeDocuments.length}/8</Text>
+                        <Text style={{ color: '#E9C3DF', fontSize: 22, fontWeight: '800' }}>{knowledgeDocuments.filter(item => !item.deletedAt).length}/8</Text>
                         <Text style={{ color: '#B9AAB7', fontSize: 10 }}>ملفات محفوظة</Text>
                       </View>
                       <View style={{ flex: 1, padding: 13, borderRadius: 14, backgroundColor: '#1B151E', borderWidth: 1, borderColor: '#493747', alignItems: 'center', gap: 4 }}>
-                        <Text style={{ color: '#E9C3DF', fontSize: 22, fontWeight: '800' }}>{(knowledgeDocuments.reduce((total, item) => total + item.sizeBytes, 0) / 1024).toFixed(0)} KB</Text>
+                        <Text style={{ color: '#E9C3DF', fontSize: 22, fontWeight: '800' }}>{(knowledgeDocuments.filter(item => !item.deletedAt).reduce((total, item) => total + item.sizeBytes, 0) / 1024).toFixed(0)} KB</Text>
                         <Text style={{ color: '#B9AAB7', fontSize: 10 }}>حجم المكتبة</Text>
                       </View>
                     </View>
@@ -2891,7 +2903,7 @@ export default function App() {
                       <Text style={{ color: '#B9AAB7', fontSize: 12, textAlign: 'right' }}>TXT · Markdown · CSV · JSON</Text>
                       <Text style={{ color: '#8F8290', fontSize: 10, lineHeight: 17, textAlign: 'right' }}>حتى 8 ملفات، وبحد أقصى 256 كيلوبايت لكل ملف. دعم PDF وWord والفهرسة المتقدمة لاحقاً.</Text>
                     </View>
-                    <TouchableOpacity onPress={addKnowledgeDocument} disabled={!knowledgeLoaded || knowledgeLoading || !!knowledgeError || knowledgeDocuments.length >= 8} style={{ borderRadius: 15, paddingVertical: 14, alignItems: 'center', backgroundColor: '#754765', borderWidth: 1, borderColor: '#C58DBB', opacity: !knowledgeLoaded || knowledgeLoading || !!knowledgeError || knowledgeDocuments.length >= 8 ? 0.55 : 1 }}>
+                    <TouchableOpacity onPress={addKnowledgeDocument} disabled={!knowledgeLoaded || knowledgeLoading || !!knowledgeError || knowledgeDocuments.filter(item => !item.deletedAt).length >= 8} style={{ borderRadius: 15, paddingVertical: 14, alignItems: 'center', backgroundColor: '#754765', borderWidth: 1, borderColor: '#C58DBB', opacity: !knowledgeLoaded || knowledgeLoading || !!knowledgeError || knowledgeDocuments.length >= 8 ? 0.55 : 1 }}>
                       <Text style={{ color: '#FFF0F8', fontSize: 14, fontWeight: '800' }}>{knowledgeLoading ? 'جارٍ تحميل المكتبة…' : '＋ إضافة ملف إلى مكتبة المعرفة'}</Text>
                     </TouchableOpacity>
                     <TextInput value={knowledgeSearch} onChangeText={setKnowledgeSearch} placeholder="ابحث عن ملف باسمه…" placeholderTextColor="#817482" style={{ minHeight: 46, borderRadius: 13, borderWidth: 1, borderColor: '#594253', backgroundColor: '#17121A', color: '#F5EAF2', paddingHorizontal: 13, textAlign: 'right', writingDirection: 'rtl' }} />
@@ -2915,7 +2927,7 @@ export default function App() {
                       ) : knowledgeLoading && !knowledgeLoaded ? (
                         <Text style={styles.historyEmpty}>جارٍ تحميل مكتبة المعرفة…</Text>
                       ) : visibleKnowledgeDocuments.length === 0 ? (
-                        <Text style={styles.historyEmpty}>{knowledgeDocuments.length === 0 ? 'لم تضف ملفات بعد. ابدأ بإضافة مستند نصي.' : 'لا توجد ملفات تطابق البحث.'}</Text>
+                        <Text style={styles.historyEmpty}>{knowledgeDocuments.filter(item => !item.deletedAt).length === 0 ? 'لم تضف ملفات بعد. ابدأ بإضافة مستند نصي.' : 'لا توجد ملفات تطابق البحث.'}</Text>
                       ) : (
                         visibleKnowledgeDocuments.map(document => (
                           <View key={document.id} style={{ padding: 13, borderRadius: 14, backgroundColor: '#1B151E', borderWidth: 1, borderColor: '#493747', gap: 8 }}>
