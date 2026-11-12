@@ -197,9 +197,13 @@ class EzraWakeWordService : Service(), RecognitionListener {
       val keyguardManager = getSystemService(KEYGUARD_SERVICE) as KeyguardManager
       val screenLockedOrOff = keyguardManager.isKeyguardLocked || !powerManager.isInteractive
       if (screenLockedOrOff) {
-        // Android restricts background activity launches over the lock screen.
+        // Android restricts background interaction and activity launches over the lock screen.
         // Keep the recognized command and let the user explicitly resume from a notification.
         postWakeCommandNotification()
+      } else if (EzraAccessibilityService.executeWakeCommand(this, command)) {
+        // Execute supported accessibility commands against the app that is currently visible,
+        // without bringing EZRA to the foreground and stealing that app's window focus.
+        getSharedPreferences(PREFERENCES, MODE_PRIVATE).edit().remove(PENDING_COMMAND).apply()
       } else {
         openPendingCommand()
       }
