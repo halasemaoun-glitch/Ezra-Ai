@@ -34,7 +34,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import EzraOrb3D from './src/EzraOrb3D';
 import { EzraButton, EzraTextField } from './src/components/DesignSystem';
-import { motion } from './src/theme';
+import { colors, motion, radius, spacing, typography, shadows } from './src/theme';
 import { supabase } from './src/lib/supabase';
 import { DEFAULT_EZRA_VOICE } from './src/voice/voiceProfile';
 import { requireNativeModule } from 'expo-modules-core';
@@ -2577,18 +2577,18 @@ export default function App() {
                         accessibilityHint={item.id === 'voice' ? 'فتح إعدادات الصوت الحالية' : 'فتح هذا القسم'}
                         style={{
                           minHeight: 88,
-                          borderRadius: 20,
+                          borderRadius: radius.lg,
                           borderWidth: 1,
-                          borderColor: '#56384F',
-                          backgroundColor: '#171119',
-                          paddingHorizontal: 16,
-                          paddingVertical: 15,
+                          borderColor: colors.border,
+                          backgroundColor: colors.surface,
+                          paddingHorizontal: spacing.lg,
+                          paddingVertical: spacing.md,
                           flexDirection: 'row',
                           alignItems: 'center',
                           gap: 14,
                         }}
                       >
-                        <View style={{ width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#352033', borderWidth: 1, borderColor: '#76506D' }}>
+                        <View style={{ width: 48, height: 48, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.borderStrong }}>
                           <Text style={{ color: item.color, fontSize: 25, fontWeight: '700' }}>{item.icon}</Text>
                         </View>
                         <View style={{ flex: 1, gap: 5 }}>
@@ -3597,7 +3597,7 @@ const styles = StyleSheet.create({
   voiceTopButton: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14, backgroundColor: 'rgba(36,24,38,0.72)', borderWidth: 1, borderColor: '#493044' },
   voiceTopButtonText: { color: '#BFA4BA', fontSize: 11 },
   settingsBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.76)', justifyContent: 'flex-end' },
-  settingsPanel: { height: '90%', maxHeight: '92%', flexShrink: 1, backgroundColor: '#17131C', borderTopLeftRadius: 26, borderTopRightRadius: 26, borderWidth: 1, borderColor: '#56384F', padding: 22, paddingBottom: 18 },
+  settingsPanel: { height: '90%', maxHeight: '92%', flexShrink: 1, backgroundColor: colors.surface, borderTopLeftRadius: radius.panel, borderTopRightRadius: radius.panel, borderWidth: 1, borderColor: colors.border, padding: spacing.xxl, paddingBottom: spacing.lg },
   settingsScroll: { flex: 1, minHeight: 0 },
   settingsScrollContent: { paddingBottom: 18 },
   settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 17, borderBottomWidth: 1, borderBottomColor: '#302532' },
@@ -3609,9 +3609,9 @@ const styles = StyleSheet.create({
   rateButtonText: { color: '#F0C9E4', fontSize: 21 },
   settingsFootnote: { color: '#827684', fontSize: 10, textAlign: 'right', marginTop: 18, lineHeight: 17 },
   voiceHome: { flex: 1, alignItems: 'center', justifyContent: 'space-between', paddingTop: 24, paddingBottom: 8, paddingHorizontal: 20, backgroundColor: '#08070D' },
-  mainTabBar: { width: '100%', minHeight: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', borderTopWidth: 1, borderTopColor: 'rgba(137,76,119,0.28)', backgroundColor: 'rgba(18,12,22,0.96)', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 7, marginTop: 8 },
-  mainTab: { flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', gap: 3, borderRadius: 14 },
-  mainTabActive: { backgroundColor: 'rgba(173,75,143,0.16)', borderWidth: 1, borderColor: 'rgba(210,112,178,0.28)' },
+  mainTabBar: { width: '100%', minHeight: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', borderTopWidth: 1, borderTopColor: colors.borderSubtle, backgroundColor: colors.backgroundRaised, borderRadius: radius.lg, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, marginTop: spacing.sm },
+  mainTab: { flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', gap: spacing.xxs, borderRadius: radius.md },
+  mainTabActive: { backgroundColor: 'rgba(173,75,143,0.16)', borderWidth: 1, borderColor: colors.borderStrong },
   mainTabIcon: { color: '#897888', fontSize: 19, lineHeight: 22 },
   mainTabIconActive: { color: '#F0A5D4' },
   mainTabLabel: { color: '#8E7D8E', fontSize: 10, fontWeight: '500' },
@@ -3761,9 +3761,9 @@ const styles = StyleSheet.create({
   messageSenderLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 1.15, marginBottom: 1 },
   ezraSenderLabel: { color: '#D28AB8', alignSelf: 'flex-start', paddingLeft: 3 },
   userSenderLabel: { color: '#E6A3C5', alignSelf: 'flex-end', paddingRight: 3 },
-  messageBubble: { maxWidth: '100%', paddingHorizontal: 17, paddingVertical: 14, borderRadius: 21, borderWidth: 1 },
-  ezraBubble: { backgroundColor: '#17121B', borderColor: '#65435F', borderBottomLeftRadius: 7, borderTopLeftRadius: 20 },
-  userBubble: { backgroundColor: '#482238', borderColor: '#A6537C', borderBottomRightRadius: 7, borderTopRightRadius: 20 },
+  messageBubble: { maxWidth: '100%', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderRadius: radius.xl, borderWidth: 1 },
+  ezraBubble: { backgroundColor: colors.surface, borderColor: colors.border, borderBottomLeftRadius: radius.xs, borderTopLeftRadius: radius.lg },
+  userBubble: { backgroundColor: colors.accentDeep, borderColor: colors.accent, borderBottomRightRadius: radius.xs, borderTopRightRadius: radius.lg },
   messageText: { color: '#F7EAF2', fontSize: 15, lineHeight: 27, flexShrink: 1 },
   rtlMessageText: { textAlign: 'right', writingDirection: 'rtl' },
   ltrMessageText: { textAlign: 'left', writingDirection: 'ltr' },
@@ -3817,30 +3817,27 @@ const styles = StyleSheet.create({
   pendingText: { color: '#D5C5D5', fontSize: 11, flex: 1 },
   removeAttachment: { color: '#E7B9D8', fontSize: 21, paddingHorizontal: 6 },
   composer: {
-    marginHorizontal: 13,
-    marginTop: 8,
-    marginBottom: 10,
+    marginHorizontal: spacing.md,
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
     minHeight: 64,
-    paddingHorizontal: 9,
-    paddingVertical: 8,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(35,18,31,0.98)',
+    backgroundColor: colors.surfaceGlass,
     borderWidth: 1,
-    borderColor: '#80506E',
-    borderRadius: 25,
-    gap: 7,
-    shadowColor: '#D45E91',
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    elevation: 3,
+    borderColor: colors.borderStrong,
+    borderRadius: radius.pill,
+    gap: spacing.xs,
+    ...shadows.softGlow,
   },
   typingRow: { flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: 18, paddingVertical: 8 },
   typingBubble: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18, backgroundColor: '#201720', borderWidth: 1, borderColor: '#50364A' },
   typingText: { color: '#D8A7C2', fontSize: 12 },
   composerAction: { width: 36, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(213,169,204,0.08)' },
   attachText: { color: '#D8A7C2', fontSize: 25, lineHeight: 29, fontWeight: '400' },
-  input: { flex: 1, minWidth: 0, color: '#F5F0F5', fontSize: 14, minHeight: 44, maxHeight: 112, paddingHorizontal: 5, paddingTop: 9, paddingBottom: 8, textAlignVertical: 'center' },
+  input: { flex: 1, minWidth: 0, color: colors.textPrimary, ...typography.input, minHeight: 44, maxHeight: 112, paddingHorizontal: spacing.xs, paddingTop: spacing.sm, paddingBottom: spacing.sm, textAlignVertical: 'center' },
   rtlInput: { textAlign: 'right', writingDirection: 'rtl' },
   ltrInput: { textAlign: 'left', writingDirection: 'ltr' },
   voiceButton: { width: 38, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 13, backgroundColor: 'rgba(213,169,204,0.08)' },
@@ -3852,11 +3849,11 @@ const styles = StyleSheet.create({
     width: 43,
     height: 43,
     borderRadius: 15,
-    backgroundColor: '#D45E91',
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#F4A6CA',
+    borderColor: colors.accentBright,
   },
   sendButtonDisabled: { backgroundColor: '#493342', borderColor: '#604357', opacity: 0.62 },
   sendIcon: { color: '#FFF4FA', fontSize: 22, fontWeight: '700' },
