@@ -216,6 +216,9 @@ export default function App() {
   const appIsActiveRef = useRef(AppState.currentState === 'active');
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [settingsSection, setSettingsSection] = useState<string | null>(null);
+  const [phonePermissions, setPhonePermissions] = useState({ contacts: false, camera: false, microphone: false, notifications: false });
+  const [phonePermissionsLoading, setPhonePermissionsLoading] = useState(false);
+  const [phoneTorchEnabled, setPhoneTorchEnabled] = useState(false);
   const [companionProfile, setCompanionProfile] = useState({
     personality: ['ودود', 'ذكي', 'هادئ'],
     communicationStyle: 'متوازن',
@@ -1846,6 +1849,72 @@ export default function App() {
     );
   };
 
+  const refreshPhonePermissions = async () => {
+    if (Platform.OS !== 'android') return;
+    setPhonePermissionsLoading(true);
+    try {
+      const [contacts, camera, microphone, notifications] = await Promise.all([
+        PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.READ_CONTACTS),
+        PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.CAMERA),
+        PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO),
+        Number(Platform.Version) >= 33
+          ? PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS)
+          : Promise.resolve(true),
+      ]);
+      setPhonePermissions({ contacts, camera, microphone, notifications });
+    } catch (error) {
+      console.warn('Could not refresh EZRA phone permissions:', error);
+    } finally {
+      setPhonePermissionsLoading(false);
+    }
+  };
+
+  const requestPhonePermission = async (kind: 'contacts' | 'camera' | 'microphone' | 'notifications') => {
+    if (Platform.OS !== 'android') return;
+    const permission = kind === 'contacts' ? PermissionsAndroid.PERMISSIONS.READ_CONTACTS
+      : kind === 'camera' ? PermissionsAndroid.PERMISSIONS.CAMERA
+      : kind === 'microphone' ? PermissionsAndroid.PERMISSIONS.RECORD_AUDIO
+      : PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS;
+    try {
+      const result = Number(Platform.Version) < 33 && kind === 'notifications'
+        ? PermissionsAndroid.RESULTS.GRANTED
+        : await PermissionsAndroid.request(permission);
+      await refreshPhonePermissions();
+      if (result !== PermissionsAndroid.RESULTS.GRANTED) {
+        Alert.alert('الإذن غير مفعّل', 'يمكنك السماح به لاحقًا من إعدادات Android. لن يستخدم EZRA هذه الميزة دون موافقتك.');
+      }
+    } catch (error) {
+      console.warn('EZRA permission request failed:', error);
+      Alert.alert('تعذّر طلب الإذن', 'افتح إعدادات التطبيق وحاول مرة أخرى.');
+    }
+  };
+
+  const togglePhoneTorch = async () => {
+    if (Platform.OS !== 'android' || !EzraWakeWord) {
+      Alert.alert('غير متاح', 'التحكم بالفلاش متاح على Android فقط.');
+      return;
+    }
+    if (!phonePermissions.camera) {
+      await requestPhonePermission('camera');
+      return;
+    }
+    try {
+      const next = !phoneTorchEnabled;
+      const changed = await EzraWakeWord.setTorch(next);
+      if (changed) setPhoneTorchEnabled(next);
+      else Alert.alert('الفلاش غير متاح', 'لم يعثر الهاتف على فلاش يمكن التحكم به.');
+    } catch (error) {
+      console.warn('EZRA quick flashlight control failed:', error);
+      Alert.alert('تعذّر التحكم بالفلاش', 'قد تكون الكاميرا أو الفلاش قيد الاستخدام من تطبيق آخر.');
+    }
+  };
+
+  useEffect(() => {
+    if (settingsVisible && settingsSection === 'التحكم بالهاتف') {
+      void refreshPhonePermissions();
+    }
+  }, [settingsVisible, settingsSection]);
+
   const toggleBackgroundWake = async (enabled: boolean) => {
     if (Platform.OS !== 'android' || !EzraWakeWord) {
       Alert.alert('غير متاح', 'الاستماع بكلمة التنبيه متاح حاليًا على Android فقط.');
@@ -2653,6 +2722,76 @@ export default function App() {
                       )}
                     </View>
                     <Text style={{ color: '#8F8290', fontSize: 10, lineHeight: 17, textAlign: 'right' }}>تنبيه خصوصية: عند طرح سؤال مطابق، قد تُرسل مقتطفات من الملفات ذات الصلة إلى خدمة الذكاء الاصطناعي لمعالجة السؤال. لا تضف كلمات مرور أو بيانات شديدة الحساسية.</Text>
+                  </View>
+                ) : settingsSection === 'التحكم بالهاتف' ? (
+                  <View style={{ gap: 15, paddingBottom: 24 }}>
+                    <View style={{ padding: 17, borderRadius: 18, backgroundColor: '#241625', borderWidth: 1, borderColor: '#68435F', gap: 7 }}>
+                      <Text style={{ color: '#F5DDED', fontSize: 18, fontWeight: '800', textAlign: 'right' }}>مركز التحكم بالهاتف</Text>
+                      <Text style={{ color: '#B9A6B6', fontSize: 12, lineHeight: 20, textAlign: 'right' }}>تحكّمي في أذونات Android والاختصارات التي يستخدمها EZRA. كل إذن اختياري، ولا تُنفّذ الإجراءات الحساسة دون تأكيدك.</Text>
+                      <Text style={{ color: '#A9D7B9', fontSize: 11, lineHeight: 18, textAlign: 'right' }}>المكالمات تفتح شاشة الاتصال فقط، والرسائل تُجهّز في تطبيق الرسائل لتراجعيها وترسليها بنفسك. لا يحتاج EZRA إلى صلاحية الاتصال المباشر أو إرسال SMS.</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Text style={{ color: '#F2D9E9', fontSize: 14, fontWeight: '800' }}>أذونات الميزات</Text>
+                      <TouchableOpacity onPress={() => { void refreshPhonePermissions(); }} disabled={phonePermissionsLoading} accessibilityRole="button">
+                        <Text style={{ color: '#DCA8CA', fontSize: 11, fontWeight: '700' }}>{phonePermissionsLoading ? 'جارٍ التحديث…' : 'تحديث الحالة ↻'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                    {([
+                      { key: 'contacts', title: 'جهات الاتصال', detail: 'للعثور على رقم جهة اتصال عند طلب الاتصال أو تجهيز رسالة', permission: 'contacts' as const },
+                      { key: 'camera', title: 'الكاميرا والفلاش', detail: 'للتأكد من إذن التحكم بكشاف الهاتف فقط؛ لا يلتقط EZRA صورًا من هذا الاختصار', permission: 'camera' as const },
+                      { key: 'microphone', title: 'الميكروفون', detail: 'للتفاعل الصوتي والتعرّف على أوامرك', permission: 'microphone' as const },
+                      { key: 'notifications', title: 'الإشعارات', detail: 'لإظهار إشعار خدمة كلمة التنبيه على Android 13 وما بعده', permission: 'notifications' as const },
+                    ]).map(item => (
+                      <View key={item.key} style={{ padding: 13, borderRadius: 14, backgroundColor: '#1B151E', borderWidth: 1, borderColor: '#493747', gap: 9 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                          <View style={{ flex: 1, gap: 4 }}>
+                            <Text style={{ color: '#F5EAF2', fontSize: 13, fontWeight: '800', textAlign: 'right' }}>{item.title}</Text>
+                            <Text style={{ color: '#A99AA8', fontSize: 10, lineHeight: 16, textAlign: 'right' }}>{item.detail}</Text>
+                          </View>
+                          <View style={{ paddingHorizontal: 9, paddingVertical: 5, borderRadius: 10, backgroundColor: phonePermissions[item.permission] ? '#20352C' : '#38202D' }}>
+                            <Text style={{ color: phonePermissions[item.permission] ? '#A9D7B9' : '#E5B7C8', fontSize: 10, fontWeight: '700' }}>{phonePermissions[item.permission] ? 'مسموح' : 'غير مسموح'}</Text>
+                          </View>
+                        </View>
+                        <TouchableOpacity onPress={() => { void requestPhonePermission(item.permission); }} accessibilityRole="button" style={{ alignSelf: 'flex-start', paddingHorizontal: 13, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: '#80516F' }}>
+                          <Text style={{ color: '#E9B8D8', fontSize: 11, fontWeight: '700' }}>{phonePermissions[item.permission] ? 'إعادة طلب / إدارة الإذن' : 'طلب الإذن'}</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                    <Text style={{ color: '#F2D9E9', fontSize: 14, fontWeight: '800', textAlign: 'right', marginTop: 3 }}>اختصارات التحكم</Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 9 }}>
+                      <TouchableOpacity onPress={() => { void togglePhoneTorch(); }} accessibilityRole="button" style={{ flexGrow: 1, minWidth: '46%', padding: 13, borderRadius: 13, backgroundColor: '#241925', borderWidth: 1, borderColor: '#69465F', alignItems: 'center' }}>
+                        <Text style={{ color: '#F2D9E9', fontSize: 12, fontWeight: '700' }}>{phoneTorchEnabled ? 'إطفاء الفلاش' : 'تشغيل الفلاش'}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => { void EzraWakeWord?.adjustVolume('up').catch(error => Alert.alert('تعذّر تعديل الصوت', String(error))); }} accessibilityRole="button" style={{ flexGrow: 1, minWidth: '46%', padding: 13, borderRadius: 13, backgroundColor: '#241925', borderWidth: 1, borderColor: '#69465F', alignItems: 'center' }}>
+                        <Text style={{ color: '#F2D9E9', fontSize: 12, fontWeight: '700' }}>رفع صوت الوسائط ＋</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => { void EzraWakeWord?.adjustVolume('down').catch(error => Alert.alert('تعذّر تعديل الصوت', String(error))); }} accessibilityRole="button" style={{ flexGrow: 1, minWidth: '46%', padding: 13, borderRadius: 13, backgroundColor: '#241925', borderWidth: 1, borderColor: '#69465F', alignItems: 'center' }}>
+                        <Text style={{ color: '#F2D9E9', fontSize: 12, fontWeight: '700' }}>خفض صوت الوسائط −</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => { void EzraWakeWord?.mediaControl('play').catch(error => Alert.alert('تعذّر التحكم بالوسائط', String(error))); }} accessibilityRole="button" style={{ flexGrow: 1, minWidth: '46%', padding: 13, borderRadius: 13, backgroundColor: '#241925', borderWidth: 1, borderColor: '#69465F', alignItems: 'center' }}>
+                        <Text style={{ color: '#F2D9E9', fontSize: 12, fontWeight: '700' }}>تشغيل / إيقاف الوسائط</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={{ color: '#F2D9E9', fontSize: 14, fontWeight: '800', textAlign: 'right', marginTop: 3 }}>إعدادات Android</Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 9 }}>
+                      {([
+                        { label: 'Wi-Fi', target: 'wifi' },
+                        { label: 'Bluetooth', target: 'bluetooth' },
+                        { label: 'الصوت', target: 'sound' },
+                        { label: 'الشاشة', target: 'display' },
+                        { label: 'البطارية', target: 'battery' },
+                        { label: 'إشعارات EZRA', target: 'app' },
+                      ] as const).map(item => (
+                        <TouchableOpacity key={item.target} onPress={() => { void EzraWakeWord?.openSystemSettings(item.target).catch(error => Alert.alert('تعذّر فتح الإعدادات', String(error))); }} accessibilityRole="button" style={{ flexGrow: 1, minWidth: '30%', paddingHorizontal: 11, paddingVertical: 12, borderRadius: 12, backgroundColor: '#1B151E', borderWidth: 1, borderColor: '#493747', alignItems: 'center' }}>
+                          <Text style={{ color: '#E9B8D8', fontSize: 11, fontWeight: '700' }}>{item.label}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    <TouchableOpacity onPress={() => { void EzraWakeWord?.openSystemSettings('app').catch(error => Alert.alert('تعذّر فتح الإعدادات', String(error))); }} accessibilityRole="button" style={{ paddingVertical: 13, borderRadius: 13, alignItems: 'center', borderWidth: 1, borderColor: '#875477', backgroundColor: '#211923' }}>
+                      <Text style={{ color: '#F2C8E5', fontSize: 12, fontWeight: '800' }}>فتح صفحة أذونات EZRA في Android</Text>
+                    </TouchableOpacity>
+                    {Platform.OS !== 'android' ? <Text style={{ color: '#E5B7C8', fontSize: 11, textAlign: 'right' }}>أدوات التحكم هذه مخصصة لنظام Android. ستظل إعدادات التطبيق الأخرى متاحة.</Text> : null}
+                    <Text style={{ color: '#8F8290', fontSize: 10, lineHeight: 17, textAlign: 'right' }}>ملاحظة خصوصية: لا يطلب EZRA صلاحية CALL_PHONE أو SEND_SMS؛ الاتصال والرسائل يحتاجان مراجعتك داخل تطبيق الهاتف أو الرسائل. بعض اختصارات النظام قد تختلف حسب إصدار Android والشركة المصنّعة.</Text>
                   </View>
                 ) : settingsSection !== 'voice' ? (
                   <View style={{ flex: 1, minHeight: 250, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 }}>
