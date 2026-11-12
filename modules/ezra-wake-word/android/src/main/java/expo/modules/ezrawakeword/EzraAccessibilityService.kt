@@ -25,6 +25,7 @@ class EzraAccessibilityService : AccessibilityService() {
     fun isConnected(): Boolean = instance != null
 
     fun executeWakeCommand(context: Context, command: String): Boolean {
+      if (instance == null) return false
       val value = normalize(command)
       val click = Regex("""^(?:اضغط|انقر|اكبس|اختار|حدد|tap|click|press)\s+(?:على\s+)?(?:زر\s+)?(.{1,80})$""").matchEntire(value)
       if (click != null) {
