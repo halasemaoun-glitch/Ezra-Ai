@@ -1976,7 +1976,7 @@ export default function App() {
         const conversationInput = recentContext
           ? `Continue this conversation naturally. Use the previous messages as context.\n\n${recentContext}\nUser: ${userInput}`
           : userInput;
-        const companionGuidance = [
+        const companionGuidance = companionProfileLoadedUserId === session?.user.id ? [
           companionProfile.personality.length ? `Personality traits: ${companionProfile.personality.join(', ')}.` : '',
           companionProfile.communicationStyle ? `Communication style: ${companionProfile.communicationStyle}.` : '',
           companionProfile.preferredAddress.trim() ? `Address the user as: ${companionProfile.preferredAddress.trim()}.` : '',
@@ -1985,7 +1985,7 @@ export default function App() {
           companionProfile.occupation.trim() ? `User occupation: ${companionProfile.occupation.trim()}.` : '',
           companionProfile.lifestyle.trim() ? `User lifestyle context: ${companionProfile.lifestyle.trim()}.` : '',
           companionProfile.extraInstructions.trim() ? `Additional user instructions: ${companionProfile.extraInstructions.trim()}.` : '',
-        ].filter(Boolean).join('\n');
+        ].filter(Boolean).join('\n') : '';
         const knowledgeTerms = userInput.toLowerCase()
           .replace(/[\u064B-\u065F\u0670]/g, '')
           .match(/[a-z0-9\u0600-\u06ff]{3,}/g) ?? [];
