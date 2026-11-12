@@ -217,7 +217,7 @@ class EzraWakeWordModule : Module() {
         putExtra(AlarmClock.EXTRA_HOUR, hour)
         putExtra(AlarmClock.EXTRA_MINUTES, minute)
         putExtra(AlarmClock.EXTRA_MESSAGE, label.take(120))
-        putExtra(AlarmClock.EXTRA_SKIP_UI, false)
+        putExtra(AlarmClock.EXTRA_SKIP_UI, true)
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
       }
       if (intent.resolveActivity(context.packageManager) == null) return@AsyncFunction false
@@ -232,7 +232,7 @@ class EzraWakeWordModule : Module() {
       val intent = Intent(AlarmClock.ACTION_SET_TIMER).apply {
         putExtra(AlarmClock.EXTRA_LENGTH, seconds)
         putExtra(AlarmClock.EXTRA_MESSAGE, label.take(120))
-        putExtra(AlarmClock.EXTRA_SKIP_UI, false)
+        putExtra(AlarmClock.EXTRA_SKIP_UI, true)
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
       }
       if (intent.resolveActivity(context.packageManager) == null) return@AsyncFunction false
