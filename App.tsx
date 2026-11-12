@@ -279,6 +279,7 @@ export default function App() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [memoryVisible, setMemoryVisible] = useState(false);
   const [memoryLoading, setMemoryLoading] = useState(false);
+  const [memoryLoadError, setMemoryLoadError] = useState('');
   const [memorySaving, setMemorySaving] = useState(false);
   const [memoryDraft, setMemoryDraft] = useState('');
   const [memories, setMemories] = useState<MemoryItem[]>([]);
@@ -722,6 +723,7 @@ export default function App() {
   const refreshMemories = async (showError = true) => {
     if (!session) return;
     setMemoryLoading(true);
+    setMemoryLoadError('');
     const { data, error } = await supabase
       .from('memories')
       .select('id, content, category, approval_status, created_at')
@@ -731,6 +733,7 @@ export default function App() {
 
     if (error) {
       console.error('Could not load memories:', error);
+      setMemoryLoadError('تعذّر تحميل الذكريات. تحقق من الاتصال ثم حاول مجدداً.');
       if (showError) Alert.alert('تعذّر تحميل الذكريات', 'تحقق من الاتصال ثم حاول مرة أخرى.');
       setMemoryLoading(false);
       return;
@@ -2382,12 +2385,19 @@ export default function App() {
                         <Text style={{ color: '#F2D9E9', fontSize: 14, fontWeight: '800', textAlign: 'right' }}>أحدث الذكريات</Text>
                         <TouchableOpacity onPress={() => refreshMemories()} accessibilityRole="button" accessibilityLabel="تحديث الذكريات"><Text style={{ color: '#D58AB8', fontSize: 11 }}>تحديث ↻</Text></TouchableOpacity>
                       </View>
-                      {memoryLoading ? (
+                      {memoryLoading && memories.length === 0 ? (
                         <Text style={styles.historyEmpty}>جارٍ تحميل الذكريات…</Text>
+                      ) : memoryLoadError && memories.length === 0 ? (
+                        <View style={{ gap: 8, padding: 13, borderRadius: 12, backgroundColor: '#2A1B24' }}>
+                          <Text style={{ color: '#E5B7C8', fontSize: 11, textAlign: 'right' }}>{memoryLoadError}</Text>
+                          <TouchableOpacity onPress={() => refreshMemories(false)}><Text style={{ color: '#F2C8E5', fontSize: 11, textAlign: 'right' }}>إعادة المحاولة</Text></TouchableOpacity>
+                        </View>
                       ) : memories.length === 0 ? (
                         <Text style={styles.historyEmpty}>لا توجد ذكريات بعد. أضيفي أول معلومة تريدين أن يتذكرها EZRA.</Text>
                       ) : (
-                        memories.slice(0, 4).map(item => (
+                        <>
+                          {memoryLoadError ? <Text style={{ color: '#E5B7C8', fontSize: 10, textAlign: 'right' }}>{memoryLoadError} · نعرض آخر بيانات متاحة.</Text> : null}
+                          {memories.slice(0, 4).map(item => (
                           <View key={item.id} style={styles.memoryItem}>
                             <Text style={styles.memoryItemText}>{item.content}</Text>
                             <Text style={styles.memoryStatus}>{item.approval_status === 'approved' ? 'معتمدة ويُسمح باستخدامها' : item.approval_status === 'pending' ? 'بانتظار موافقتك · لا تُستخدم بعد' : 'مرفوضة · لا تُستخدم'}</Text>
@@ -2397,7 +2407,8 @@ export default function App() {
                               <TouchableOpacity style={styles.memoryDelete} onPress={() => deleteMemory(item.id)}><Text style={styles.memoryActionText}>حذف</Text></TouchableOpacity>
                             </View>
                           </View>
-                        ))
+                        ))}
+                        </>
                       )}
                     </View>
                     <TouchableOpacity onPress={openMemoryCenter} style={{ borderRadius: 14, paddingVertical: 13, alignItems: 'center', borderWidth: 1, borderColor: '#875477', backgroundColor: '#211923' }}>
@@ -2719,8 +2730,13 @@ export default function App() {
                   </TouchableOpacity>
                 ))}
               </View>
-              {memoryLoading ? (
+              {memoryLoading && memories.length === 0 ? (
                 <Text style={styles.historyEmpty}>جارٍ تحميل الذكريات…</Text>
+              ) : memoryLoadError && memories.length === 0 ? (
+                <View style={{ gap: 8 }}>
+                  <Text style={styles.historyEmpty}>{memoryLoadError}</Text>
+                  <TouchableOpacity onPress={() => refreshMemories(false)}><Text style={{ color: '#F2C8E5', textAlign: 'center' }}>إعادة المحاولة</Text></TouchableOpacity>
+                </View>
               ) : memories.length === 0 ? (
                 <Text style={styles.historyEmpty}>لا توجد ذكريات بعد. يمكنك إضافة أول ذكرى أعلاه.</Text>
               ) : visibleMemories.length === 0 ? (
