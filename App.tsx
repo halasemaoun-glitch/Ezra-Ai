@@ -42,6 +42,8 @@ import { DENTAL_REFERENCE_LIBRARY } from './src/study/studyLibrary';
 import { supabase } from './src/lib/supabase';
 import { DEFAULT_EZRA_VOICE } from './src/voice/voiceProfile';
 import { parseCallContactName } from './src/phone/commandParser';
+import type { KnowledgeDocumentRecord } from './src/knowledge/knowledgeSync';
+import { knowledgeDocumentsFromCloud, knowledgeDocumentsToCloud, mergeKnowledgeDocuments, normalizeKnowledgeDocuments } from './src/knowledge/knowledgeSync';
 import { requireNativeModule } from 'expo-modules-core';
 
 type EzraWakeWordNative = {
@@ -142,13 +144,7 @@ type MemoryItem = {
   created_at: string;
 };
 
-type KnowledgeDocument = {
-  id: string;
-  name: string;
-  content: string;
-  sizeBytes: number;
-  addedAt: string;
-};
+type KnowledgeDocument = KnowledgeDocumentRecord;
 
 type Message = {
   id: string;
@@ -333,6 +329,7 @@ export default function App() {
   const [knowledgeLoading, setKnowledgeLoading] = useState(false);
   const [knowledgeSearch, setKnowledgeSearch] = useState('');
   const [knowledgeError, setKnowledgeError] = useState('');
+  const [knowledgeSyncStatus, setKnowledgeSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
   const [historySearch, setHistorySearch] = useState('');
   const micPulse = useRef(new Animated.Value(1)).current;
 
@@ -843,40 +840,81 @@ export default function App() {
     }
   }, [settingsSection, session?.user.id]);
 
-  useEffect(() => {
-    let active = true;
-    const loadKnowledgeLibrary = async () => {
-      setKnowledgeLoading(true);
-      setKnowledgeError('');
-      try {
-        const stored = await AsyncStorage.getItem('ezra:knowledgeLibrary');
-        const parsed = stored ? JSON.parse(stored) : [];
-        if (!Array.isArray(parsed)) throw new Error('Invalid knowledge library');
-        const safeDocuments = parsed.filter((item: any) =>
-          item && typeof item.id === 'string' && typeof item.name === 'string' &&
-          typeof item.content === 'string' && typeof item.sizeBytes === 'number' &&
-          typeof item.addedAt === 'string'
-        ).slice(0, 8) as KnowledgeDocument[];
-        if (active) {
-          setKnowledgeDocuments(safeDocuments);
-          setKnowledgeLoaded(true);
-        }
-      } catch (error) {
-        console.error('Could not load EZRA knowledge library:', error);
-        if (active) {
-          setKnowledgeError('تعذّر تحميل مكتبة المعرفة المحفوظة على هذا الجهاز.');
-          setKnowledgeLoaded(true);
-        }
-      } finally {
-        if (active) setKnowledgeLoading(false);
+  const loadKnowledgeLibrary = async (userId: string, isActive: () => boolean = () => true) => {
+    const storageKey = `ezra:knowledgeLibrary:${userId}`;
+    setKnowledgeLoading(true);
+    setKnowledgeLoaded(false);
+    setKnowledgeError('');
+    setKnowledgeSyncStatus('syncing');
+    let localDocuments: KnowledgeDocument[] = [];
+    try {
+      const scopedStored = await AsyncStorage.getItem(storageKey);
+      const legacyStored = scopedStored === null ? await AsyncStorage.getItem('ezra:knowledgeLibrary') : null;
+      localDocuments = normalizeKnowledgeDocuments(JSON.parse(scopedStored ?? legacyStored ?? '[]'));
+      if (scopedStored === null && legacyStored !== null) {
+        await AsyncStorage.setItem(storageKey, JSON.stringify(localDocuments));
+        await AsyncStorage.removeItem('ezra:knowledgeLibrary');
       }
-    };
-    loadKnowledgeLibrary();
+      if (!isActive()) return;
+      setKnowledgeDocuments(localDocuments);
+      setKnowledgeLoaded(true);
+    } catch (error) {
+      console.error('Could not load local EZRA knowledge library:', error);
+      if (isActive()) {
+        setKnowledgeError('تعذّر تحميل مكتبة المعرفة المحفوظة على هذا الجهاز.');
+        setKnowledgeSyncStatus('error');
+        setKnowledgeLoaded(true);
+      }
+      setKnowledgeLoading(false);
+      return;
+    }
+    try {
+      const { data, error } = await supabase
+        .from('knowledge_documents')
+        .select('id, name, content, size_bytes, added_at, updated_at')
+        .eq('owner_id', userId)
+        .order('updated_at', { ascending: false })
+        .limit(8);
+      if (error) throw error;
+      const cloudDocuments = knowledgeDocumentsFromCloud(data ?? []);
+      const mergedDocuments = mergeKnowledgeDocuments(localDocuments, cloudDocuments);
+      const cloudRows = knowledgeDocumentsToCloud(mergedDocuments, userId);
+      if (cloudRows.length) {
+        const { error: saveError } = await supabase
+          .from('knowledge_documents')
+          .upsert(cloudRows, { onConflict: 'owner_id,id' });
+        if (saveError) throw saveError;
+      }
+      await AsyncStorage.setItem(storageKey, JSON.stringify(mergedDocuments));
+      if (isActive()) {
+        setKnowledgeDocuments(mergedDocuments);
+        setKnowledgeSyncStatus('synced');
+      }
+    } catch (error) {
+      console.error('Could not synchronize EZRA knowledge library:', error);
+      if (isActive()) setKnowledgeSyncStatus('error');
+    } finally {
+      if (isActive()) setKnowledgeLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const userId = session?.user.id;
+    if (!userId) {
+      setKnowledgeDocuments([]);
+      setKnowledgeLoaded(false);
+      setKnowledgeLoading(false);
+      setKnowledgeError('');
+      setKnowledgeSyncStatus('idle');
+      return;
+    }
+    let active = true;
+    loadKnowledgeLibrary(userId, () => active);
     return () => { active = false; };
-  }, []);
+  }, [session?.user.id]);
 
   const addKnowledgeDocument = async () => {
-    if (!knowledgeLoaded || knowledgeLoading || !!knowledgeError) return;
+    if (!session || !knowledgeLoaded || knowledgeLoading || !!knowledgeError) return;
     if (knowledgeDocuments.length >= 8) {
       Alert.alert('وصلت إلى الحد الأقصى', 'يمكنك حفظ 8 ملفات نصية حالياً. احذف ملفاً قديماً لإضافة ملف جديد.');
       return;
@@ -909,17 +947,28 @@ export default function App() {
         Alert.alert('الملف موجود مسبقاً', 'احذف النسخة القديمة أولاً إذا أردت استبدال هذا الملف.');
         return;
       }
+      const now = new Date().toISOString();
       const next: KnowledgeDocument[] = [{
         id: `knowledge-${Date.now()}`,
         name: file.name,
         content,
         sizeBytes: typeof file.size === 'number' ? file.size : content.length,
-        addedAt: new Date().toISOString(),
+        addedAt: now,
+        updatedAt: now,
       }, ...knowledgeDocuments];
-      await AsyncStorage.setItem('ezra:knowledgeLibrary', JSON.stringify(next));
+      await AsyncStorage.setItem(`ezra:knowledgeLibrary:${session.user.id}`, JSON.stringify(next));
       setKnowledgeDocuments(next);
-      setKnowledgeError('');
-      Alert.alert('أُضيف إلى مكتبة المعرفة', 'حُفظ الملف على هذا الجهاز. سيبحث EZRA فيه عند طرح أسئلة مرتبطة بمحتواه.');
+      const { error } = await supabase
+        .from('knowledge_documents')
+        .upsert(knowledgeDocumentsToCloud([next[0]], session.user.id), { onConflict: 'owner_id,id' });
+      if (error) {
+        console.error('Knowledge document saved locally but cloud sync failed:', error);
+        setKnowledgeSyncStatus('error');
+        Alert.alert('حُفظ الملف على الجهاز', 'تعذّرت مزامنته مع حسابك الآن. سيبقى محفوظاً على الجهاز ويمكن إعادة المزامنة لاحقاً.');
+        return;
+      }
+      setKnowledgeSyncStatus('synced');
+      Alert.alert('أُضيف إلى مكتبة المعرفة', 'حُفظ الملف على جهازك وحساب EZRA. يمكن استعادته عند تسجيل الدخول من جهاز آخر.');
     } catch (error) {
       console.error('Could not add knowledge document:', error);
       Alert.alert('تعذّرت إضافة الملف', 'لم نتمكن من قراءة الملف أو حفظه. بقيت المكتبة كما هي؛ حاول مرة أخرى.');
@@ -927,14 +976,23 @@ export default function App() {
   };
 
   const removeKnowledgeDocument = async (documentId: string) => {
-    const next = knowledgeDocuments.filter(item => item.id !== documentId);
+    if (!session) return;
     try {
-      await AsyncStorage.setItem('ezra:knowledgeLibrary', JSON.stringify(next));
+      const { error } = await supabase
+        .from('knowledge_documents')
+        .delete()
+        .eq('owner_id', session.user.id)
+        .eq('id', documentId);
+      if (error) throw error;
+      const next = knowledgeDocuments.filter(item => item.id !== documentId);
+      await AsyncStorage.setItem(`ezra:knowledgeLibrary:${session.user.id}`, JSON.stringify(next));
       setKnowledgeDocuments(next);
+      setKnowledgeSyncStatus('synced');
       setKnowledgeError('');
     } catch (error) {
-      console.error('Could not remove knowledge document:', error);
-      Alert.alert('تعذّر حذف الملف', 'لم يتغير محتوى المكتبة. حاول مرة أخرى.');
+      console.error('Could not delete synchronized knowledge document:', error);
+      setKnowledgeSyncStatus('error');
+      Alert.alert('تعذّر حذف الملف', 'لم نحذف الملف لأن التغيير لم يصل إلى حسابك. تحقق من الاتصال وحاول مرة أخرى.');
     }
   };
 
@@ -2846,10 +2904,7 @@ export default function App() {
                             setKnowledgeLoading(true);
                             setKnowledgeError('');
                             try {
-                              const stored = await AsyncStorage.getItem('ezra:knowledgeLibrary');
-                              const parsed = stored ? JSON.parse(stored) : [];
-                              if (!Array.isArray(parsed)) throw new Error('Invalid library');
-                              setKnowledgeDocuments(parsed.filter((item: any) => item && typeof item.id === 'string' && typeof item.name === 'string' && typeof item.content === 'string' && typeof item.sizeBytes === 'number' && typeof item.addedAt === 'string').slice(0, 8));
+                              if (session) await loadKnowledgeLibrary(session.user.id);
                             } catch {
                               setKnowledgeError('تعذّرت قراءة المكتبة. جرّب مرة أخرى.');
                             } finally {
