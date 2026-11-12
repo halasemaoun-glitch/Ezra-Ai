@@ -240,6 +240,38 @@ class EzraWakeWordModule : Module() {
       true
     }
 
+    AsyncFunction("openFilePicker") {
+      val context = appContext.reactContext?.applicationContext
+        ?: throw IllegalStateException("EZRA Android context is unavailable")
+      val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+        addCategory(Intent.CATEGORY_OPENABLE)
+        type = "*/*"
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+      }
+      if (intent.resolveActivity(context.packageManager) == null) return@AsyncFunction false
+      context.startActivity(intent)
+      true
+    }
+
+    AsyncFunction("openDownloads") {
+      val context = appContext.reactContext?.applicationContext
+        ?: throw IllegalStateException("EZRA Android context is unavailable")
+      val downloadsIntent = Intent("android.intent.action.VIEW_DOWNLOADS")
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      val intent = if (downloadsIntent.resolveActivity(context.packageManager) != null) {
+        downloadsIntent
+      } else {
+        Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+          addCategory(Intent.CATEGORY_OPENABLE)
+          type = "*/*"
+          addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+      }
+      if (intent.resolveActivity(context.packageManager) == null) return@AsyncFunction false
+      context.startActivity(intent)
+      true
+    }
+
     AsyncFunction("openSystemSettings") { target: String ->
       val context = appContext.reactContext?.applicationContext
         ?: throw IllegalStateException("EZRA Android context is unavailable")
@@ -266,6 +298,10 @@ class EzraWakeWordModule : Module() {
       }
       val intent = Intent(action).apply {
         if (target.equals("app", true) || target.equals("app_permissions", true)) data = Uri.parse("package:${context.packageName}")
+        if (target.equals("notifications", true)) {
+          putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+          putExtra("android.provider.extra.APP_PACKAGE", context.packageName)
+        }
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
       }
       if (intent.resolveActivity(context.packageManager) == null) return@AsyncFunction false
