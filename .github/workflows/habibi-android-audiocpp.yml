@@ -10,6 +10,7 @@ on:
       - "plugins/withEzraWakeWord.js"
       - "App.tsx"
       - "src/voice/**"
+      - "src/phone/**"
       - "src/EzraOrb3D.tsx"
       - "package.json"
       - "app.json"
