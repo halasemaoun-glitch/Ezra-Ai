@@ -42,7 +42,7 @@ import { DENTAL_REFERENCE_LIBRARY } from './src/study/studyLibrary';
 import { supabase } from './src/lib/supabase';
 import { DEFAULT_EZRA_VOICE } from './src/voice/voiceProfile';
 import { AI_MODELS, AI_PROVIDER_OPTIONS, DEFAULT_AI_MODELS, normalizeAiModel, normalizeAiProvider, type AiProvider } from './src/ai/aiModelSettings';
-import { DEFAULT_MIC_SENSITIVITY, getCompleteSilenceLengthMs, getMinimumSpeechLengthMs, getMicInterruptionThreshold, getPossibleSilenceLengthMs, normalizeMicSensitivity, scaleMicLevel } from './src/voice/micSensitivity';
+import { DEFAULT_MIC_SENSITIVITY, getCompleteSilenceLengthMs, getMinimumSpeechLengthMs, getMicInterruptionThreshold, getMicInterruptionFramesRequired, getPossibleSilenceLengthMs, normalizeMicSensitivity, scaleMicLevel } from './src/voice/micSensitivity';
 import { parseCallContactName } from './src/phone/commandParser';
 import { parseSmsCommand, parseIncompleteSmsCommand } from './src/phone/smsCommandParser';
 import { isScreenCaptureCommand } from './src/phone/screenCaptureCommands';
@@ -326,6 +326,7 @@ export default function App() {
   const voiceRequestStartedRef = useRef(false);
   const interruptVoiceFramesRef = useRef(0);
   const voiceRecognitionActiveRef = useRef(false);
+  const voiceStartInFlightRef = useRef(false);
   const voiceCaptureDuringSpeechRef = useRef(false);
   const voiceInterruptionConfirmedRef = useRef(false);
   const ignoreNextVoiceEndRef = useRef(false);
@@ -378,6 +379,7 @@ export default function App() {
         const hadPartialTranscript = !!voiceTranscriptRef.current;
         voiceTranscriptRef.current = '';
         voiceRecognitionActiveRef.current = false;
+        voiceStartInFlightRef.current = false;
         voiceCaptureDuringSpeechRef.current = false;
         voiceInterruptionConfirmedRef.current = false;
         interruptVoiceFramesRef.current = 0;
@@ -1435,6 +1437,7 @@ export default function App() {
   }, [session?.user.id, conversationId]);
 
   useSpeechRecognitionEvent('start', () => {
+    voiceStartInFlightRef.current = false;
     voiceRecognitionActiveRef.current = true;
     if (!voiceCaptureDuringSpeechRef.current) voiceInterruptionConfirmedRef.current = false;
     interruptVoiceFramesRef.current = 0;
@@ -1454,8 +1457,8 @@ export default function App() {
       // Require a sustained, clear voice signal so EZRA's own speaker echo is less likely to interrupt it.
       interruptVoiceFramesRef.current = normalized >= getMicInterruptionThreshold(micSensitivityRef.current)
         ? interruptVoiceFramesRef.current + 1
-        : Math.max(0, interruptVoiceFramesRef.current - 1);
-      if (interruptVoiceFramesRef.current >= 5) {
+        : 0;
+      if (interruptVoiceFramesRef.current >= getMicInterruptionFramesRequired(micSensitivityRef.current)) {
         interruptVoiceFramesRef.current = 0;
         voiceInterruptionConfirmedRef.current = true;
         Speech.stop();
@@ -1472,6 +1475,7 @@ export default function App() {
     setVoiceLevel(0);
   });
   useSpeechRecognitionEvent('end', () => {
+    voiceStartInFlightRef.current = false;
     voiceRecognitionActiveRef.current = false;
     setIsListening(false);
     setVoiceLevel(0);
@@ -1495,7 +1499,11 @@ export default function App() {
       voiceTurnInProgressRef.current = true;
       voiceTranscriptRef.current = '';
       setMessage(spokenText);
-      setTimeout(() => sendMessage(true, spokenText), 250);
+      setTimeout(() => {
+        if (appIsActiveRef.current && autoListenRef.current && voiceHome) {
+          sendMessage(true, spokenText);
+        }
+      }, 80);
     }
   });
   useSpeechRecognitionEvent('result', event => {
@@ -1510,6 +1518,7 @@ export default function App() {
     }
   });
   useSpeechRecognitionEvent('error', event => {
+    voiceStartInFlightRef.current = false;
     voiceRecognitionActiveRef.current = false;
     setIsListening(false);
     setVoiceLevel(0);
@@ -1535,16 +1544,16 @@ export default function App() {
       setVoiceRetrying(false);
       setVoiceRetryMessage('');
       Alert.alert('الميكروفون غير متاح', 'لم يتمكن الهاتف من الوصول إلى الميكروفون. أغلق أي تطبيق يستخدمه ثم حاول مجددًا.');
-    } else if (autoListenRef.current && voiceHome && voiceRetryCountRef.current < 2) {
+    } else if (autoListenRef.current && voiceHome && voiceRetryCountRef.current < 5) {
       voiceRetryCountRef.current += 1;
       setVoiceRetryMessage('انقطع الاتصال بخدمة الصوت، أعيد المحاولة…');
       setVoiceRetrying(true);
-    } else if (voiceRetryCountRef.current >= 2) {
+    } else if (voiceRetryCountRef.current >= 5) {
       setVoiceRetrying(false);
       setVoiceRetryMessage('');
       autoListenRef.current = false;
       setAutoListen(false);
-      Alert.alert('تعذّر استمرار الاستماع', 'توقّف التعرّف الصوتي بعد محاولتين. تحقق من اتصال الإنترنت وإذن الميكروفون، ثم اضغط الميكروفون للمحاولة مجددًا.');
+      Alert.alert('تعذّر استمرار الاستماع', 'توقّف التعرّف الصوتي بعد خمس محاولات. تحقق من خدمة الصوت وإذن الميكروفون، ثم أعد المحاولة.');
     }
   });
 
@@ -2614,11 +2623,16 @@ export default function App() {
   }, [backgroundWakeEnabled, appIsActive, speechRate, speechPitch]);
 
   const beginListening = async (interruptSpeech = false, interruptionAlreadyConfirmed = false) => {
-    if (!appIsActiveRef.current || !appIsActive || !autoListenRef.current || isListening || sending || (speakingMessageId && !interruptSpeech)) return;
+    if (!appIsActiveRef.current || !appIsActive || !autoListenRef.current || isListening || voiceRecognitionActiveRef.current || voiceStartInFlightRef.current || sending || (speakingMessageId && !interruptSpeech)) return;
+    voiceStartInFlightRef.current = true;
     try {
       const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-      if (!appIsActiveRef.current) return;
+      if (!appIsActiveRef.current) {
+        voiceStartInFlightRef.current = false;
+        return;
+      }
       if (!permission.granted) {
+        voiceStartInFlightRef.current = false;
         autoListenRef.current = false;
         setAutoListen(false);
         Alert.alert('إذن الميكروفون', 'اسمح لـ EZRA باستخدام الميكروفون والتعرّف على الكلام لتفعيل المحادثة التلقائية.');
@@ -2645,7 +2659,13 @@ export default function App() {
         volumeChangeEventOptions: { enabled: true, intervalMillis: 90 },
       });
     } catch {
+      voiceStartInFlightRef.current = false;
       setIsListening(false);
+      if (autoListenRef.current && appIsActiveRef.current && voiceHome && voiceRetryCountRef.current < 5) {
+        voiceRetryCountRef.current += 1;
+        setVoiceRetryMessage('تعذّر بدء الاستماع، سأحاول مجددًا…');
+        setVoiceRetrying(true);
+      }
       console.warn('Automatic voice listening could not start.');
     }
   };
