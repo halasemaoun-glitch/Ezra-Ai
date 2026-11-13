@@ -162,7 +162,7 @@ class EzraWakeWordModule : Module() {
       val matches = cursor?.use { result ->
         val found = mutableListOf<Pair<String, String>>()
         while (result.moveToNext()) {
-          found += result.getString(0).orEmpty() to result.getString(1).orEmpty()
+          found.add(Pair(result.getString(0).orEmpty(), result.getString(1).orEmpty()))
         }
         found
       }.orEmpty()
