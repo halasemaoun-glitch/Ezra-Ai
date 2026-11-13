@@ -172,3 +172,14 @@ A feature is marked **implemented** when its source integration exists. It is ma
 - Added regression tests for microphone sensitivity, AI provider/model selection, Gemini request/response handling, and the expanded dental study library.
 - The latest validation workflow must pass on the final branch head before declaring source/build verification complete.
 - Scope remains `ezra/habibi-android-spike`; no merge to `main`, no APK creation, no Supabase migration, no Edge Function deployment, and no paid service/billing changes are part of this work.
+
+## Phase 15 — hands-free listening, interruption, and wake-word lifecycle (source implementation)
+
+- Lowered the voice-interruption threshold in proportion to the selected microphone sensitivity and require consecutive above-threshold audio frames; a quiet/invalid frame resets the detection window to reduce false interruptions from speaker echo and background noise.
+- Added deterministic regression coverage for interruption-frame accumulation, reset behavior, sensitivity thresholds, and faster Android end-of-utterance hints.
+- Hardened recognition startup against overlapping permission/start requests, respects the user's auto-listen opt-out even if permission prompting is still in flight, and aborts a pending recognition start when auto-listen is switched off.
+- Reduced the delay between final speech recognition and sending the captured phrase, and expanded bounded retries for transient recognition failures. Permission denial and microphone capture failures stop automatic retries and explain the issue.
+- Audited the Android wake-word foreground service: it declares microphone foreground-service permissions/type, holds a partial wake lock while active, retries transient recognition failures, retains a generic pending-command notification for locked-screen handoff, and stops after a wake event so EZRA can process the command without two recognizers competing.
+- Fixed the wake-only greeting completion path to resume the wake service only if the user still has background wake enabled. This prevents a delayed speech callback from silently re-enabling a feature the user turned off.
+- **Platform boundary:** Android does not permit unrestricted background microphone starts or arbitrary activity launches over the lock screen. The user must enable the wake-word option, grant microphone and notification permissions, and keep the foreground service allowed by Android/OEM battery policies. On a locked/off screen, EZRA preserves the command and asks the user to open the app from a generic notification; it does not claim full lock-screen command execution.
+- **Validation boundary:** source changes and deterministic helper tests are committed. The combined GitHub commit status currently exposes no check runs for the latest revision, so CI success is not claimed here. A real microphone/wake-word behavior check still requires a later app run on an Android device.
