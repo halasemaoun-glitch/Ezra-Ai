@@ -2635,9 +2635,8 @@ export default function App() {
         lang: responseLanguage === 'en' ? 'en-US' : 'ar-DZ',
         interimResults: true,
         continuous: false,
-        // Shorten Android's end-of-utterance silence window so a completed thought
-        // is submitted sooner, while retaining a pause buffer to avoid cutting phrases.
-        // Some Android recognition providers may ignore these optional intent extras.
+        // Apply the user's sensitivity preference to Android's minimum utterance
+        // and end-of-utterance silence hints. Some recognition providers may ignore these extras.
         ...(Platform.OS === 'android' ? {
           androidIntentOptions: {
             EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS: getMinimumSpeechLengthMs(micSensitivityRef.current),
