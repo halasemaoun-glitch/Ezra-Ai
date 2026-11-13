@@ -18,39 +18,87 @@ const WINDOWS_1252_HIGH_BYTES = [
  * reader requests it while decoding legacy PDF strings. Keep the native
  * decoder for every other encoding and provide the missing single-byte map.
  */
-function installWindows1252TextDecoderCompat(): void {
+/**
+ * Hermes may reject legacy encodings requested by Ream's PDF parser.
+ * Supply Windows-1252 and UTF-16LE/BE decoders while delegating all other
+ * labels to the platform implementation.
+ */
+function installDocumentTextDecoderCompat(): void {
   const NativeDecoder = globalThis.TextDecoder;
-  if ((NativeDecoder as any).__ezraWindows1252Compat) return;
+  if ((NativeDecoder as any).__ezraDocumentCompat) return;
 
   class CompatibleTextDecoder extends NativeDecoder {
-    private readonly windows1252: boolean;
+    private readonly mode: 'native' | 'windows1252' | 'utf16le' | 'utf16be';
+    private pendingByte: number | null = null;
+    private firstDecode = true;
 
     constructor(label = 'utf-8', options?: TextDecoderOptions) {
-      const normalized = label.toLowerCase().replace(/_/g, '-');
-      const windows1252 = ['windows-1252', 'cp1252', 'x-cp1252', 'iso-8859-1', 'latin1'].includes(normalized);
-      super(windows1252 ? 'utf-8' : label, options);
-      this.windows1252 = windows1252;
+      const normalized = label.toLowerCase().replace(/_/g, '-').replace(/\s+/g, '');
+      const mode = ['windows-1252', 'cp1252', 'x-cp1252', 'iso-8859-1', 'latin1'].includes(normalized)
+        ? 'windows1252'
+        : ['utf-16le', 'utf-16'].includes(normalized)
+          ? 'utf16le'
+          : ['utf-16be'].includes(normalized)
+            ? 'utf16be'
+            : 'native';
+      super(mode === 'native' ? label : 'utf-8', options);
+      this.mode = mode;
     }
 
     decode(input?: AllowSharedBufferSource, options?: TextDecodeOptions): string {
-      if (!this.windows1252) return super.decode(input, options);
-      if (input == null) return '';
+      if (this.mode === 'native') return super.decode(input, options);
+      if (input == null) {
+        if (this.mode === 'windows1252') return '';
+        const hadPending = this.pendingByte !== null;
+        this.pendingByte = null;
+        return hadPending ? '\\uFFFD' : '';
+      }
       const bytes = ArrayBuffer.isView(input)
         ? new Uint8Array(input.buffer, input.byteOffset, input.byteLength)
         : new Uint8Array(input as ArrayBuffer);
-      let output = '';
-      for (let offset = 0; offset < bytes.length; offset += 1) {
-        const value = bytes[offset];
-        const codePoint = value >= 0x80 && value <= 0x9f
-          ? WINDOWS_1252_HIGH_BYTES[value - 0x80]
-          : value;
-        output += String.fromCharCode(codePoint);
+      if (this.mode === 'windows1252') {
+        let output = '';
+        for (let offset = 0; offset < bytes.length; offset += 1) {
+          const value = bytes[offset];
+          const codePoint = value >= 0x80 && value <= 0x9f
+            ? WINDOWS_1252_HIGH_BYTES[value - 0x80]
+            : value;
+          output += String.fromCharCode(codePoint);
+        }
+        return output;
       }
+
+      const littleEndian = this.mode === 'utf16le';
+      const startWithPending = this.pendingByte !== null;
+      const units: number[] = [];
+      let offset = 0;
+      if (startWithPending && bytes.length) {
+        units.push(littleEndian
+          ? this.pendingByte! | (bytes[0] << 8)
+          : (this.pendingByte! << 8) | bytes[0]);
+        this.pendingByte = null;
+        offset = 1;
+      }
+      for (; offset + 1 < bytes.length; offset += 2) {
+        units.push(littleEndian
+          ? bytes[offset] | (bytes[offset + 1] << 8)
+          : (bytes[offset] << 8) | bytes[offset + 1]);
+      }
+      if (offset < bytes.length) {
+        if (options?.stream) this.pendingByte = bytes[offset];
+        else units.push(0xfffd);
+      }
+      let output = '';
+      for (let i = 0; i < units.length; i += 8192) {
+        output += String.fromCharCode(...units.slice(i, i + 8192));
+      }
+      if (this.firstDecode && output.charCodeAt(0) === 0xfeff) output = output.slice(1);
+      this.firstDecode = false;
       return output;
     }
   }
 
-  (CompatibleTextDecoder as any).__ezraWindows1252Compat = true;
+  (CompatibleTextDecoder as any).__ezraDocumentCompat = true;
   (globalThis as any).TextDecoder = CompatibleTextDecoder;
 }
 export const MAX_EXTRACTED_DOCUMENT_BYTES = 1024 * 1024;
@@ -82,7 +130,7 @@ export async function extractDocumentText(
       // Load the office/PDF parser only when a document is actually opened.
       // Ream's legacy encoding detector requests windows-1252 TextDecoder,
       // which is not available in the current Hermes runtime at app startup.
-      installWindows1252TextDecoderCompat();
+      installDocumentTextDecoderCompat();
       const { Ream } = await import('reamkit');
       const parsed = Ream.parse(bytes);
       if (parsed.format !== extension) {
