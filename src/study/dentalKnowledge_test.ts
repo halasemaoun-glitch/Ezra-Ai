@@ -31,3 +31,34 @@ Deno.test('trauma retrieval preserves authoritative source links', () => {
   const trauma = matches.find(match => match.reference.id === 'dental-trauma');
   assert(!!trauma?.reference.sources?.some(source => source.url.startsWith('https://')), 'trauma reference should include HTTPS source');
 });
+
+
+import { DENTAL_CLINICAL_CASES } from './clinicalCases.ts';
+import { retrieveDentalClinicalCases } from './dentalKnowledge.ts';
+
+Deno.test('clinical case bank is broad, structured, unique and evidence-linked', () => {
+  assert(DENTAL_CLINICAL_CASES.length >= 18, 'expected at least 18 structured clinical cases');
+  assert(new Set(DENTAL_CLINICAL_CASES.map(item => item.id)).size === DENTAL_CLINICAL_CASES.length, 'clinical case IDs must be unique');
+  for (const item of DENTAL_CLINICAL_CASES) {
+    assert(item.presentation.length > 80, 'case presentation is too short: ' + item.id);
+    assert(item.historyToCollect.length >= 3, 'missing history checklist: ' + item.id);
+    assert(item.clinicalFindings.length >= 3, 'missing clinical findings: ' + item.id);
+    assert(item.redFlags.length >= 2, 'missing red flags: ' + item.id);
+    assert(item.differentials.length >= 2, 'case needs differential diagnoses: ' + item.id);
+    assert(item.investigations.length >= 2, 'case needs investigation guidance: ' + item.id);
+    assert(item.management.length >= 2, 'case needs management options: ' + item.id);
+    assert(item.complications.length >= 1 && item.followUp.length >= 1, 'case needs complications and follow-up: ' + item.id);
+    assert(item.options.length >= 3 && item.correctIndex >= 0 && item.correctIndex < item.options.length, 'invalid case question: ' + item.id);
+    assert(item.sources.length > 0 && item.sources.every(source => source.url.startsWith('https://')), 'case must cite HTTPS references: ' + item.id);
+  }
+});
+
+Deno.test('clinical retrieval ranks matching cases and respects limits', () => {
+  const abscess = retrieveDentalClinicalCases('تورم خراج سني وصعوبة بلع', DENTAL_CLINICAL_CASES, { limit: 3 });
+  assert(abscess.length > 0, 'expected abscess-related clinical cases');
+  assert(abscess[0].clinicalCase.id === 'clinical-deep-space-05' || abscess[0].clinicalCase.id === 'clinical-abscess-local-04', 'urgent abscess case should rank first');
+  const trauma = retrieveDentalClinicalCases('انخلاع سن دائم بعد رض trauma avulsion', DENTAL_CLINICAL_CASES, { limit: 2 });
+  assert(trauma.length > 0 && trauma[0].clinicalCase.id === 'clinical-avulsion-12', 'avulsion case should rank first');
+  assert(retrieveDentalClinicalCases('ما هو هذا؟', DENTAL_CLINICAL_CASES).length === 0, 'generic query must not return arbitrary cases');
+  assert(retrieveDentalClinicalCases('periodontitis', DENTAL_CLINICAL_CASES, { limit: 1 }).length <= 1, 'limit must be respected');
+});
