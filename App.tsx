@@ -2278,7 +2278,9 @@ export default function App() {
             : '',
           dentalReferenceGuidance
             ? `Relevant built-in foundational dental learning notes. Treat these as educational reference summaries, not patient-specific diagnosis or treatment instructions. Do not infer beyond their content; explain uncertainty and recommend authoritative course or clinical references where needed:\n${dentalReferenceGuidance}`
-          clinicalCaseGuidance ? `Relevant structured dental clinical cases. Use these as educational case examples, not as a diagnosis. Explain signs, ranked differentials, investigations, management options, complications and follow-up; identify missing data and urgent red flags. Do not turn a teaching case into patient-specific instructions or invent evidence:\n${clinicalCaseGuidance}` : '',
+            : '',
+          clinicalCaseGuidance
+            ? `Relevant structured dental clinical cases. Use these as educational case examples, not as a diagnosis. Explain signs, ranked differentials, investigations, management options, complications and follow-up; identify missing data and urgent red flags. Do not turn a teaching case into patient-specific instructions or invent evidence:\n${clinicalCaseGuidance}`
             : '',
         ].filter(Boolean);
         const personalizedInput = personalizationSections.length
