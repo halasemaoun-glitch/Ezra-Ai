@@ -19,3 +19,17 @@ export function scaleMicLevel(rawLevel: number, sensitivity: number): number {
 export function getMicInterruptionThreshold(sensitivity: number): number {
   return 0.78 - (normalizeMicSensitivity(sensitivity) * 0.0032);
 }
+
+/** Android recognition hint: lower sensitivity requires a longer stable speech segment. */
+export function getMinimumSpeechLengthMs(sensitivity: number): number {
+  return Math.round(500 - normalizeMicSensitivity(sensitivity) * 4);
+}
+
+/** Android recognition hints: higher sensitivity finalizes shorter pauses sooner. */
+export function getPossibleSilenceLengthMs(sensitivity: number): number {
+  return Math.round(1250 - normalizeMicSensitivity(sensitivity) * 3);
+}
+
+export function getCompleteSilenceLengthMs(sensitivity: number): number {
+  return Math.round(2150 - normalizeMicSensitivity(sensitivity) * 5);
+}
