@@ -2119,7 +2119,7 @@ export default function App() {
       }
       Alert.alert(
         'مراجعة الرسالة قبل الإرسال',
-        `إلى: ${contactName}\\n\\nنص الرسالة:\\n${smsBody}\\n\\nهل تريدين إرسالها الآن؟`,
+        `إلى: ${contactName}\n\nنص الرسالة:\n${smsBody}\n\nهل تريدين إرسالها الآن؟`,
         [
           { text: 'إلغاء', style: 'cancel' },
           {
