@@ -2779,7 +2779,7 @@ export default function App() {
       interruptVoiceFramesRef.current = 0;
       // Use the language explicitly selected by the user; do not auto-switch recognition locales.
       ExpoSpeechRecognitionModule.start({
-        lang: responseLanguage === 'en' ? 'en-US' : 'ar-DZ',
+        lang: responseLanguage === 'en' ? 'en-US' : 'ar-SA',
         interimResults: true,
         continuous: false,
         // Apply the user's sensitivity preference to Android's minimum utterance
