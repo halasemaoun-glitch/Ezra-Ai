@@ -1107,7 +1107,7 @@ export default function App() {
         return;
       }
       if (typeof file.size === 'number' && file.size > MAX_DOCUMENT_SOURCE_BYTES) {
-        Alert.alert('الملف كبير', 'الحد الأقصى لحجم المستند الأصلي 5 ميغابايت.');
+        Alert.alert('الملف كبير', 'الحد الأقصى لحجم المستند الأصلي 50 ميغابايت.');
         return;
       }
       const response = await fetch(file.uri);
@@ -2907,7 +2907,7 @@ export default function App() {
         return;
       }
       if (typeof file.size === 'number' && file.size > MAX_DOCUMENT_SOURCE_BYTES) {
-        Alert.alert('الملف كبير جدًا', 'الحد الأقصى لحجم المرفق 5 ميغابايت.');
+        Alert.alert('الملف كبير جدًا', 'الحد الأقصى لحجم المرفق 50 ميغابايت.');
         return;
       }
       const response = await fetch(file.uri);
