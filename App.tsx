@@ -273,6 +273,7 @@ export default function App() {
   const [voiceHome, setVoiceHome] = useState(true);
   const [appIsActive, setAppIsActive] = useState(AppState.currentState === 'active');
   const appIsActiveRef = useRef(AppState.currentState === 'active');
+  const [reduceMotion, setReduceMotion] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [settingsSection, setSettingsSection] = useState<string | null>(null);
   const [phonePermissions, setPhonePermissions] = useState({ contacts: false, camera: false, microphone: false, notifications: false, calls: false, sms: false, accessibility: false });
@@ -913,8 +914,17 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then(value => { if (mounted) setReduceMotion(value); })
+      .catch(() => {});
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => { mounted = false; subscription.remove(); };
+  }, []);
+
+  useEffect(() => {
     const active = isListening || !!speakingMessageId || sending;
-    if (!active) {
+    if (!active || reduceMotion) {
       micPulse.stopAnimation();
       micPulse.setValue(1);
       return;
@@ -925,7 +935,7 @@ export default function App() {
     ]));
     pulse.start();
     return () => pulse.stop();
-  }, [isListening, speakingMessageId, sending, micPulse]);
+  }, [isListening, speakingMessageId, sending, micPulse, reduceMotion]);
 
   useEffect(() => {
     Speech.getAvailableVoicesAsync()
