@@ -367,6 +367,8 @@ export default function App() {
   const [knowledgeCategory, setKnowledgeCategory] = useState<KnowledgeCategory>('all');
   const [knowledgeSort, setKnowledgeSort] = useState<KnowledgeSort>('newest');
   const [previewKnowledgeDocument, setPreviewKnowledgeDocument] = useState<KnowledgeDocument | null>(null);
+  const [knowledgeEditMode, setKnowledgeEditMode] = useState(false);
+  const [knowledgeEditDraft, setKnowledgeEditDraft] = useState('');
   const [knowledgeError, setKnowledgeError] = useState('');
   const [knowledgeSyncStatus, setKnowledgeSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
   const [historySearch, setHistorySearch] = useState('');
@@ -1190,6 +1192,49 @@ export default function App() {
       console.error('Could not synchronize knowledge document deletion:', error);
       setKnowledgeSyncStatus('error');
       Alert.alert('حُذف الملف من هذه القائمة', 'تعذّرت مزامنة الحذف الآن. سيُحفظ طلب الحذف محلياً ويُعاد إرساله عند المزامنة.');
+    }
+  };
+
+  const openKnowledgePreview = (document: KnowledgeDocument) => {
+    setPreviewKnowledgeDocument(document);
+    setKnowledgeEditDraft(document.content);
+    setKnowledgeEditMode(false);
+  };
+
+  const saveKnowledgeEdit = async () => {
+    if (!session || !previewKnowledgeDocument) return;
+    const content = knowledgeEditDraft.trim();
+    if (!content) {
+      Alert.alert('المحتوى فارغ', 'أضيفي محتوى قبل حفظ التعديل.');
+      return;
+    }
+    const updated: KnowledgeDocument = {
+      ...previewKnowledgeDocument,
+      content,
+      sizeBytes: content.length,
+      updatedAt: new Date().toISOString(),
+    };
+    const next = knowledgeDocuments.map(item => item.id === updated.id ? updated : item);
+    try {
+      await AsyncStorage.setItem(`ezra:knowledgeLibrary:${session.user.id}`, JSON.stringify(next));
+      setKnowledgeDocuments(next);
+      setPreviewKnowledgeDocument(updated);
+      setKnowledgeEditMode(false);
+      try {
+        const { error } = await supabase
+          .from('knowledge_documents')
+          .upsert(knowledgeDocumentsToCloud([updated], session.user.id), { onConflict: 'owner_id,id' });
+        if (error) throw error;
+        setKnowledgeSyncStatus('synced');
+        Alert.alert('تم تحديث الدرس', 'حُفظ التصحيح في مكتبتك المحلية وحسابك.');
+      } catch (error) {
+        console.error('Knowledge edit saved locally but cloud sync failed:', error);
+        setKnowledgeSyncStatus('error');
+        Alert.alert('حُفظ التعديل محلياً', 'تعذّرت مزامنته مع حسابك الآن. سيبقى على الجهاز.');
+      }
+    } catch (error) {
+      console.error('Could not save knowledge edit:', error);
+      Alert.alert('تعذّر حفظ التعديل', 'حاولي مرة أخرى.');
     }
   };
 
@@ -3461,7 +3506,7 @@ export default function App() {
                               <Text numberOfLines={2} style={{ flex: 1, color: '#B9AAB7', fontSize: 10, lineHeight: 16, textAlign: 'right' }}>{document.content.slice(0, 180)}</Text>
                             </View>
                             <View style={{ flexDirection: 'row', justifyContent: 'flex-start', flexWrap: 'wrap', gap: 7 }}>
-                              <TouchableOpacity onPress={() => setPreviewKnowledgeDocument(document)} accessibilityRole="button" accessibilityLabel={`معاينة ${document.name}`} style={{ borderRadius: 10, paddingHorizontal: 13, paddingVertical: 7, backgroundColor: '#30243A', borderWidth: 1, borderColor: '#80618B' }}>
+                              <TouchableOpacity onPress={() => openKnowledgePreview(document)} accessibilityRole="button" accessibilityLabel={`معاينة ${document.name}`} style={{ borderRadius: 10, paddingHorizontal: 13, paddingVertical: 7, backgroundColor: '#30243A', borderWidth: 1, borderColor: '#80618B' }}>
                                 <Text style={{ color: '#E6C9F2', fontSize: 11, fontWeight: '700' }}>معاينة المحتوى</Text>
                               </TouchableOpacity>
                               <TouchableOpacity onPress={() => Alert.alert('حذف الملف من المكتبة؟', `سيُزال "${document.name}" من مكتبة المعرفة على هذا الجهاز.`, [{ text: 'إلغاء', style: 'cancel' }, { text: 'حذف', style: 'destructive', onPress: () => removeKnowledgeDocument(document.id) }])} accessibilityRole="button" accessibilityLabel={`حذف ${document.name}`} style={{ borderRadius: 10, paddingHorizontal: 13, paddingVertical: 7, backgroundColor: '#38202D', borderWidth: 1, borderColor: '#75465D' }}>
@@ -4155,11 +4200,33 @@ export default function App() {
                 </View>
               )}
               <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, gap: 8 }} nestedScrollEnabled showsVerticalScrollIndicator keyboardShouldPersistTaps="handled">
-                <Text selectable style={{ color: '#F5EAF2', fontSize: 13, lineHeight: 23, textAlign: 'right', writingDirection: 'auto' }}>{previewKnowledgeDocument?.content ?? ''}</Text>
+                {knowledgeEditMode ? (
+                  <TextInput value={knowledgeEditDraft} onChangeText={setKnowledgeEditDraft} multiline maxLength={100000} textAlign="right" textAlignVertical="top" style={{ minHeight: 260, color: '#F5EAF2', fontSize: 13, lineHeight: 23, textAlign: 'right', writingDirection: 'auto', backgroundColor: '#17121A', borderRadius: 12, borderWidth: 1, borderColor: '#594253', padding: 12 }} />
+                ) : (
+                  <Text selectable style={{ color: '#F5EAF2', fontSize: 13, lineHeight: 23, textAlign: 'right', writingDirection: 'auto' }}>{previewKnowledgeDocument?.content ?? ''}</Text>
+                )}
               </ScrollView>
-              <TouchableOpacity onPress={() => setPreviewKnowledgeDocument(null)} style={{ borderRadius: 12, paddingVertical: 12, alignItems: 'center', backgroundColor: '#754765', borderWidth: 1, borderColor: '#C58DBB' }}>
-                <Text style={{ color: '#FFF0F8', fontSize: 12, fontWeight: '800' }}>إغلاق المعاينة</Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {knowledgeEditMode ? (
+                  <>
+                    <TouchableOpacity onPress={() => { setKnowledgeEditMode(false); setKnowledgeEditDraft(previewKnowledgeDocument?.content ?? ''); }} style={{ flex: 1, borderRadius: 12, paddingVertical: 12, alignItems: 'center', backgroundColor: '#30243A', borderWidth: 1, borderColor: '#80618B' }}>
+                      <Text style={{ color: '#E6C9F2', fontSize: 12, fontWeight: '800' }}>إلغاء</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={saveKnowledgeEdit} style={{ flex: 1, borderRadius: 12, paddingVertical: 12, alignItems: 'center', backgroundColor: '#754765', borderWidth: 1, borderColor: '#C58DBB' }}>
+                      <Text style={{ color: '#FFF0F8', fontSize: 12, fontWeight: '800' }}>حفظ التصحيح</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    <TouchableOpacity onPress={() => setKnowledgeEditMode(true)} style={{ flex: 1, borderRadius: 12, paddingVertical: 12, alignItems: 'center', backgroundColor: '#30243A', borderWidth: 1, borderColor: '#80618B' }}>
+                      <Text style={{ color: '#E6C9F2', fontSize: 12, fontWeight: '800' }}>تعديل المحتوى</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => setPreviewKnowledgeDocument(null)} style={{ flex: 1, borderRadius: 12, paddingVertical: 12, alignItems: 'center', backgroundColor: '#754765', borderWidth: 1, borderColor: '#C58DBB' }}>
+                      <Text style={{ color: '#FFF0F8', fontSize: 12, fontWeight: '800' }}>إغلاق المعاينة</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+              </View>
             </View>
           </View>
         </Modal>
