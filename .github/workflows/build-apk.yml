@@ -1,4 +1,4 @@
-name: Build EZRA APK (GitHub only) # Includes native WebCrypto runtime
+name: Build EZRA APK (GitHub only) # WebCrypto initialized before App module import
 
 on:
   push:
