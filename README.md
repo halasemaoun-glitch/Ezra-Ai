@@ -7,14 +7,14 @@ Private personal AI companion built with Expo SDK 54 and React Native, with Andr
 - Android app identity: `com.halasemaoun.ezra`.
 - Dark burgundy/pink interface with Home, Chat, and Settings destinations and an animated orb.
 - Supabase email/password authentication and owner-scoped conversation and memory data.
-- AI replies through the authenticated `smart-service` Supabase Edge Function. The Groq provider key stays server-side.
-- Text chat uses `openai/gpt-oss-120b`; image requests use the configured vision model `qwen/qwen3.8-27b`.
+- AI replies through the authenticated `smart-service` Supabase Edge Function. Groq and Google Gemini adapters are supported in source; provider keys remain server-side.
+- Selectable free-tier models include Groq `openai/gpt-oss-120b` / `openai/gpt-oss-20b` and Gemini `gemini-2.5-flash` / `gemini-2.5-flash-lite`. Groq image requests use `qwen/qwen3.8-27b` automatically.
 - Conversation history and user-approved memory personalization.
 - Companion, Dentist, and Study modes with mode-specific guidance.
-- Dental learning references, flashcards, quizzes, and clinical case simulations. These are educational tools, not remote diagnosis or treatment.
+- Evidence-linked dental learning library with 13 reference topics, 16 flashcards, 12 quiz questions, and 6 clinical case simulations. Sources include ADA, AAPD, AAE, EFP, and IADT. These are educational tools, not remote diagnosis or treatment.
 - Local knowledge library for TXT, Markdown, CSV, JSON, PDF, DOCX, PPTX, and XLSX documents (up to 8 files, with up to 5 MB per source file and 1 MB of extracted text per library item). Relevant excerpts may be sent with a question to the AI service.
 - One-off message attachments: images can be sent for AI image analysis; TXT, MD, CSV, JSON, PDF, DOCX, PPTX, and XLSX documents are text-extracted for the current request (up to 5 MB per source file and 1 MB of extracted text).
-- Arabic/English speech recognition, system text-to-speech fallback, and an optional local Habibi TTS native engine.
+- Arabic/English speech recognition with adjustable microphone sensitivity, system text-to-speech fallback, and an optional local Habibi TTS native engine.
 - Android wake-word foreground service and phone actions including flashlight, volume/media controls, app/system settings, alarms/timers, contact lookup, direct phone calls, and direct SMS after the corresponding Android permissions are granted.
 - Voice screenshot commands (for example, “EZRA, take a screenshot”) launch Android's official screen-capture consent prompt, then save the approved capture to `Pictures/EZRA` in the device gallery.
 - Optional Android AccessibilityService integration lets the user explicitly enable EZRA in system settings, then issue semantic button clicks, scroll, Back/Home, notifications, and quick-settings commands. High-impact button labels (send, delete, payment, purchase, confirmation) require an in-app confirmation first.
@@ -29,7 +29,7 @@ Private personal AI companion built with Expo SDK 54 and React Native, with Andr
 - Android requires the user to approve screen capture through its system prompt. The approval is session-scoped and may be requested again for later captures; protected app content may appear black. Calls and SMS require explicit permissions, and SMS submission does not guarantee carrier delivery.
 - Accessibility control is opt-in and must be enabled manually by the user in Android Settings. EZRA only searches the active accessibility tree when the user gives a supported action; the service does not log or transmit screen text. Controls without accessible labels, custom canvas controls, and apps that restrict accessibility may not respond.
 - The orb is an animated 2D React Native illustration, not a 3D model.
-- Groq free-tier availability and quotas can change. If the provider quota is exhausted, AI responses may be temporarily unavailable.
+- Groq and Gemini free-tier availability, eligible models, and quotas can change. Gemini requires a free Google AI Studio key stored as the Supabase Edge Function secret `GEMINI_API_KEY`; the Gemini adapter is source-ready but cannot be used until that secret is configured and the Edge Function update is deployed. The Groq provider remains the currently configured default. If a free quota is exhausted, AI responses may be temporarily unavailable.
 
 ## Privacy and cost
 
@@ -37,7 +37,7 @@ Private personal AI companion built with Expo SDK 54 and React Native, with Andr
 - The mobile app uses a Supabase publishable key. Never place a Supabase secret/service-role key or provider API key in the app or repository.
 - Only approved memories are loaded by the authenticated Edge Function for AI personalization.
 - Knowledge-library excerpts and current message attachments are sent to the AI provider when needed to answer a request.
-- No paid plan or billing upgrade is enabled or required by this repository. Free-tier limits are controlled by the service providers and may change.
+- No paid plan or billing upgrade is enabled or required by this repository. EZRA never upgrades provider billing automatically; free-tier limits are controlled by the providers and may change. Gemini requests require a user-provided free AI Studio key stored only in Supabase secrets, never in the mobile app or GitHub.
 
 ## Install and validate
 
