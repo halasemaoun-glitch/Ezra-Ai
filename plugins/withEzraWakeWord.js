@@ -133,7 +133,7 @@ module.exports = function withEzraWakeWord(config) {
     android:accessibilityFlags="flagRetrieveInteractiveWindows" />`);
     fs.writeFileSync(path.join(valuesDir, "ezra_accessibility_strings.xml"), `<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="ezra_accessibility_service_description">يسمح لـ EZRA بالعثور على الأزرار التي تطلبينها والضغط عليها والتمرير داخل التطبيقات. لا يسجل الخدمة محتوى الشاشة ولا ترسله إلى أي خادم.</string>
+    <string name="ezra_accessibility_service_description">يسمح لـ EZRA بالعثور على الأزرار التي تطلبينها والضغط عليها والتمرير داخل التطبيقات، وإدخال نص تطلبينه صراحةً في حقل الكتابة النشط فقط. لا تجمع الخدمة نصوص الشاشة أو تسجلها أو ترسلها إلى أي خادم.</string>
 </resources>`);
     return modConfig;
   }]);
