@@ -1,98 +1,63 @@
 import React, { useMemo, useState } from 'react';
-import { Text, TouchableOpacity, View, StyleSheet } from 'react-native';
+import { Linking, Text, TouchableOpacity, View, StyleSheet } from 'react-native';
+import { DENTAL_CLINICAL_CASES, type DentalClinicalCase } from '../study/clinicalCases';
 
-type ClinicalCase = {
-  id: string;
-  title: string;
-  level: string;
-  scenario: string;
-  question: string;
-  options: string[];
-  correctIndex: number;
-  explanation: string;
-  safetyNote: string;
-};
-
-const CASES: ClinicalCase[] = [
-  {
-    id: 'case-pulp-01',
-    title: 'ألم يزداد مع البارد',
-    level: 'حالة تعليمية · اللب السني',
-    scenario: 'يصف شخص ألماً قصيراً عند شرب الماء البارد، يختفي سريعاً بعد إزالة المؤثر. لا توجد معلومات كافية عن الفحص أو التاريخ المرضي.',
-    question: 'ما الخطوة التعليمية الأكثر منطقية قبل ترجيح أي تشخيص؟',
-    options: ['اعتبارها حالة التهاب لب غير عكوس مباشرة', 'جمع قصة الألم وإجراء فحوص سريرية مناسبة ومقارنة الأسنان', 'بدء علاج عصب فوراً', 'وصف مضاد حيوي'],
-    correctIndex: 1,
-    explanation: 'مدة الألم ومحفزاته مهمة، لكنها لا تكفي وحدها. يلزم جمع التاريخ المرضي، والفحص، واختبارات الحساسية المقارنة، وربط النتائج ببقية المعطيات.',
-    safetyNote: 'لا يمكن تحديد تشخيص أو خطة علاج لشخص حقيقي من وصف مختصر، ولا تُستخدم المضادات الحيوية لمجرد وجود ألم سني.',
-  },
-  {
-    id: 'case-swelling-02',
-    title: 'تورم مع صعوبة البلع',
-    level: 'حالة تعليمية · علامات الخطر',
-    scenario: 'يذكر شخص وجود تورم متزايد في الوجه مع صعوبة في البلع، وربما تغير في الصوت.',
-    question: 'ما الأولوية الصحيحة؟',
-    options: ['انتظار موعد أسنان روتيني', 'تجربة مسكن ومراقبة يومين', 'طلب رعاية طارئة فوراً بسبب احتمال امتداد عدوى وتهديد مجرى الهواء', 'الضغط على التورم لتفريغه'],
-    correctIndex: 2,
-    explanation: 'صعوبة البلع أو التنفس، وتغير الصوت، والتورم سريع الانتشار علامات إنذار. الأولوية تقييم طبي طارئ، وليس تأخير الرعاية أو محاولة تصريف التورم منزلياً.',
-    safetyNote: 'إذا كانت هذه الأعراض موجودة الآن، اتصل بخدمات الطوارئ المحلية أو توجّه إلى قسم الطوارئ فوراً.',
-  },
-  {
-    id: 'case-gum-03',
-    title: 'نزف اللثة عند التفريش',
-    level: 'حالة تعليمية · دواعم السن',
-    scenario: 'يلاحظ شخص نزفاً متكرراً من اللثة عند تنظيف الأسنان، مع احمرار موضعي. لا تتوفر قياسات الجيوب أو صور شعاعية.',
-    question: 'أي معلومة تساعد أكثر في التفريق بين التهاب اللثة والتهاب دواعم السن؟',
-    options: ['لون فرشاة الأسنان', 'وجود فقدان ارتباط سريري وفقدان عظم داعم عند التقييم', 'عدد مرات شرب الماء', 'شدة النزف وحدها'],
-    correctIndex: 1,
-    explanation: 'التفريق يعتمد على تقييم دواعم السن، بما في ذلك مستوى الارتباط السريري والعظم الداعم. النزف وحده لا يثبت وجود Periodontitis.',
-    safetyNote: 'النزف المستمر أو التورم أو الألم يستحق فحصاً لدى طبيب الأسنان، ولا يُستعاض عن الفحص بقياس منزلي.',
-  },
-  {
-    id: 'case-xray-04',
-    title: 'منطقة داكنة في صورة سنية',
-    level: 'حالة تعليمية · الأشعة',
-    scenario: 'تظهر منطقة شفافة شعاعياً قرب ذروة جذر في صورة ثنائية الأبعاد، لكن جودة الصورة وتاريخ السن غير معروفين.',
-    question: 'ما الاستنتاج الأكثر دقة؟',
-    options: ['الصورة وحدها تؤكد خراجاً سنياً', 'يمكن تجاهل الصورة إذا لم يوجد ألم', 'المظهر يحتاج إلى ربطه بالفحص والقصة المرضية وجودة الصورة وقد يلزم تصوير مناسب إضافي', 'كل منطقة داكنة تعني كيساً'],
-    correctIndex: 2,
-    explanation: 'الشفافية حول الذروة علامة تصويرية وليست تشخيصاً نهائياً بمفردها. يجب تقييم جودة الصورة، والأعراض، واختبارات السن، والسياق السريري.',
-    safetyNote: 'قراءة الأشعة السنية مسؤولية سريرية تتطلب صورة مناسبة وسياقاً وفحصاً؛ هذه الحالة للتعلم فقط.',
-  },
-  {
-    id: 'case-avulsion-05',
-    title: 'انخلاع سن دائم بعد إصابة',
-    level: 'حالة تعليمية · رضوض الأسنان',
-    scenario: 'بعد سقوط رياضي، أُخرج قاطع دائم بالكامل من مكانه. الشخص واعٍ ولا توجد إصابة عامة ظاهرة، ويسأل عن الأولوية.',
-    question: 'ما التصرف التعليمي الأكثر أماناً؟',
-    options: ['الانتظار حتى يخف الألم', 'اعتبارها حالة إسعافية سنية واتباع إرشادات IADT فوراً مع تقييم عاجل', 'إعادة زرع أي سن سواء كان لبنياً أو دائماً دون تمييز', 'تنظيف الجذر بفرشاة خشنة'], 
-    correctIndex: 1,
-    explanation: 'انخلاع السن الدائم الكامل حالة حساسة للوقت وتحتاج تدخلاً سنياً عاجلاً. يجب التمييز بين الدائم واللبني وعدم ارتجال تنظيف الجذر أو تأخير التقييم.',
-    safetyNote: 'الحالة افتراضية. اتبع إرشادات IADT الحالية واطلب رعاية أسنان طارئة فوراً؛ لا يُعاد زرع السن اللبني المنخلع.',
-  },
-  {
-    id: 'case-caries-risk-06',
-    title: 'طفل مع نوبات تسوّس متكررة',
-    level: 'حالة تعليمية · الوقاية وتقييم الخطورة',
-    scenario: 'طفل لديه آفات تسوّس جديدة، ويتناول مشروبات محلاة عدة مرات يومياً، ولا يعرف الأهل تركيز الفلورايد في معجون الأسنان.',
-    question: 'ما النهج الأنسب لتخطيط الوقاية؟',
-    options: ['إعطاء نصيحة واحدة دون تقييم', 'تقييم عوامل المرض والحماية والعمر والعادات ثم تخصيص خطة وقائية ومتابعتها', 'منع جميع الأطعمة بشكل مطلق', 'استخدام منتج فلورايد عالي التركيز دون فحص'], 
-    correctIndex: 1,
-    explanation: 'تقييم خطورة التسوّس يجمع التاريخ المرضي والعوامل السلوكية والسريرية والواقية، ثم تُخصص المتابعة والتدخلات بحسب العمر والحاجة.',
-    safetyNote: 'تركيز الفلورايد والوسيلة المناسبة للأطفال يحددهما طبيب الأسنان وفق العمر والخطورة والإرشادات المحلية.',
-  },
-];
-
-export const CLINICAL_CASE_COUNT = CASES.length;
+export { CLINICAL_CASE_COUNT } from '../study/clinicalCases';
 
 type Props = {
   completedCaseIds: string[];
   onCaseCompleted: (caseId: string) => void;
 };
 
+function DetailSection({ title, items, warning = false }: { title: string; items: string[]; warning?: boolean }) {
+  return (
+    <View style={styles.detailSection}>
+      <Text style={[styles.sectionTitle, warning && styles.warningTitle]}>{title}</Text>
+      {items.map((item, index) => (
+        <Text key={index} style={[styles.detailText, warning && styles.warningText]}>• {item}</Text>
+      ))}
+    </View>
+  );
+}
+
+function ClinicalCaseDetails({ item }: { item: DentalClinicalCase }) {
+  return (
+    <View style={styles.details}>
+      <DetailSection title="القصة المرضية التي يجب استكمالها" items={item.historyToCollect} />
+      <DetailSection title="الفحص والعلامات السريرية" items={item.clinicalFindings} />
+      <DetailSection title="علامات الخطر والاستعجال" items={item.redFlags} warning />
+      <View style={styles.detailSection}>
+        <Text style={styles.sectionTitle}>الاحتمالات التشخيصية التفريقية</Text>
+        {item.differentials.map((differential, index) => (
+          <View key={index} style={styles.differentialCard}>
+            <Text style={styles.differentialTitle}>{index + 1}. {differential.diagnosis}</Text>
+            <Text style={styles.miniHeading}>ما يدعم الاحتمال</Text>
+            {differential.supportingClues.map((clue, clueIndex) => <Text key={clueIndex} style={styles.detailText}>• {clue}</Text>)}
+            <Text style={styles.miniHeading}>ما يعارضه أو ما يزال ناقصاً</Text>
+            {differential.opposingOrMissingClues.map((clue, clueIndex) => <Text key={clueIndex} style={styles.detailText}>• {clue}</Text>)}
+          </View>
+        ))}
+      </View>
+      <DetailSection title="الفحوص المطلوبة أو التي قد تُبحث" items={item.investigations} />
+      <DetailSection title="خيارات التدبير ومبادئ العلاج" items={item.management} />
+      <DetailSection title="المضاعفات المحتملة" items={item.complications} warning />
+      <DetailSection title="المتابعة وإعادة التقييم" items={item.followUp} />
+      <View style={styles.detailSection}>
+        <Text style={styles.sectionTitle}>المراجع والإرشادات</Text>
+        {item.sources.map((source, index) => (
+          <TouchableOpacity key={index} onPress={() => Linking.openURL(source.url)} accessibilityRole="link">
+            <Text style={styles.sourceLink}>↗ {source.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 export default function ClinicalCaseSimulator({ completedCaseIds, onCaseCompleted }: Props) {
   const [caseIndex, setCaseIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
-  const currentCase = CASES[caseIndex];
+  const currentCase = DENTAL_CLINICAL_CASES[caseIndex];
   const completed = useMemo(() => new Set(completedCaseIds), [completedCaseIds]);
   const isCorrect = selectedAnswer === currentCase.correctIndex;
 
@@ -107,14 +72,15 @@ export default function ClinicalCaseSimulator({ completedCaseIds, onCaseComplete
     onCaseCompleted(currentCase.id);
   };
 
-  const nextCase = () => chooseCase((caseIndex + 1) % CASES.length);
+  const nextCase = () => chooseCase((caseIndex + 1) % DENTAL_CLINICAL_CASES.length);
 
   return (
     <View style={styles.container}>
-      <Text style={styles.heading}>محاكاة الحالات السريرية</Text>
-      <Text style={styles.helper}>حلّل المعطيات واختر الخطوة التعليمية الأنسب. الحالات افتراضية وليست تشخيصاً لمريض.</Text>
+      <Text style={styles.heading}>بنك الحالات السريرية</Text>
+      <Text style={styles.helper}>حالات تعليمية منظمة للتدرب على تحليل العلامات والتشخيص التفريقي والفحوص والتدبير والمضاعفات. لا تمثل تشخيصاً لمريض حقيقي.</Text>
+      <Text style={styles.progress}>أنجزت {DENTAL_CLINICAL_CASES.filter(item => completed.has(item.id)).length} من {DENTAL_CLINICAL_CASES.length} حالة</Text>
       <View style={styles.casePicker}>
-        {CASES.map((item, index) => (
+        {DENTAL_CLINICAL_CASES.map((item, index) => (
           <TouchableOpacity key={item.id} onPress={() => chooseCase(index)} style={[styles.caseChip, index === caseIndex && styles.caseChipActive]}>
             <Text style={[styles.caseChipText, index === caseIndex && styles.caseChipTextActive]}>{index + 1}. {item.title}</Text>
             {completed.has(item.id) ? <Text style={styles.doneMark}>✓</Text> : null}
@@ -122,57 +88,77 @@ export default function ClinicalCaseSimulator({ completedCaseIds, onCaseComplete
         ))}
       </View>
       <View style={styles.caseCard}>
-        <Text style={styles.level}>{currentCase.level}</Text>
+        <Text style={styles.level}>{itemLevel(currentCase)}</Text>
         <Text style={styles.caseTitle}>{currentCase.title}</Text>
-        <Text style={styles.scenario}>{currentCase.scenario}</Text>
-        <Text style={styles.question}>{currentCase.question}</Text>
-        {currentCase.options.map((option, index) => {
-          const correct = index === currentCase.correctIndex;
-          const chosen = selectedAnswer === index;
-          return (
-            <TouchableOpacity
-              key={index}
-              disabled={selectedAnswer !== null}
-              onPress={() => answer(index)}
-              style={[styles.option, chosen && (correct ? styles.correct : styles.incorrect), selectedAnswer !== null && correct && styles.correct]}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: selectedAnswer !== null, selected: chosen }}
-            >
-              <Text style={[styles.optionText, (chosen || (selectedAnswer !== null && correct)) && styles.optionTextActive]}>{option}</Text>
-            </TouchableOpacity>
-          );
-        })}
-        {selectedAnswer !== null ? (
-          <View style={styles.feedback}>
-            <Text style={[styles.feedbackTitle, { color: isCorrect ? '#8FD4AE' : '#E7A1B5' }]}>{isCorrect ? 'تحليل صحيح' : 'لنراجع القرار'}</Text>
-            <Text style={styles.explanation}>{currentCase.explanation}</Text>
-            <Text style={styles.safety}>{currentCase.safetyNote}</Text>
-            <TouchableOpacity onPress={nextCase} style={styles.nextButton}>
-              <Text style={styles.nextButtonText}>الحالة التالية</Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
+        <Text style={styles.specialty}>{currentCase.specialty}</Text>
+        <Text style={styles.sectionTitle}>عرض الحالة</Text>
+        <Text style={styles.scenario}>{currentCase.presentation}</Text>
+        <ClinicalCaseDetails item={currentCase} />
+        <View style={styles.quizBlock}>
+          <Text style={styles.question}>اختبر فهمك: {currentCase.question}</Text>
+          {currentCase.options.map((option, index) => {
+            const correct = index === currentCase.correctIndex;
+            const chosen = selectedAnswer === index;
+            return (
+              <TouchableOpacity
+                key={index}
+                disabled={selectedAnswer !== null}
+                onPress={() => answer(index)}
+                style={[styles.option, chosen && (correct ? styles.correct : styles.incorrect), selectedAnswer !== null && correct && styles.correct]}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: selectedAnswer !== null, selected: chosen }}
+              >
+                <Text style={[styles.optionText, (chosen || (selectedAnswer !== null && correct)) && styles.optionTextActive]}>{option}</Text>
+              </TouchableOpacity>
+            );
+          })}
+          {selectedAnswer !== null ? (
+            <View style={styles.feedback}>
+              <Text style={[styles.feedbackTitle, { color: isCorrect ? '#8FD4AE' : '#E7A1B5' }]}>{isCorrect ? 'تحليل صحيح' : 'لنراجع القرار'}</Text>
+              <Text style={styles.explanation}>{currentCase.explanation}</Text>
+              <TouchableOpacity onPress={nextCase} style={styles.nextButton}>
+                <Text style={styles.nextButtonText}>الحالة التالية</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+        </View>
       </View>
-      <Text style={styles.progress}>أكملت {CASES.filter(item => completed.has(item.id)).length} من {CASES.length} حالات</Text>
     </View>
   );
+}
+
+function itemLevel(item: DentalClinicalCase): string {
+  return 'حالة تعليمية · ' + item.level;
 }
 
 const styles = StyleSheet.create({
   container: { gap: 11 },
   heading: { color: '#F5EAF3', fontSize: 15, fontWeight: '800', textAlign: 'right' },
-  helper: { color: '#A99BAA', fontSize: 11, lineHeight: 18, textAlign: 'right' },
+  helper: { color: '#A99BAA', fontSize: 11, lineHeight: 19, textAlign: 'right' },
+  progress: { color: '#B9A7B8', fontSize: 10, textAlign: 'right' },
   casePicker: { gap: 7 },
   caseChip: { minHeight: 42, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: '#443447', backgroundColor: '#19141F', flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
   caseChipActive: { backgroundColor: '#46243D', borderColor: '#B75B91' },
-  caseChipText: { color: '#C7B8C7', fontSize: 11, textAlign: 'right', flex: 1 },
+  caseChipText: { color: '#C7B8C7', fontSize: 11, textAlign: 'right', flex: 1, lineHeight: 18 },
   caseChipTextActive: { color: '#FFF0FA', fontWeight: '700' },
   doneMark: { color: '#8FD4AE', fontWeight: '900', paddingLeft: 8 },
   caseCard: { backgroundColor: '#19141F', borderRadius: 18, borderWidth: 1, borderColor: '#3B2C40', padding: 15, gap: 10 },
   level: { color: '#D28AB8', fontSize: 10, fontWeight: '800', textAlign: 'right' },
   caseTitle: { color: '#F8ECF5', fontSize: 16, fontWeight: '800', textAlign: 'right' },
+  specialty: { color: '#C4A6C0', fontSize: 10, textAlign: 'right' },
+  sectionTitle: { color: '#E9C4DD', fontSize: 12, lineHeight: 20, fontWeight: '800', textAlign: 'right', marginTop: 4 },
   scenario: { color: '#D0C5D0', fontSize: 12, lineHeight: 22, textAlign: 'right' },
-  question: { color: '#E9C4DD', fontSize: 12, lineHeight: 21, fontWeight: '800', textAlign: 'right', marginTop: 4 },
+  details: { gap: 11, borderTopWidth: 1, borderTopColor: '#3D3041', paddingTop: 10 },
+  detailSection: { gap: 5 },
+  detailText: { color: '#D0C5D0', fontSize: 11, lineHeight: 19, textAlign: 'right' },
+  warningTitle: { color: '#F0A7B2' },
+  warningText: { color: '#E7B9C1' },
+  differentialCard: { backgroundColor: '#211B27', borderWidth: 1, borderColor: '#493A4C', borderRadius: 12, padding: 10, gap: 5, marginTop: 5 },
+  differentialTitle: { color: '#F3D9EA', fontSize: 11, fontWeight: '800', textAlign: 'right' },
+  miniHeading: { color: '#C58FB2', fontSize: 10, fontWeight: '800', textAlign: 'right', marginTop: 3 },
+  sourceLink: { color: '#D69BC3', fontSize: 10, lineHeight: 18, textAlign: 'right', textDecorationLine: 'underline' },
+  quizBlock: { borderTopWidth: 1, borderTopColor: '#3D3041', paddingTop: 12, gap: 9, marginTop: 5 },
+  question: { color: '#E9C4DD', fontSize: 12, lineHeight: 21, fontWeight: '800', textAlign: 'right' },
   option: { minHeight: 48, borderRadius: 12, borderWidth: 1, borderColor: '#493A4C', backgroundColor: '#211B27', justifyContent: 'center', paddingHorizontal: 12 },
   correct: { borderColor: '#5FAD86', backgroundColor: '#18382C' },
   incorrect: { borderColor: '#C66C75', backgroundColor: '#3B2028' },
@@ -181,8 +167,6 @@ const styles = StyleSheet.create({
   feedback: { borderTopWidth: 1, borderTopColor: '#3D3041', paddingTop: 12, gap: 9, marginTop: 4 },
   feedbackTitle: { fontSize: 12, fontWeight: '800', textAlign: 'right' },
   explanation: { color: '#D0C5D0', fontSize: 11, lineHeight: 20, textAlign: 'right' },
-  safety: { color: '#E4B5C3', fontSize: 10, lineHeight: 18, textAlign: 'right', backgroundColor: '#2B1C28', padding: 10, borderRadius: 10 },
   nextButton: { minHeight: 44, borderRadius: 13, backgroundColor: '#74365E', alignItems: 'center', justifyContent: 'center' },
   nextButtonText: { color: '#FFF3FA', fontSize: 12, fontWeight: '800' },
-  progress: { color: '#B9A7B8', fontSize: 10, textAlign: 'right' },
 });
