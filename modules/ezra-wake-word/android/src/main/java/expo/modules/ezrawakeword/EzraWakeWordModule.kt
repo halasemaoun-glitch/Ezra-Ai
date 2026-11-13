@@ -58,6 +58,11 @@ class EzraWakeWordModule : Module() {
       EzraAccessibilityService.clickText(target)
     }
 
+    AsyncFunction("typeAccessibilityText") { text: String ->
+      if (text.isBlank() || text.length > 4000) return@AsyncFunction false
+      EzraAccessibilityService.typeFocusedText(text)
+    }
+
     AsyncFunction("scrollAccessibility") { direction: String ->
       if (direction !in listOf("up", "down", "للأعلى", "للأسفل")) return@AsyncFunction false
       EzraAccessibilityService.scroll(direction)
