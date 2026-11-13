@@ -1955,7 +1955,8 @@ export default function App() {
       [
         { text: 'إلغاء', style: 'cancel', onPress: () => setSending(false) },
         { text: 'اتصال الآن', onPress: () => { void executeCallCommand(commandText, voiceReply); } },
-      ]
+      ],
+      { cancelable: false }
     );
     return true;
   };
@@ -2174,7 +2175,8 @@ export default function App() {
               })();
             },
           },
-        ]
+        ],
+        { cancelable: false }
       );
       return true;
     }
