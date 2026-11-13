@@ -2013,7 +2013,6 @@ export default function App() {
     const smsMatch = parseSmsCommand(commandText);
     if (smsMatch) {
       const { contactName, message: smsBody } = smsMatch;
-      const smsBody = smsMatch[2].trim();
       setSending(true);
       try {
         const contactsPermission = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_CONTACTS);
