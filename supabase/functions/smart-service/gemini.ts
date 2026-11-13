@@ -45,7 +45,9 @@ export function extractGeminiReply(result: unknown): string | null {
   const parts = candidates[0]?.content?.parts;
   if (!Array.isArray(parts)) return null;
   const reply = parts
-    .map((part: unknown) => part && typeof part === "object" && typeof (part as { text?: unknown }).text === "string"
+    .map((part: unknown) => part && typeof part === "object" &&
+      (part as { thought?: unknown }).thought !== true &&
+      typeof (part as { text?: unknown }).text === "string"
       ? (part as { text: string }).text
       : "")
     .join("")
