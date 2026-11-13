@@ -3,7 +3,7 @@ import type { DentalReference } from './studyLibrary';
 export type DentalReferenceMatch = { reference: DentalReference; score: number };
 
 const DIACRITICS = /[\u064B-\u065F\u0670\u0640]/g;
-const STOP_WORDS = new Set(['the','and','for','with','this','that','from','what','when','where','which','does','have','about','كيف','ماذا','هذا','هذه','على','الى','إلى','من','عن','هل','ما','لماذا','متى','اين','أين','انا','أنا','انت','أنت']);
+const STOP_WORDS = new Set(['the','and','for','with','this','that','from','what','when','where','which','does','have','about','كيف','ماذا','هذا','هذه','على','الى','إلى','من','عن','هل','ما','لماذا','متى','اين','أين','انا','أنا','انت','أنت','هو','هي','كان','كانت','يكون','تكون']);
 const SYNONYMS: Record<string, string[]> = {
   'تسوس':['caries','decay','نخر','cavity'], 'نخر':['تسوس','caries','decay'],
   'لثة':['gingiva','gingivitis','periodontitis','دواعم'], 'التهاب':['inflammation','pulpitis','gingivitis','periodontitis'],
