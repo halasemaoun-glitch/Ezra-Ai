@@ -2309,10 +2309,16 @@ export default function App() {
         }
 
         const { data: aiData, error: aiError } = aiRequest.result;
-        if (aiError || typeof aiData?.reply !== 'string' || !aiData.reply.trim()) {
+        const selectedAiConfigUnavailable = aiPreferences.provider === 'gemini'
+          ? aiData?.provider !== 'gemini' || aiData?.model !== aiPreferences.model
+          : aiPreferences.model !== DEFAULT_AI_MODELS.groq && aiData?.model !== aiPreferences.model;
+        if (aiError || typeof aiData?.reply !== 'string' || !aiData.reply.trim() || selectedAiConfigUnavailable) {
           setAssistantConnection('offline');
           const context = (aiError as any)?.context;
           const details = [
+            selectedAiConfigUnavailable
+              ? 'لم تؤكد خدمة EZRA تشغيل المزود والنموذج المختارين. يحتاج تحديث smart-service إلى النشر، كما يحتاج Gemini إلى إضافة GEMINI_API_KEY في أسرار Supabase أولاً.'
+              : null,
             aiError?.message,
             context?.status ? `HTTP status: ${context.status}` : null,
             context?.statusText,
