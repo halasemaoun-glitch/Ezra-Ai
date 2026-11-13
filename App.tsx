@@ -40,7 +40,7 @@ import { ASSISTANT_MODE_OPTIONS, getAssistantModeGuidance, getAssistantModeSugge
 import LearningToolsModal from './src/components/LearningToolsModal';
 import { DENTAL_REFERENCE_LIBRARY } from './src/study/studyLibrary';
 import { supabase } from './src/lib/supabase';
-import { DEFAULT_EZRA_VOICE } from './src/voice/voiceProfile';
+import { DEFAULT_EZRA_VOICE, detectEzraSpeechLanguage } from './src/voice/voiceProfile';
 import { AI_MODELS, AI_PROVIDER_OPTIONS, DEFAULT_AI_MODELS, normalizeAiModel, normalizeAiProvider, type AiProvider } from './src/ai/aiModelSettings';
 import { DEFAULT_MIC_SENSITIVITY, advanceMicInterruptionFrames, getCompleteSilenceLengthMs, getMinimumSpeechLengthMs, getMicInterruptionFramesRequired, getPossibleSilenceLengthMs, normalizeMicSensitivity, scaleMicLevel } from './src/voice/micSensitivity';
 import { parseCallContactName } from './src/phone/commandParser';
@@ -2893,7 +2893,9 @@ export default function App() {
     await EzraHabibiTts?.stopAudio().catch(() => {});
     activeHabibiSpeechRef.current = null;
     setSpeakingMessageId(messageId);
-    const speechLanguage = responseLanguage;
+    const speechLanguage = DEFAULT_EZRA_VOICE.automaticOutputLanguage
+      ? detectEzraSpeechLanguage(text, responseLanguage)
+      : responseLanguage;
 
     if (speechLanguage === 'ar' && habibiEngineReady && EzraHabibiTts && Platform.OS === 'android') {
       activeHabibiSpeechRef.current = {
