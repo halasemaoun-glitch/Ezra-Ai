@@ -42,7 +42,7 @@ import { DENTAL_REFERENCE_LIBRARY } from './src/study/studyLibrary';
 import { supabase } from './src/lib/supabase';
 import { DEFAULT_EZRA_VOICE } from './src/voice/voiceProfile';
 import { AI_MODELS, AI_PROVIDER_OPTIONS, DEFAULT_AI_MODELS, normalizeAiModel, normalizeAiProvider, type AiProvider } from './src/ai/aiModelSettings';
-import { DEFAULT_MIC_SENSITIVITY, getMicInterruptionThreshold, normalizeMicSensitivity, scaleMicLevel } from './src/voice/micSensitivity';
+import { DEFAULT_MIC_SENSITIVITY, getCompleteSilenceLengthMs, getMinimumSpeechLengthMs, getMicInterruptionThreshold, getPossibleSilenceLengthMs, normalizeMicSensitivity, scaleMicLevel } from './src/voice/micSensitivity';
 import { parseCallContactName } from './src/phone/commandParser';
 import { parseSmsCommand, parseIncompleteSmsCommand } from './src/phone/smsCommandParser';
 import { isScreenCaptureCommand } from './src/phone/screenCaptureCommands';
@@ -2640,8 +2640,9 @@ export default function App() {
         // Some Android recognition providers may ignore these optional intent extras.
         ...(Platform.OS === 'android' ? {
           androidIntentOptions: {
-            EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS: 1100,
-            EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 1900,
+            EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS: getMinimumSpeechLengthMs(micSensitivityRef.current),
+            EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS: getPossibleSilenceLengthMs(micSensitivityRef.current),
+            EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: getCompleteSilenceLengthMs(micSensitivityRef.current),
           },
         } : {}),
         volumeChangeEventOptions: { enabled: true, intervalMillis: 90 },
@@ -3720,7 +3721,7 @@ export default function App() {
                   <View style={styles.settingCopy}>
                     <Text style={styles.settingTitle}>حساسية الميكروفون</Text>
                     <Text style={styles.settingHint}>{micSensitivity <= 25 ? 'منخفضة' : micSensitivity >= 75 ? 'مرتفعة' : 'متوازنة'} · {micSensitivity}%</Text>
-                    <Text style={styles.settingHint}>ارفعي الحساسية إذا كان EZRA لا يلتقط صوتك بسهولة، وخفّضيها إذا كان يلتقط الضوضاء أو يقاطع كلامه بسبب الصدى. يؤثر هذا الضبط في مستوى الصوت وعتبة مقاطعة الرد؛ أما تحويل الكلام إلى نص فيبقى تابعًا لمحرك التعرف في Android.</Text>
+                    <Text style={styles.settingHint}>ارفعي الحساسية لالتقاط المقاطع الأقصر وإنهاء الكلام بعد فواصل أقصر، وخفّضيها لتجاهل الأصوات القصيرة وانتظار توقف أطول. يؤثر الضبط في عتبة المقاطعة ومدد الكلام والصمت التي يرسلها EZRA إلى Android؛ بعض مزودي التعرف قد يتجاهلون هذه التلميحات، ولا يغيّر كسب الميكروفون المادي.</Text>
                   </View>
                   <View style={{ height: 7, borderRadius: 8, backgroundColor: '#342A36', overflow: 'hidden' }}>
                     <View style={{ height: 7, width: `${micSensitivity}%`, backgroundColor: '#C47AA8' }} />
