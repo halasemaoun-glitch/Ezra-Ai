@@ -18,15 +18,15 @@ export const AI_MODELS: Record<AiProvider, AiModelOption[]> = {
     { id: 'openai/gpt-oss-20b', label: 'GPT-OSS 20B', description: 'أخف وأسرع للمحادثات اليومية', supportsImages: false },
   ],
   gemini: [
-    { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', description: 'متوازن للشرح والتحليل ويدعم الصور', supportsImages: true },
-    { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite', description: 'خفيف وسريع ويدعم الصور', supportsImages: true },
+    { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', description: 'متوازن للشرح والتحليل ويدعم الصور', supportsImages: true },
+    { id: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash-Lite', description: 'خفيف وسريع ويدعم الصور', supportsImages: true },
   ],
 };
 
 export const DEFAULT_AI_PROVIDER: AiProvider = 'groq';
 export const DEFAULT_AI_MODELS: Record<AiProvider, string> = {
   groq: 'openai/gpt-oss-120b',
-  gemini: 'gemini-2.5-flash',
+  gemini: 'gemini-3.8-flash',
 };
 export const GROQ_VISION_MODEL = 'qwen/qwen3.8-27b';
 
