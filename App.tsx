@@ -1905,7 +1905,9 @@ export default function App() {
         reply = 'أحتاج إذن جهات الاتصال حتى أجد الرقم. اسمحي بالإذن ثم أعيدي الطلب.';
       } else {
         const phone = await EzraWakeWord.findContactPhone(contactName);
-        if (!phone) {
+        if (phone === '__AMBIGUOUS__') {
+          reply = `وجدت أكثر من جهة اتصال تطابق «${contactName}». استخدمي الاسم الكامل لنتجنب الاتصال بالشخص الخطأ.`;
+        } else if (!phone) {
           reply = `ما لقيت جهة اتصال محفوظة باسم ${contactName}. تأكدي من الاسم في جهات الاتصال وجربي مرة ثانية.`;
         } else {
           const callPermission = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CALL_PHONE);
@@ -2149,7 +2151,9 @@ export default function App() {
                     await sayResult('أحتاج إذن جهات الاتصال للعثور على الرقم.');
                   } else {
                     const phone = await EzraWakeWord.findContactPhone(contactName);
-                    if (!phone) {
+                    if (phone === '__AMBIGUOUS__') {
+                      await sayResult(`وجدت أكثر من جهة اتصال تطابق «${contactName}». أرسلي الاسم الكامل حتى لا نرسل للشخص الخطأ.`);
+                    } else if (!phone) {
                       await sayResult(`لم أجد جهة اتصال باسم ${contactName}.`);
                     } else {
                       const smsPermission = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.SEND_SMS);
