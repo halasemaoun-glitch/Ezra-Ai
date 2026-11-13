@@ -320,7 +320,7 @@ export default function App() {
   const [micSensitivity, setMicSensitivity] = useState(DEFAULT_MIC_SENSITIVITY);
   const micSensitivityRef = useRef(DEFAULT_MIC_SENSITIVITY);
   const [voiceRetrying, setVoiceRetrying] = useState(false);
-  const [arabicRecognitionFallback, setArabicRecognitionFallback] = useState(0);
+  const [arabicRecognitionFallback, setArabicRecognitionFallback] = useState(1);
   const [voiceRetryMessage, setVoiceRetryMessage] = useState('');
   const [autoListen, setAutoListen] = useState(true);
   const [backgroundWakeEnabled, setBackgroundWakeEnabled] = useState(false);
@@ -1625,6 +1625,7 @@ export default function App() {
     }
   });
   useSpeechRecognitionEvent('error', event => {
+    console.warn('EZRA speech recognition error:', event.error);
     voiceStartInFlightRef.current = false;
     voiceRecognitionActiveRef.current = false;
     setIsListening(false);
@@ -1651,15 +1652,15 @@ export default function App() {
         }
         return;
       }
-      // Try the device's broader Arabic recognizer locales if the Algerian locale
-      // returns no speech. A generic Arabic locale is the final compatibility fallback.
+      // Android commonly lacks a reliable Algerian (ar-DZ) speech model.
+      // Start with the widely supported Arabic Saudi model, then fall back to generic Arabic.
       if (responseLanguage !== 'en' && arabicRecognitionFallback < 2) {
         setArabicRecognitionFallback(current => current + 1);
-        setVoiceRetryMessage(arabicRecognitionFallback === 0
-          ? 'أعيد المحاولة باللهجة العربية الأوسع…'
-          : 'أعيد المحاولة بالتعرّف العربي العام…');
+        setVoiceRetryMessage('أعيد تهيئة الاستماع باللغة العربية…');
       } else {
-        setVoiceRetryMessage('لم ألتقط صوتًا واضحًا. تأكدي من إذن الميكروفون وخدمة التعرّف على الكلام…');
+        // A no-speech timeout is not proof of a microphone/permission failure.
+        // Re-open recognition quietly; only permission/audio-capture errors stop auto-listening.
+        setVoiceRetryMessage('أعيد فتح الاستماع… يمكنك التحدث الآن.');
       }
       voiceRetryCountRef.current = 0;
       setVoiceRetrying(true);
@@ -2802,7 +2803,7 @@ export default function App() {
       interruptVoiceFramesRef.current = 0;
       // Use the language explicitly selected by the user; do not auto-switch recognition locales.
       ExpoSpeechRecognitionModule.start({
-        lang: responseLanguage === 'en' ? 'en-US' : (arabicRecognitionFallback === 0 ? 'ar-DZ' : arabicRecognitionFallback === 1 ? 'ar-SA' : 'ar'),
+        lang: responseLanguage === 'en' ? 'en-US' : (arabicRecognitionFallback === 1 ? 'ar-SA' : 'ar'),
         contextualStrings: responseLanguage === 'en' ? ['EZRA', 'Ezra'] : ['إزرا', 'ازرا', 'يا إزرا', 'EZRA'],
         interimResults: true,
         continuous: false,
