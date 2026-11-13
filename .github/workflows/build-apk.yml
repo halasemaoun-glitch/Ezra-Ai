@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   android-apk:
-    name: Generate installable Android APK
+    name: Generate OPPO-compatible Android APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -47,14 +47,14 @@ jobs:
       - name: Generate native Android project
         run: npx expo prebuild --platform android --clean
 
-      - name: Build installable debug APK
+      - name: Build arm64 Android APK for OPPO A76
         working-directory: android
-        run: ./gradlew --no-daemon assembleDebug
+        run: ./gradlew --no-daemon -PreactNativeArchitectures=arm64-v8a assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: EZRA-latest-Android-APK
+          name: EZRA-OPPO-A76-Android-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
