@@ -40,6 +40,7 @@ import { ASSISTANT_MODE_OPTIONS, getAssistantModeGuidance, getAssistantModeSugge
 import LearningToolsModal from './src/components/LearningToolsModal';
 import { DENTAL_REFERENCE_LIBRARY } from './src/study/studyLibrary';
 import { retrieveDentalReferences } from './src/study/dentalKnowledge';
+import { retrieveDentalClinicalCases } from './src/study/dentalKnowledge';
 import { DENTAL_CLINICAL_CASES } from './src/study/clinicalCases';
 import { supabase } from './src/lib/supabase';
 import { DEFAULT_EZRA_VOICE, detectEzraSpeechLanguage } from './src/voice/voiceProfile';
