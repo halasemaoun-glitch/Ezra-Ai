@@ -2110,8 +2110,8 @@ export default function App() {
       const requestedApp = appMatch[1].trim();
       const aliases: Record<string, string> = {
         'واتساب': 'WhatsApp', 'يوتيوب': 'YouTube', 'كروم': 'Chrome',
-        'انستغرام': 'Instagram', 'انستجرام': 'Instagram', 'فيسبوك': 'Facebook',
-        'تيك توك': 'TikTok', 'تيليجرام': 'Telegram', 'تلغرام': 'Telegram',
+        'انستغرام': 'Instagram', 'انستجرام': 'Instagram', 'انستا': 'Instagram', 'فيسبوك': 'Facebook',
+        'ماسنجر': 'Messenger', 'تيك توك': 'TikTok', 'تيليجرام': 'Telegram', 'تلغرام': 'Telegram', 'تيليغرام': 'Telegram',
         'خرائط': 'Maps', 'الخرائط': 'Maps', 'الكاميرا': 'Camera',
         'الساعة': 'Clock', 'الاعدادات': 'Settings', 'جيميل': 'Gmail',
         'البريد': 'Gmail', 'الهاتف': 'Phone', 'المكالمات': 'Phone',
