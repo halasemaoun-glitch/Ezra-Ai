@@ -159,10 +159,22 @@ Java_expo_modules_ezrahabibitts_EzraHabibiTtsModule_nativeInitialize(
   if (!loadWavMono(referencePath, g_reference, g_reference_rate)) {
     return env->NewStringUTF("Reference audio must be a readable PCM WAV (8/16-bit) or float32 WAV, mono/stereo.");
   }
-  if (g_reference.size() < static_cast<size_t>(g_reference_rate / 2) ||
-      g_reference.size() > static_cast<size_t>(g_reference_rate * 1.3)) {
+  const double referenceSeconds =
+      static_cast<double>(g_reference.size()) / static_cast<double>(g_reference_rate);
+  if (referenceSeconds < 0.5) {
     g_reference.clear();
-    return env->NewStringUTF("Reference audio must be between 0.5 and 1.3 seconds for the mobile frame budget.");
+    const std::string error = "Reference WAV is only " +
+        std::to_string(referenceSeconds) +
+        " seconds. It must contain at least 0.5 seconds of audio.";
+    return env->NewStringUTF(error.c_str());
+  }
+  // The mobile F5 frame budget is capped at 1.3 seconds. Users often select
+  // a short clip with a little leading/trailing silence; safely cap long WAVs
+  // rather than rejecting an otherwise valid reference recording.
+  const size_t maxReferenceFrames =
+      static_cast<size_t>(g_reference_rate * 1.2);
+  if (g_reference.size() > maxReferenceFrames) {
+    g_reference.resize(maxReferenceFrames);
   }
 
   audiocpp_status status = audiocpp_registry_create(nullptr, &g_registry);
