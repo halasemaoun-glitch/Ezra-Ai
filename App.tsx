@@ -42,7 +42,7 @@ import { DENTAL_REFERENCE_LIBRARY } from './src/study/studyLibrary';
 import { supabase } from './src/lib/supabase';
 import { DEFAULT_EZRA_VOICE } from './src/voice/voiceProfile';
 import { AI_MODELS, AI_PROVIDER_OPTIONS, DEFAULT_AI_MODELS, normalizeAiModel, normalizeAiProvider, type AiProvider } from './src/ai/aiModelSettings';
-import { DEFAULT_MIC_SENSITIVITY, getCompleteSilenceLengthMs, getMinimumSpeechLengthMs, getMicInterruptionThreshold, getMicInterruptionFramesRequired, getPossibleSilenceLengthMs, normalizeMicSensitivity, scaleMicLevel } from './src/voice/micSensitivity';
+import { DEFAULT_MIC_SENSITIVITY, advanceMicInterruptionFrames, getCompleteSilenceLengthMs, getMinimumSpeechLengthMs, getMicInterruptionFramesRequired, getPossibleSilenceLengthMs, normalizeMicSensitivity, scaleMicLevel } from './src/voice/micSensitivity';
 import { parseCallContactName } from './src/phone/commandParser';
 import { parseSmsCommand, parseIncompleteSmsCommand } from './src/phone/smsCommandParser';
 import { isScreenCaptureCommand } from './src/phone/screenCaptureCommands';
@@ -1455,9 +1455,11 @@ export default function App() {
     // so the user's words continue into the transcript after playback stops.
     if (voiceCaptureDuringSpeechRef.current && speakingMessageId && voiceHome && autoListenRef.current && appIsActiveRef.current) {
       // Require a sustained, clear voice signal so EZRA's own speaker echo is less likely to interrupt it.
-      interruptVoiceFramesRef.current = normalized >= getMicInterruptionThreshold(micSensitivityRef.current)
-        ? interruptVoiceFramesRef.current + 1
-        : 0;
+      interruptVoiceFramesRef.current = advanceMicInterruptionFrames(
+        interruptVoiceFramesRef.current,
+        normalized,
+        micSensitivityRef.current,
+      );
       if (interruptVoiceFramesRef.current >= getMicInterruptionFramesRequired(micSensitivityRef.current)) {
         interruptVoiceFramesRef.current = 0;
         voiceInterruptionConfirmedRef.current = true;
@@ -2665,6 +2667,12 @@ export default function App() {
         voiceRetryCountRef.current += 1;
         setVoiceRetryMessage('تعذّر بدء الاستماع، سأحاول مجددًا…');
         setVoiceRetrying(true);
+      } else if (autoListenRef.current && appIsActiveRef.current && voiceHome) {
+        autoListenRef.current = false;
+        setAutoListen(false);
+        setVoiceRetrying(false);
+        setVoiceRetryMessage('');
+        Alert.alert('تعذّر استمرار الاستماع', 'لم يتمكن الهاتف من بدء التعرّف الصوتي بعد عدة محاولات. تحقق من خدمة الصوت ثم أعد تفعيله.');
       }
       console.warn('Automatic voice listening could not start.');
     }
