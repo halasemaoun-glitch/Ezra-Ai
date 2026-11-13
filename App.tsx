@@ -3720,7 +3720,7 @@ export default function App() {
                   <View style={styles.settingCopy}>
                     <Text style={styles.settingTitle}>حساسية الميكروفون</Text>
                     <Text style={styles.settingHint}>{micSensitivity <= 25 ? 'منخفضة' : micSensitivity >= 75 ? 'مرتفعة' : 'متوازنة'} · {micSensitivity}%</Text>
-                    <Text style={styles.settingHint}>ارفعي الحساسية لالتقاط المقاطع الأقصر وإنهاء الكلام بعد فواصل أقصر، وخفّضيها لتجاهل الأصوات القصيرة وانتظار توقف أطول. يؤثر الضبط في عتبة المقاطعة ومدد الكلام والصمت التي يرسلها EZRA إلى Android؛ بعض مزودي التعرف قد يتجاهلون هذه التلميحات، ولا يغيّر كسب الميكروفون المادي.</Text>
+                    <Text style={styles.settingHint}>ارفعي الحساسية لالتقاط المقاطع الأقصر وإنهاء الكلام بعد فواصل أقصر، وخفّضيها لتجاهل الأصوات القصيرة وانتظار توقف أطول. يؤثر الضبط في عتبة المقاطعة ومدد الكلام والصمت التي يرسلها EZRA إلى Android؛ بعض مزودي التعرف قد يتجاهلون هذه التلميحات، وتُطبّق مدد الكلام والصمت عند جلسة الاستماع التالية. لا يغيّر هذا كسب الميكروفون المادي.</Text>
                   </View>
                   <View style={{ height: 7, borderRadius: 8, backgroundColor: '#342A36', overflow: 'hidden' }}>
                     <View style={{ height: 7, width: `${micSensitivity}%`, backgroundColor: '#C47AA8' }} />
