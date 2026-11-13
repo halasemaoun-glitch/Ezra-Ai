@@ -1,4 +1,3 @@
-import { Ream } from 'reamkit';
 import {
   getDocumentExtension,
   htmlToPlainText,
@@ -32,6 +31,10 @@ export async function extractDocumentText(
     content = new TextDecoder('utf-8').decode(bytes).replace(/^\uFEFF/, '').trim();
   } else {
     try {
+      // Load the office/PDF parser only when a document is actually opened.
+      // Ream's legacy encoding detector requests windows-1252 TextDecoder,
+      // which is not available in the current Hermes runtime at app startup.
+      const { Ream } = await import('reamkit');
       const parsed = Ream.parse(bytes);
       if (parsed.format !== extension) {
         throw new Error('امتداد الملف لا يطابق محتواه الفعلي.');
