@@ -988,22 +988,23 @@ export default function App() {
     if (!session) return;
     setMemoryLoading(true);
     setMemoryLoadError('');
-    const { data, error } = await supabase
-      .from('memories')
-      .select('id, content, category, approval_status, created_at')
-      .eq('owner_id', session.user.id)
-      .order('created_at', { ascending: false })
-      .limit(100);
-
-    if (error) {
+    try {
+      const { data, error } = await supabase
+        .from('memories')
+        .select('id, content, category, approval_status, created_at')
+        .eq('owner_id', session.user.id)
+        .order('created_at', { ascending: false })
+        .limit(100);
+      if (error) throw error;
+      setMemories((data ?? []) as MemoryItem[]);
+    } catch (error) {
       console.error('Could not load memories:', error);
-      setMemoryLoadError('تعذّر تحميل الذكريات. تحقق من الاتصال ثم حاول مجدداً.');
-      if (showError) Alert.alert('تعذّر تحميل الذكريات', 'تحقق من الاتصال ثم حاول مرة أخرى.');
+      const detail = error instanceof Error ? error.message : String(error);
+      setMemoryLoadError(`تعذّر تحميل الذكريات: ${detail}`);
+      if (showError) Alert.alert('تعذّر تحميل الذكريات', 'تحققي من تسجيل الدخول واتصال الإنترنت ثم حاولي مرة أخرى.');
+    } finally {
       setMemoryLoading(false);
-      return;
     }
-    setMemories((data ?? []) as MemoryItem[]);
-    setMemoryLoading(false);
   };
 
   const openMemoryCenter = async () => {
@@ -1261,26 +1262,28 @@ export default function App() {
     const content = memoryDraft.trim();
     if (!session || !content || memorySaving) return;
     setMemorySaving(true);
-    const { data, error } = await supabase
-      .from('memories')
-      .insert({
-        owner_id: session.user.id,
-        content,
-        category: 'general',
-        approval_status: 'pending',
-      })
-      .select('id, content, category, approval_status, created_at')
-      .single();
-
-    if (error || !data) {
-      console.error('Could not save memory:', error);
-      Alert.alert('تعذّر حفظ الذكرى', 'تحقق من الاتصال ثم حاول مرة أخرى.');
-    } else {
+    try {
+      const { data, error } = await supabase
+        .from('memories')
+        .insert({
+          owner_id: session.user.id,
+          content,
+          category: 'general',
+          approval_status: 'pending',
+        })
+        .select('id, content, category, approval_status, created_at')
+        .single();
+      if (error) throw error;
+      if (!data) throw new Error('لم يُرجع الخادم سجل الذكرى بعد الحفظ.');
       setMemories(previous => [data as MemoryItem, ...previous]);
       setMemoryDraft('');
       Alert.alert('تم حفظ الاقتراح', 'أُضيفت الذكرى كاقتراح بانتظار موافقتك.');
+    } catch (error) {
+      console.error('Could not save memory:', error);
+      Alert.alert('تعذّر حفظ الذكرى', 'تعذّر الوصول إلى خدمة الذكريات أو رفض الخادم الطلب. تحققي من الاتصال وتسجيل الدخول ثم حاولي مجدداً.');
+    } finally {
+      setMemorySaving(false);
     }
-    setMemorySaving(false);
   };
 
   const updateMemoryStatus = async (memoryId: string, status: 'approved' | 'rejected') => {
