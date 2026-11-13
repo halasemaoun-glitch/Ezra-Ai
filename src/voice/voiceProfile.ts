@@ -14,7 +14,8 @@ export const DEFAULT_EZRA_VOICE = {
   rate: 0.88,
   pitch: 0.78,
   languages: ['ar', 'en'] as const,
-  dialects: ['Levantine Arabic', 'Algerian Arabic', 'Saudi Arabic'] as const,
+  // The installed mobile checkpoint is ALG; other dialects are not yet verified.
+  dialects: ['Algerian Arabic'] as const,
   automaticOutputLanguage: true,
 };
 
@@ -50,5 +51,9 @@ export function detectEzraSpeechLanguage(text: string, fallbackLocale = 'en'): E
     const score = words.reduce((total, word) => total + (sample.includes(word) ? 1 : 0), 0);
     if (score > bestScore) { best = locale; bestScore = score; }
   }
-  return bestScore > 0 ? best : (fallbackLocale.split(/[-_]/)[0] || 'en');
+  if (bestScore > 0) return best;
+  // A Latin-script reply with no stronger language signal is treated as English,
+  // even when the assistant's preferred response language is Arabic.
+  if (/[A-Za-z]/.test(text)) return 'en';
+  return fallbackLocale.split(/[-_]/)[0] || 'en';
 }
