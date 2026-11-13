@@ -31,7 +31,7 @@ export function parseAccessibilityCommand(command: string): AccessibilityCommand
     return { kind: 'scroll', direction: 'up' };
   }
 
-  const typeText = value.match(/^(?:اكتب|ادخل|أدخل|type)\s+(?:في\s+الحقل|داخل\s+الحقل|في\s+مربع\s+النص|in\s+the\s+field)\s+([\s\S]{1,4000})$/);
+  const typeText = value.match(/^(?:اكتب|ادخل|أدخل|type)\s+(?:في\s+الحقل|داخل\s+الحقل|في\s+مربع\s+النص|في\s+خانه\s+(?:الرساله|الكتابه)|in\s+the\s+field)\s+([\s\S]{1,4000})$/);
   if (typeText) return { kind: 'type', text: typeText[1].trim() };
 
   const click = value.match(/^(?:اضغط|انقر|اكبس|اختار|حدد|tap|click|press)\s+(?:على\s+|علي\s+)?(?:زر\s+)?(.{1,80})$/);
