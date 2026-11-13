@@ -15,21 +15,26 @@ export function scaleMicLevel(rawLevel: number, sensitivity: number): number {
   return Math.max(0, Math.min(1, (safeRaw / 10) * gain));
 }
 
-/** Lower threshold at higher sensitivity, while retaining a sustained-frame anti-echo guard. */
+/** A lower threshold at higher sensitivity helps catch normal conversational speech. */
 export function getMicInterruptionThreshold(sensitivity: number): number {
-  return 0.78 - (normalizeMicSensitivity(sensitivity) * 0.0032);
+  return 0.5 - (normalizeMicSensitivity(sensitivity) * 0.002);
+}
+
+/** Require several consecutive frames to reduce false interruptions from brief noise. */
+export function getMicInterruptionFramesRequired(sensitivity: number): number {
+  return 5 - Math.floor(normalizeMicSensitivity(sensitivity) / 50);
 }
 
 /** Android recognition hint: lower sensitivity requires a longer stable speech segment. */
 export function getMinimumSpeechLengthMs(sensitivity: number): number {
-  return Math.round(500 - normalizeMicSensitivity(sensitivity) * 4);
+  return Math.round(420 - normalizeMicSensitivity(sensitivity) * 2);
 }
 
 /** Android recognition hints: higher sensitivity finalizes shorter pauses sooner. */
 export function getPossibleSilenceLengthMs(sensitivity: number): number {
-  return Math.round(1250 - normalizeMicSensitivity(sensitivity) * 3);
+  return Math.round(1050 - normalizeMicSensitivity(sensitivity) * 5);
 }
 
 export function getCompleteSilenceLengthMs(sensitivity: number): number {
-  return Math.round(2150 - normalizeMicSensitivity(sensitivity) * 5);
+  return Math.round(1800 - normalizeMicSensitivity(sensitivity) * 7);
 }
