@@ -1,4 +1,4 @@
-name: Build EZRA APK (GitHub only)
+name: Build EZRA APK (GitHub only) # Includes native WebCrypto runtime
 
 on:
   push:
