@@ -1,4 +1,4 @@
-import type { DentalReference } from './studyLibrary';
+import type { DentalReference } from './studyLibrary.ts';
 
 export type DentalReferenceMatch = { reference: DentalReference; score: number };
 
