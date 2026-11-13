@@ -52,6 +52,7 @@ module.exports = function withEzraWakeWord(config) {
 
     const application = manifest.application?.[0];
     if (!application) throw new Error("EZRA Android application manifest is missing.");
+    application.$["android:supportsRtl"] = "true";
     application.service = application.service || [];
     const serviceName = "expo.modules.ezrawakeword.EzraWakeWordService";
     if (!application.service.some(item => item.$["android:name"] === serviceName)) {
