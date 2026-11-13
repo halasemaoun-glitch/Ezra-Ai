@@ -50,7 +50,7 @@ class EzraAccessibilityService : AccessibilityService() {
         return true
       }
 
-      val typeText = Regex("""^(?:اكتب|ادخل|type)\s+(?:في\s+الحقل|داخل\s+الحقل|in\s+the\s+field)\s+([\s\S]{1,4000})$""").matchEntire(value)
+      val typeText = Regex("""^(?:اكتب|ادخل|type)\s+(?:في\s+الحقل|داخل\s+الحقل|في\s+مربع\s+النص|في\s+خانه\s+(?:الرساله|الكتابه)|in\s+the\s+field)\s+([\s\S]{1,4000})$""").matchEntire(value)
       if (typeText != null) {
         val success = typeFocusedText(typeText.groupValues[1].trim())
         postActionResult(context, if (success) "تم إدخال النص في الحقل النشط. لم يتم إرسال أي رسالة." else "لم أجد حقلاً نشطاً قابلاً لتحرير النص.")
