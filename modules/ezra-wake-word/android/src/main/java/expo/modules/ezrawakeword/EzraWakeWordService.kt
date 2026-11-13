@@ -141,7 +141,8 @@ class EzraWakeWordService : Service(), RecognitionListener {
         recognizer = speechRecognizer
       }
       val request = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-        putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+        // Android's web-search model is more reliable for short wake phrases such as 'EZRA'.
+        putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_WEB_SEARCH)
         putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ar")
         putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "ar-DZ")
         putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
