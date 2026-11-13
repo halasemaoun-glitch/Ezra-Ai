@@ -64,6 +64,8 @@ jobs:
         run: deno test src/documents/documentTextUtils_test.ts
       - name: Test EZRA study progress synchronization
         run: deno test src/study/studyProgressSync_test.ts
+      - name: Test EZRA dental learning library
+        run: deno test src/study/studyLibrary_test.ts
       - name: Test EZRA companion profile synchronization
         run: deno test src/companion/companionProfileSync_test.ts
       - name: Check Expo configuration and dependencies
