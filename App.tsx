@@ -1150,7 +1150,7 @@ export default function App() {
     const document: KnowledgeDocument = {
       id: `taught-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       name: `تعليم EZRA - ${cleanTitle}`,
-      content: `مادة تعليمية أضافتها صاحبة الحساب بنفسها. العنوان: ${cleanTitle}\\n\\n${cleanContent}`,
+      content: `مادة تعليمية أضافتها صاحبة الحساب بنفسها. العنوان: ${cleanTitle}\n\n${cleanContent}`,
       sizeBytes: new TextEncoder().encode(`مادة تعليمية أضافتها صاحبة الحساب بنفسها. العنوان: ${cleanTitle}\n\n${cleanContent}`).byteLength,
       addedAt: now,
       updatedAt: now,
@@ -2343,9 +2343,7 @@ export default function App() {
           companionProfile.lifestyle.trim() ? `User lifestyle context: ${companionProfile.lifestyle.trim()}.` : '',
           companionProfile.extraInstructions.trim() ? `Additional user instructions: ${companionProfile.extraInstructions.trim()}.` : '',
         ].filter(Boolean).join('\n') : '';
-        const eligibleKnowledgeDocuments = conversationInput.length <= 7000
-          ? knowledgeDocuments.filter(document => !document.deletedAt && (!document.name.startsWith('تعليم EZRA - ') || assistantMode === 'dentist' || assistantMode === 'study'))
-          : [];
+        const eligibleKnowledgeDocuments = knowledgeDocuments.filter(document => !document.deletedAt && (!document.name.startsWith('تعليم EZRA - ') || assistantMode === 'dentist' || assistantMode === 'study'));
         const retrievedKnowledge = retrieveKnowledgeChunks(eligibleKnowledgeDocuments, userInput, {
           maxDocuments: 5,
           maxChunksPerDocument: 2,
@@ -2353,7 +2351,7 @@ export default function App() {
           maxTotalCharacters: 12000,
         });
         const knowledgeGuidance = retrievedKnowledge.length
-          ? retrievedKnowledge.map(({ document, text }) => `User knowledge-library source: ${document.name}\\n${text}`).join('\\n\\n').slice(0, 14000)
+          ? retrievedKnowledge.map(({ document, text }) => `User knowledge-library source: ${document.name}\n${text}`).join('\n\n').slice(0, 14000)
           : '';
 
         const relevantDentalReferences = assistantMode === 'dentist' || assistantMode === 'study'
