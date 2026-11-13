@@ -9,7 +9,7 @@ export type AiModelOption = {
 
 export const AI_PROVIDER_OPTIONS: { id: AiProvider; label: string; description: string; secretName: string }[] = [
   { id: 'groq', label: 'Groq', description: 'المزوّد الحالي السريع · يعمل بمفتاح الخادم الموجود', secretName: 'GROQ_API_KEY' },
-  { id: 'gemini', label: 'Google Gemini', description: 'خيار مجاني إضافي · يحتاج مفتاح AI Studio المجاني على الخادم', secretName: 'GEMINI_API_KEY' },
+  { id: 'gemini', label: 'Google Gemini', description: 'خيار مجاني إضافي · يحتاج مفتاح AI Studio على الخادم؛ بيانات الخطة المجانية قد تُستخدم لتحسين منتجات Google', secretName: 'GEMINI_API_KEY' },
 ];
 
 export const AI_MODELS: Record<AiProvider, AiModelOption[]> = {
