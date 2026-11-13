@@ -57,6 +57,7 @@ import { knowledgeDocumentsFromCloud, knowledgeDocumentsToCloud, mergeKnowledgeD
 import { extractDocumentText, MAX_DOCUMENT_SOURCE_BYTES, MAX_EXTRACTED_DOCUMENT_BYTES } from './src/documents/documentExtractor';
 import { getDocumentExtension, getDocumentMimeType, isSupportedDocumentExtension, selectRelevantDocumentText } from './src/documents/documentTextUtils';
 import { filterAndSortKnowledgeDocuments, getKnowledgeCategoryLabel, KNOWLEDGE_CATEGORY_OPTIONS, type KnowledgeCategory, type KnowledgeSort } from './src/knowledge/knowledgeLibraryTools';
+import { retrieveKnowledgeChunks } from './src/knowledge/knowledgeRetrieval';
 import {
   DEFAULT_COMPANION_PROFILE,
   companionProfileFromCloudRow,
@@ -2337,24 +2338,19 @@ export default function App() {
           companionProfile.lifestyle.trim() ? `User lifestyle context: ${companionProfile.lifestyle.trim()}.` : '',
           companionProfile.extraInstructions.trim() ? `Additional user instructions: ${companionProfile.extraInstructions.trim()}.` : '',
         ].filter(Boolean).join('\n') : '';
-        const knowledgeTerms = userInput.toLowerCase()
-          .replace(/[\u064B-\u065F\u0670]/g, '')
-          .match(/[a-z0-9\u0600-\u06ff]{3,}/g) ?? [];
-        const knowledgeStopWords = new Set(['the','and','for','with','this','that','from','what','when','where','which','كيف','ماذا','هذا','هذه','على','الى','إلى','من','عن','هل','ما','لماذا','متى','اين','أين','انا','أنا','انت','أنت']);
-        const queryTerms = [...new Set(knowledgeTerms.filter(term => !knowledgeStopWords.has(term)))].slice(0, 40);
-        const relevantKnowledge = conversationInput.length <= 7000 ? knowledgeDocuments.filter(document => !document.deletedAt && (!document.name.startsWith('تعليم EZRA - ') || assistantMode === 'dentist' || assistantMode === 'study'))
-          .map(document => {
-            const normalizedContent = document.content.toLowerCase().replace(/[\u064B-\u065F\u0670]/g, '');
-            const rawScore = queryTerms.reduce((total, term) => total + (normalizedContent.split(term).length - 1), 0);
-            const isUserTaught = document.name.startsWith('تعليم EZRA - ');
-            const score = rawScore * (isUserTaught ? 2 : 1);
-            return { document, score, isUserTaught };
-          })
-          .filter(item => item.score > 0)
-          .sort((a, b) => b.score - a.score)
-          .slice(0, 4) : [];
-        const knowledgeGuidance = relevantKnowledge.length
-          ? relevantKnowledge.map(({ document, isUserTaught }) => `${isUserTaught ? 'User-taught personal study note (not independently verified; cross-check clinical claims against current authoritative guidance)' : 'User knowledge-library source'}: ${document.name}\n${selectRelevantDocumentText(document.content, userInput, 5000)}`).join('\n\n').slice(0, 16000) : '';
+        const eligibleKnowledgeDocuments = conversationInput.length <= 7000
+          ? knowledgeDocuments.filter(document => !document.deletedAt && (!document.name.startsWith('تعليم EZRA - ') || assistantMode === 'dentist' || assistantMode === 'study'))
+          : [];
+        const retrievedKnowledge = retrieveKnowledgeChunks(eligibleKnowledgeDocuments, userInput, {
+          maxDocuments: 5,
+          maxChunksPerDocument: 2,
+          maxChunkCharacters: 1400,
+          maxTotalCharacters: 12000,
+        });
+        const knowledgeGuidance = retrievedKnowledge.length
+          ? retrievedKnowledge.map(({ document, text }) => `User knowledge-library source: ${document.name}\\n${text}`).join('\\n\\n').slice(0, 14000)
+          : '';
+
         const relevantDentalReferences = assistantMode === 'dentist' || assistantMode === 'study'
           ? retrieveDentalReferences(userInput, DENTAL_REFERENCE_LIBRARY, { limit: 5, minScore: 1 })
           : [];
