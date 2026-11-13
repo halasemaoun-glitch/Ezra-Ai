@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
@@ -134,6 +135,20 @@ class EzraAccessibilityService : AccessibilityService() {
         if (!expectedPackage.isNullOrBlank() && root.packageName?.toString() != expectedPackage) return@runOnMain false
         val match = service.findMatchingNode(root, normalizedTarget) ?: return@runOnMain false
         service.clickNodeOrClickableParent(match)
+      }
+    }
+
+    fun typeFocusedText(text: String): Boolean {
+      val service = instance ?: return false
+      if (text.isBlank() || text.length > 4000) return false
+      return service.runOnMain {
+        val root = service.rootInActiveWindow ?: return@runOnMain false
+        val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: return@runOnMain false
+        if (!focused.isEditable || !focused.isEnabled) return@runOnMain false
+        val arguments = Bundle().apply {
+          putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
+        }
+        focused.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)
       }
     }
 
