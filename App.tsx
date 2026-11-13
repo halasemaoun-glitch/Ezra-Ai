@@ -3690,10 +3690,11 @@ export default function App() {
                 <View style={styles.settingRow}>
                   <View style={styles.settingCopy}>
                     <Text style={styles.settingTitle}>ملف صوت EZRA المعتمد</Text>
-                    <Text style={styles.settingHint}>صوت رجالي دافئ وعميق · اللغة تختارينها يدوياً</Text>
+                    <Text style={styles.settingHint}>صوت رجالي دافئ وعميق · تُكتشف لغة القراءة من نص الرد</Text>
                     <Text style={styles.settingHint}>Habibi-TTS هو المحرك العربي الأساسي بعد تنزيل النموذج واعتماد عينة صوت؛ صوت الهاتف احتياطي عند عدم جاهزيته.</Text>
                     <Text style={styles.settingHint}>تنبيه الذاكرة: تهيئة Habibi تتطلب 2.2 GB RAM متاحة على الأقل قبل تحميل النموذج إلى الذاكرة؛ هذا شرط أمان وليس ضمانًا للتشغيل على كل هاتف.</Text>
                     <Text style={styles.settingHint}>الصوت العربي: اللهجة الجزائرية عبر Habibi ALG · الإنجليزية: محرك النظام</Text>
+                    <Text style={styles.settingHint}>الصوت الاحتياطي يعتمد على الأصوات المثبّتة في Android؛ خفض طبقة الصوت وحده لا يضمن صوتًا رجاليًا.</Text>
                   </View>
                 </View>
                 <View style={[styles.settingRow, { flexDirection: 'column', alignItems: 'stretch', gap: 10 }]}>
