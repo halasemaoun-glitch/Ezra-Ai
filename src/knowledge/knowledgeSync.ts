@@ -43,7 +43,7 @@ export function normalizeKnowledgeDocuments(value: unknown): KnowledgeDocumentRe
       deletedAt: typeof item.deletedAt === 'string' ? item.deletedAt : null,
     }))
     .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
-  const active = normalized.filter(item => item.deletedAt === null).slice(0, 8);
+  const active = normalized.filter(item => item.deletedAt === null).slice(0, 100);
   const tombstones = normalized.filter(item => item.deletedAt !== null);
   return [...active, ...tombstones].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
 }
@@ -76,7 +76,7 @@ export function mergeKnowledgeDocuments(
     }
   }
   const sorted = [...merged.values()].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
-  const active = sorted.filter(item => item.deletedAt === null).slice(0, 8);
+  const active = sorted.filter(item => item.deletedAt === null).slice(0, 100);
   const tombstones = sorted.filter(item => item.deletedAt !== null);
   return [...active, ...tombstones].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
 }
