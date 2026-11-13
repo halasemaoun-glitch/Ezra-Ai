@@ -1,0 +1,51 @@
+apply plugin: 'com.android.library'
+apply plugin: 'expo-module-gradle-plugin'
+
+group = 'expo.modules.ezrahabibitts'
+version = '0.2.0'
+
+// The native audio.cpp runtime is a separately supplied binary. Do not fail the
+// entire Android app build when that optional runtime is not present yet.
+// EzraHabibiTtsModule reports the runtime as unavailable until the library is added.
+def audioCppLibrary = file('src/main/jniLibs/arm64-v8a/libaudiocpp.so')
+def hasAudioCppRuntime = audioCppLibrary.isFile()
+
+android {
+  namespace 'expo.modules.ezrahabibitts'
+
+  defaultConfig {
+    versionName '0.2.0'
+    ndk {
+      abiFilters 'arm64-v8a'
+    }
+    if (hasAudioCppRuntime) {
+      externalNativeBuild {
+        cmake {
+          cppFlags '-std=c++17 -fexceptions -frtti'
+          arguments '-DANDROID_STL=c++_shared'
+        }
+      }
+    }
+  }
+
+  if (hasAudioCppRuntime) {
+    externalNativeBuild {
+      cmake {
+        path 'src/main/cpp/CMakeLists.txt'
+        version '3.22.1'
+      }
+    }
+  }
+
+  sourceSets {
+    main {
+      jniLibs.srcDirs = ['src/main/jniLibs']
+    }
+  }
+
+  packaging {
+    jniLibs {
+      useLegacyPackaging true
+    }
+  }
+}

@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ezra_accessibility_service_description">يسمح لـ EZRA بالعثور على الأزرار التي تطلبينها والضغط عليها والتمرير داخل التطبيقات. لا يسجل الخدمة محتوى الشاشة ولا ترسله إلى أي خادم.</string>
+</resources>

@@ -1,0 +1,74 @@
+name: Build EZRA APK (GitHub only) # WebCrypto initialized before App module import
+
+on:
+  push:
+    branches:
+      - ezra/habibi-android-spike
+    paths:
+      - '.github/workflows/build-apk.yml'
+      - 'app.json'
+      - 'package.json'
+      - 'plugins/**'
+      - 'src/**'
+      - 'app/**'
+      - 'assets/**'
+      - 'modules/**'
+      - 'index.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-apk:
+    name: Generate OPPO-compatible Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout latest EZRA branch
+        uses: actions/checkout@v4
+        with:
+          ref: ezra/habibi-android-spike
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install JavaScript dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Generate native Android project
+        run: npx expo prebuild --platform android --clean
+
+      - name: Embed the JavaScript bundle in the debug APK
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/build.gradle")
+          s = p.read_text()
+          needle = "react {\n"
+          if needle not in s:
+              raise SystemExit("React Native Gradle react block not found")
+          if "debuggableVariants = []" not in s:
+              s = s.replace(needle, needle + "    debuggableVariants = []\n", 1)
+          p.write_text(s)
+          PY
+
+      - name: Build arm64 Android APK for OPPO A76
+        working-directory: android
+        run: ./gradlew --no-daemon -PreactNativeArchitectures=arm64-v8a assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: EZRA-OPPO-A76-Android-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14

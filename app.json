@@ -36,7 +36,8 @@
           "cameraPermission": "Allow EZRA to take photos you choose to attach."
         }
       ],
-      "./plugins/withEzraWakeWord"
+      "./plugins/withEzraWakeWord",
+      "react-native-quick-crypto"
     ],
     "extra": {
       "eas": {

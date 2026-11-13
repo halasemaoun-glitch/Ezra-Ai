@@ -1,184 +1,432 @@
-import React, { useEffect, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { Canvas, useFrame } from '@react-three/fiber/native';
-import * as THREE from 'three';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { AccessibilityInfo, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { GLView } from 'expo-gl';
+import { colors, motion } from './theme';
 
 type OrbStatus = { status: string; level?: number };
 
-function OrbScene({ status, level = 0 }: OrbStatus) {
-  const core = useRef<THREE.Mesh>(null);
-  const coreMaterial = useRef<THREE.MeshPhysicalMaterial>(null);
-  const halo = useRef<THREE.Mesh>(null);
-  const orbitA = useRef<THREE.Mesh>(null);
-  const orbitB = useRef<THREE.Mesh>(null);
-  const particles = useRef<THREE.Points>(null);
-  const pinkLight = useRef<THREE.PointLight>(null);
-  const violetLight = useRef<THREE.PointLight>(null);
-  const burgundyLight = useRef<THREE.PointLight>(null);
-  const pulseRing = useRef<THREE.Mesh>(null);
-  const rimRing = useRef<THREE.Mesh>(null);
-  const smoothedLevel = useRef(0);
-  const smoothedActivity = useRef(0.28);
-  const smoothedSpeed = useRef(0.12);
-  const listening = status.includes('يستمع');
-  const thinking = status.includes('أفكر');
-  const speaking = status.includes('يتحدث');
-  const speed = speaking ? 0.8 : listening ? 0.52 : thinking ? 0.2 : 0.12;
-  const particleGeometry = useMemo(() => {
-    const points: THREE.Vector3[] = [];
-    for (let i = 0; i < 110; i += 1) {
-      const y = 1 - (i / 109) * 2;
-      const radius = Math.sqrt(1 - y * y);
-      const angle = Math.PI * (3 - Math.sqrt(5)) * i;
-      const spread = 1.55 + ((i * 17) % 13) / 35;
-      points.push(new THREE.Vector3(Math.cos(angle) * radius * spread, y * spread, Math.sin(angle) * radius * spread));
-    }
-    return new THREE.BufferGeometry().setFromPoints(points);
-  }, []);
+type Palette = {
+  base: [number, number, number];
+  accent: [number, number, number];
+  glow: [number, number, number];
+};
 
-  useEffect(() => () => particleGeometry.dispose(), [particleGeometry]);
+const vertexShader = `
+attribute vec2 position;
+void main() {
+  gl_Position = vec4(position, 0.0, 1.0);
+}
+`;
 
-  useFrame(({ clock }, delta) => {
-    const t = clock.getElapsedTime();
-    smoothedLevel.current = THREE.MathUtils.damp(smoothedLevel.current, level, 9, delta);
-    const targetActivity = listening ? 0.42 + smoothedLevel.current * 0.72 : speaking ? 1 : thinking ? 0.48 : 0.28;
-    smoothedActivity.current = THREE.MathUtils.damp(smoothedActivity.current, targetActivity, 4.5, delta);
-    smoothedSpeed.current = THREE.MathUtils.damp(smoothedSpeed.current, speed, 3.5, delta);
-    const activity = smoothedActivity.current;
-    const motionLevel = smoothedLevel.current;
-    const motionSpeed = smoothedSpeed.current;
-    if (core.current) {
-      core.current.rotation.y = t * motionSpeed;
-      core.current.rotation.x = Math.sin(t * 0.22) * 0.12;
-      const breath = 1 + Math.sin(t * (0.9 + activity * 2.8)) * (0.018 + activity * 0.027);
-      core.current.scale.setScalar(breath);
-    }
-    if (halo.current) {
-      halo.current.rotation.y = -t * motionSpeed * 0.42;
-    }
-    if (orbitA.current) orbitA.current.rotation.z = t * motionSpeed * 0.72;
-    if (orbitB.current) orbitB.current.rotation.x = 0.9 + t * motionSpeed * 0.5;
-    if (rimRing.current) rimRing.current.rotation.set(1.05 + Math.sin(t * 0.16) * 0.08, t * motionSpeed * 0.32, -0.35);
-    if (pulseRing.current) {
-      const wave = (Math.sin(t * (speaking ? 3.2 : listening ? 2.1 : 0.9)) + 1) * 0.5;
-      pulseRing.current.scale.setScalar(1.02 + wave * (0.045 + activity * 0.17));
-      const material = pulseRing.current.material as THREE.MeshBasicMaterial;
-      material.opacity = 0.1 + (1 - wave) * (0.1 + activity * 0.24);
-    }
-    if (particles.current) {
-      particles.current.rotation.y = -t * (0.025 + activity * 0.095);
-      particles.current.rotation.x = Math.sin(t * 0.18) * 0.08;
-    }
-    if (coreMaterial.current) {
-      const glow = speaking ? 1.12 : listening ? 0.92 : thinking ? 0.82 : 0.68;
-      const targetGlow = glow + Math.sin(t * (0.9 + activity * 3.1)) * (0.04 + activity * 0.18) + (listening ? motionLevel * 0.42 : 0);
-      coreMaterial.current.emissiveIntensity = THREE.MathUtils.damp(coreMaterial.current.emissiveIntensity, targetGlow, 5, delta);
-    }
-    const pulse = 0.88 + (Math.sin(t * (speaking ? 4.8 : listening ? 2.8 : 1.35)) + 1) * 0.09;
-    if (pinkLight.current) {
-      const targetPink = speaking ? 4.1 : listening ? 3.1 + motionLevel * 1.25 : thinking ? 2.9 : 2.3;
-      pinkLight.current.intensity = THREE.MathUtils.damp(pinkLight.current.intensity, targetPink, 5, delta) * pulse;
-    }
-    if (violetLight.current) {
-      const targetViolet = thinking ? 3.8 : speaking ? 2.9 : listening ? 3.1 : 2.5;
-      violetLight.current.intensity = THREE.MathUtils.damp(violetLight.current.intensity, targetViolet, 3.5, delta) * (0.92 + Math.sin(t * 0.8 + 1.4) * 0.08);
-    }
-    if (burgundyLight.current) {
-      const targetBurgundy = thinking ? 1.45 : speaking ? 1.25 : listening ? 1.55 : 2.0;
-      burgundyLight.current.intensity = THREE.MathUtils.damp(burgundyLight.current.intensity, targetBurgundy, 3.8, delta) * (0.94 + Math.sin(t * 0.66 + 2.1) * 0.06);
-    }
-    if (halo.current) halo.current.scale.setScalar(1.1 + activity * 0.035 + Math.sin(t * 1.15) * 0.018);
-  });
+const fragmentShader = `
+precision highp float;
+uniform vec2 uResolution;
+uniform float uTime;
+uniform float uEnergy;
+uniform float uPulse;
+uniform float uMode;
+uniform vec3 uBaseColor;
+uniform vec3 uAccentColor;
+uniform vec3 uGlowColor;
 
-  return (
-    <>
-      <ambientLight intensity={0.62} />
-      <pointLight ref={pinkLight} position={[2.5, 2.2, 3]} color="#ff70c8" intensity={3.2} distance={8} />
-      <pointLight ref={violetLight} position={[-2.8, -1.2, 2]} color="#7928ff" intensity={2.7} distance={7} />
-      <pointLight ref={burgundyLight} position={[0, -2.6, 2.3]} color="#9e174e" intensity={1.8} distance={7} />
-      <pointLight position={[0, 0, -3]} color="#e51b83" intensity={2.2} distance={6} />
-      <pointLight position={[0, 2.8, 0.8]} color="#f7b4e4" intensity={1.25} distance={5} />
-      <group>
-        <mesh ref={halo}>
-          <sphereGeometry args={[1.22, 48, 48]} />
-          <meshBasicMaterial color="#a90b67" transparent opacity={0.105} side={THREE.BackSide} />
-        </mesh>
-        <mesh ref={pulseRing}>
-          <torusGeometry args={[1.12, 0.012, 8, 160]} />
-          <meshBasicMaterial color="#f65ab5" transparent opacity={0.2} />
-        </mesh>
-        <mesh ref={core}>
-          <sphereGeometry args={[0.92, 72, 72]} />
-          <meshPhysicalMaterial
-            ref={coreMaterial}
-            color={thinking ? '#230d3d' : '#35091f'}
-            emissive={speaking ? '#c01877' : listening ? '#a51a69' : thinking ? '#6b2aa8' : '#70113f'}
-            emissiveIntensity={speaking ? 1.15 : listening ? 0.9 : 0.68}
-            metalness={0.32}
-            roughness={0.22}
-            clearcoat={1}
-            clearcoatRoughness={0.12}
-          />
-        </mesh>
-        <mesh scale={1.006}>
-          <sphereGeometry args={[0.92, 48, 48]} />
-          <meshBasicMaterial color="#f4a2db" transparent opacity={0.045} side={THREE.BackSide} />
-        </mesh>
-        <mesh scale={0.77}>
-          <sphereGeometry args={[0.92, 48, 48]} />
-          <meshBasicMaterial color="#ff6bbd" transparent opacity={0.09} />
-        </mesh>
-        <mesh ref={orbitA} rotation={[0.8, 0.2, 0.35]}>
-          <torusGeometry args={[1.34, 0.009, 8, 180]} />
-          <meshBasicMaterial color="#ff77c8" transparent opacity={0.72} />
-        </mesh>
-        <mesh ref={rimRing} rotation={[1.05, 0.2, -0.35]}>
-          <torusGeometry args={[1.19, 0.0035, 6, 180]} />
-          <meshBasicMaterial color="#f8b6e6" transparent opacity={0.34} />
-        </mesh>
-        <mesh ref={orbitB} rotation={[1.2, 0.4, -0.5]}>
-          <torusGeometry args={[1.48, 0.006, 8, 180]} />
-          <meshBasicMaterial color="#9b62ff" transparent opacity={0.58} />
-        </mesh>
-        <points ref={particles} geometry={particleGeometry}>
-          <pointsMaterial color="#ffc0ed" size={0.025} transparent opacity={0.82} sizeAttenuation />
-        </points>
-      </group>
-    </>
+void main() {
+  vec2 p = (gl_FragCoord.xy * 2.0 - uResolution) / min(uResolution.x, uResolution.y);
+  float radial = length(p);
+  vec3 background = vec3(0.018, 0.009, 0.025);
+
+  // Each state has its own rhythm: quiet breathing, listening response,
+  // slow thought cycles, and a lively speaking cadence.
+  float speakingBeat = 0.5 + 0.5 * sin(uTime * 5.4);
+  float thinkingWave = 0.5 + 0.5 * sin(uTime * 1.15 + 0.7);
+  float stateActivity = uMode > 2.5 ? 0.34 + speakingBeat * 0.66
+    : uMode > 1.5 ? 0.30 + thinkingWave * 0.30
+    : uMode > 0.5 ? uPulse
+    : 0.18 + 0.08 * sin(uTime * 0.72);
+
+  // Layered volumetric halo: a broad atmospheric haze, a soft corona,
+  // and a narrow luminous rim that gently breathes with each interaction state.
+  float auraActivity = 0.78 + stateActivity * 0.42;
+  float innerAura = exp(-pow(radial * 1.42, 2.0));
+  float outerHaze = exp(-pow(max(radial - 0.54, 0.0) * 2.75, 2.0));
+  float midHaze = exp(-pow((radial - 0.82) * 3.15, 2.0));
+  float corona = exp(-pow((radial - 0.895) * 17.0, 2.0));
+  float farBloom = exp(-pow((radial - 1.035) * 4.6, 2.0));
+  float haloBreath = 0.94 + 0.06 * sin(uTime * (uMode > 2.5 ? 4.0 : uMode > 1.5 ? 0.7 : 1.25));
+  float auraAngle = atan(p.y, p.x);
+  float lightRays = 0.5 + 0.5 * sin(auraAngle * 9.0 + uTime * 0.24);
+  float rayMask = exp(-pow((radial - 0.99) * 2.4, 2.0));
+  background += uGlowColor * outerHaze * (0.16 + auraActivity * 0.11) * haloBreath;
+  background += uAccentColor * midHaze * (0.035 + auraActivity * 0.045);
+  background += uGlowColor * corona * (0.075 + auraActivity * 0.075);
+  background += uAccentColor * farBloom * (0.018 + auraActivity * 0.026);
+  background += uAccentColor * innerAura * 0.035;
+  background += uGlowColor * rayMask * lightRays * (0.012 + stateActivity * 0.018);
+  // Three close energy rings shimmer around the orb without leaving the mobile viewport.
+  float ringTravel = uMode > 1.5 ? 0.009 : 0.016;
+  float ringPhase = radial - (0.895 + ringTravel * sin(uTime * (uMode > 2.5 ? 3.1 : 2.0)));
+  float ringOne = exp(-pow(ringPhase * 48.0, 2.0));
+  float ringTwo = exp(-pow((radial - 0.935 - ringTravel * 0.72 * sin(uTime * 1.55 + 1.2)) * 42.0, 2.0));
+  float ringThree = exp(-pow((radial - 0.975 - ringTravel * 0.48 * sin(uTime * 1.25 + 2.1)) * 36.0, 2.0));
+  float ringStrength = (0.018 + stateActivity * 0.112) * (0.72 + 0.28 * sin(uTime * (uMode > 2.5 ? 5.4 : 2.2)));
+  background += uAccentColor * (ringOne * ringStrength + ringTwo * ringStrength * 0.72 + ringThree * ringStrength * 0.48);
+
+  // Two travelling wave fronts create a gentle outward energy ripple.
+  float wavePhaseA = fract(uTime * (uMode > 2.5 ? 0.22 : 0.105));
+  float wavePhaseB = fract(wavePhaseA + 0.5);
+  float waveRadiusA = 0.91 + wavePhaseA * 0.145;
+  float waveRadiusB = 0.91 + wavePhaseB * 0.145;
+  float waveFadeA = 1.0 - wavePhaseA;
+  float waveFadeB = 1.0 - wavePhaseB;
+  float waveA = exp(-pow((radial - waveRadiusA) * 105.0, 2.0)) * waveFadeA;
+  float waveB = exp(-pow((radial - waveRadiusB) * 105.0, 2.0)) * waveFadeB;
+  float waveStrength = 0.025 + stateActivity * 0.055;
+  background += uGlowColor * (waveA + waveB) * waveStrength;
+
+  // Fourteen orbiting sparks use offset elliptical paths, subtle trails and individual twinkles.
+  for (int i = 0; i < 14; i++) {
+    float fi = float(i);
+    float orbitSpeed = uMode > 2.5 ? 0.145 : uMode > 1.5 ? 0.052 : 0.085;
+    float angle = fi * 0.4488 + uTime * (orbitSpeed + fi * 0.0035);
+    float orbit = 0.925 + 0.052 * sin(fi * 1.91 + uTime * (uMode > 1.5 ? 0.18 : 0.31));
+    vec2 orbitPoint = vec2(cos(angle) * orbit, sin(angle) * orbit * (0.88 + 0.08 * sin(fi)));
+    vec2 tangent = normalize(vec2(-sin(angle), cos(angle)));
+    vec2 trailStart = orbitPoint - tangent * (0.018 + 0.009 * mod(fi, 3.0));
+    float trailAlong = clamp(dot(p - trailStart, orbitPoint - trailStart) / max(dot(orbitPoint - trailStart, orbitPoint - trailStart), 0.00001), 0.0, 1.0);
+    vec2 trailPoint = mix(trailStart, orbitPoint, trailAlong);
+    float particleSize = 0.0055 + 0.0038 * mod(fi, 3.0);
+    float particleGlow = exp(-pow(length(p - orbitPoint) / particleSize, 2.0));
+    float trailGlow = exp(-pow(length(p - trailPoint) / (particleSize * 0.48), 2.0)) * (1.0 - trailAlong) * 0.48;
+    float twinkle = 0.72 + 0.28 * sin(uTime * (2.1 + mod(fi, 4.0)) + fi * 2.3);
+    vec3 particleColor = mod(fi, 2.0) < 1.0 ? uAccentColor : uGlowColor;
+    background += particleColor * (particleGlow + trailGlow) * twinkle * (0.20 + stateActivity * 0.34);
+  }
+
+  vec3 rayOrigin = vec3(0.0, 0.0, 2.75);
+  vec3 rayDirection = normalize(vec3(p * 1.02, -2.45));
+  float breathRate = uMode > 2.5 ? 2.7 : uMode > 1.5 ? 0.48 : 0.72;
+  float breath = sin(uTime * breathRate) * (0.006 + stateActivity * 0.006);
+  float radius = 0.91 + breath + uEnergy * 0.009;
+  float b = dot(rayOrigin, rayDirection);
+  float c = dot(rayOrigin, rayOrigin) - radius * radius;
+  float discriminant = b * b - c;
+
+  if (discriminant < 0.0) {
+    gl_FragColor = vec4(background, 1.0);
+    return;
+  }
+
+  float distanceToSphere = -b - sqrt(discriminant);
+  vec3 position = rayOrigin + rayDirection * distanceToSphere;
+  vec3 geometricNormal = normalize(position);
+  vec3 viewDirection = normalize(-position);
+  float rotation = uTime * 0.105;
+  float cs = cos(rotation);
+  float sn = sin(rotation);
+  vec3 surface = vec3(
+    geometricNormal.x * cs - geometricNormal.z * sn,
+    geometricNormal.y,
+    geometricNormal.x * sn + geometricNormal.z * cs
   );
+
+  vec3 lightDirection = normalize(vec3(-0.85, 1.15, 2.4));
+  // Tiny animated height variations bend the lighting across the surface,
+  // giving the plasma currents a tactile, softly sculpted appearance.
+  float normalWaveA = sin(surface.x * 8.0 + surface.z * 6.0 + uTime * 0.26);
+  float normalWaveB = sin(surface.y * 11.0 - surface.x * 5.0 - uTime * 0.18);
+  float normalWaveC = sin(surface.z * 15.0 + surface.y * 7.0 + uTime * 0.14);
+  float heightField = normalWaveA * 0.46 + normalWaveB * 0.34 + normalWaveC * 0.20;
+  vec3 referenceAxis = abs(geometricNormal.y) < 0.95
+    ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+  vec3 tangentX = normalize(cross(referenceAxis, geometricNormal));
+  vec3 tangentY = normalize(cross(geometricNormal, tangentX));
+  vec3 normal = normalize(geometricNormal - tangentX * (normalWaveA - normalWaveB) * 0.026
+    - tangentY * (normalWaveC - normalWaveB) * 0.022);
+  float diffuse = max(dot(normal, lightDirection), 0.0);
+  float specular = pow(max(dot(reflect(-lightDirection, normal), viewDirection), 0.0), 54.0);
+  float broadSpecular = pow(max(dot(reflect(-lightDirection, normal), viewDirection), 0.0), 12.0);
+  // A softer secondary light separates the sphere from its dark background
+  // and adds a second, restrained reflection across the glass-like surface.
+  vec3 fillDirection = normalize(vec3(1.25, -0.48, 1.7));
+  float fillDiffuse = max(dot(normal, fillDirection), 0.0);
+  float fillSpecular = pow(max(dot(reflect(-fillDirection, normal), viewDirection), 0.0), 38.0);
+  float fresnel = pow(1.0 - max(dot(normal, viewDirection), 0.0), 2.35);
+
+  // Surface currents use a different tempo for each state: calm at rest,
+  // responsive while listening, deliberate while thinking, and vivid in speech.
+  float surfaceRate = uMode > 2.5 ? 0.58 : uMode > 1.5 ? 0.105 : uMode > 0.5 ? 0.28 + uEnergy * 0.42 : 0.19;
+  float surfaceTime = uTime * surfaceRate;
+  float surfaceWarp = uMode > 2.5 ? 1.22 : uMode > 1.5 ? 0.72 : uMode > 0.5 ? 0.92 + uEnergy * 0.34 : 0.78;
+  float warp = sin(surface.x * 3.2 + surface.z * 2.7 + surfaceTime * 0.12) * 0.11 * surfaceWarp;
+  vec3 fluid = surface + vec3(warp, warp * 0.7, -warp);
+  float flowA = sin(fluid.x * 8.0 + fluid.y * 5.5 - fluid.z * 7.0 + surfaceTime * 0.34);
+  float flowB = sin(fluid.z * 12.0 - fluid.x * 5.0 + fluid.y * 3.0 + surfaceTime * 0.23);
+  float flowC = sin(fluid.y * 14.0 + fluid.x * 4.0 - surfaceTime * 0.16);
+  float flowD = sin(fluid.x * 18.0 + fluid.z * 13.0 + fluid.y * 9.0 + surfaceTime * 0.19);
+  float turbulence = flowA * 0.34 + flowB * 0.29 + flowC * 0.21 + flowD * 0.16;
+  float fluidVein = 1.0 - smoothstep(0.018, 0.145, abs(turbulence));
+  float cloudA = 0.5 + 0.5 * sin(fluid.x * 5.5 - fluid.y * 8.5 + fluid.z * 4.5 + surfaceTime * 0.15);
+  float cloudB = 0.5 + 0.5 * sin(fluid.z * 3.6 + fluid.x * 4.2 - fluid.y * 5.1 - surfaceTime * 0.11);
+  float cloud = cloudA * 0.62 + cloudB * 0.38;
+  float innerCurrent = 0.5 + 0.5 * sin(fluid.x * 3.0 + fluid.z * 5.0 - surfaceTime * 0.24);
+  // Fine, silk-like filaments add a second scale of detail without turning the orb noisy.
+  float filamentA = sin(fluid.x * 25.0 + fluid.z * 17.0 - surfaceTime * 0.38);
+  float filamentB = sin(fluid.y * 21.0 - fluid.z * 15.0 + surfaceTime * 0.29);
+  float microFilament = pow(max(0.0, filamentA * filamentB), 7.0);
+
+  vec3 body = mix(uBaseColor, uAccentColor, 0.12 + fluidVein * 0.54 + cloud * 0.18);
+  body = mix(body, uGlowColor, innerCurrent * 0.22);
+  body += uGlowColor * abs(heightField) * 0.035;
+  vec3 color = body * (0.16 + diffuse * 1.08 + fillDiffuse * 0.16);
+  float rimLight = pow(1.0 - max(dot(normal, viewDirection), 0.0), 3.1);
+  color += uGlowColor * (fresnel * 0.82 + rimLight * 0.34 + fluidVein * (0.13 + uEnergy * 0.20));
+  color += vec3(1.0, 0.82, 0.97) * specular * 1.18;
+  color += vec3(1.0, 0.88, 1.0) * fillSpecular * 0.34;
+  color += uAccentColor * broadSpecular * 0.28;
+  color += mix(uAccentColor, uGlowColor, cloud) * cloud * 0.12;
+  color += mix(uGlowColor, uAccentColor, cloud) * microFilament * (0.045 + uEnergy * 0.035);
+  // A restrained grazing highlight makes the glass-like edge read as a solid volume.
+  color += vec3(1.0, 0.76, 0.94) * pow(max(dot(reflect(-fillDirection, normal), viewDirection), 0.0), 76.0) * 0.18;
+
+  // A layered inner glow gives the sphere depth; microphone energy gently lifts its core.
+  float coreFalloff = exp(-dot(position.xy, position.xy) * 4.6);
+  float core = coreFalloff * (0.10 + uEnergy * 0.30 + uPulse * 0.035);
+  color += uAccentColor * core;
+  color += uGlowColor * exp(-dot(position.xy, position.xy) * 1.85) * (0.045 + uPulse * 0.045);
+  color = pow(max(color, 0.0), vec3(0.88));
+
+  gl_FragColor = vec4(color, 1.0);
+}
+`;
+
+const toRgb = (hex: string): [number, number, number] => {
+  const value = hex.replace('#', '');
+  return [
+    parseInt(value.slice(0, 2), 16) / 255,
+    parseInt(value.slice(2, 4), 16) / 255,
+    parseInt(value.slice(4, 6), 16) / 255,
+  ];
+};
+
+const palettes: Record<'idle' | 'listening' | 'thinking' | 'speaking', Palette> = {
+  idle: {
+    base: toRgb(colors.orbIdleBase),
+    accent: toRgb(colors.orbIdleAccent),
+    glow: toRgb(colors.orbIdleGlow),
+  },
+  listening: {
+    base: toRgb(colors.orbListeningBase),
+    accent: toRgb(colors.orbListeningAccent),
+    glow: toRgb(colors.orbListeningGlow),
+  },
+  thinking: {
+    base: toRgb(colors.orbThinkingBase),
+    accent: toRgb(colors.orbThinkingAccent),
+    glow: toRgb(colors.orbThinkingGlow),
+  },
+  speaking: {
+    base: toRgb(colors.orbSpeakingBase),
+    accent: toRgb(colors.orbSpeakingAccent),
+    glow: toRgb(colors.orbSpeakingGlow),
+  },
+};
+
+function getState(status: string): keyof typeof palettes {
+  if (status.includes('يستمع') || status.includes('أستمع')) return 'listening';
+  if (status.includes('أفكر')) return 'thinking';
+  if (status.includes('يتحدث') || status.includes('أتحدث')) return 'speaking';
+  return 'idle';
+}
+
+function compileShader(gl: any, type: number, source: string) {
+  const shader = gl.createShader(type);
+  if (!shader) throw new Error('Unable to create EZRA orb shader');
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    const message = gl.getShaderInfoLog(shader) || 'EZRA orb shader compilation failed';
+    gl.deleteShader(shader);
+    throw new Error(message);
+  }
+  return shader;
 }
 
 export default function EzraOrb3D({ status, level = 0 }: OrbStatus) {
-  const listening = status.includes('يستمع');
-  const thinking = status.includes('أفكر');
-  const speaking = status.includes('يتحدث');
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const stageSize = Math.min(384, Math.max(240, Math.min(screenWidth - 20, screenHeight - 410)));
+  const statusRef = useRef(status);
+  const levelRef = useRef(level);
+  const reducedMotionRef = useRef(false);
+  const disposeRef = useRef<(() => void) | null>(null);
+  const [rendererFailed, setRendererFailed] = useState(false);
+
+  statusRef.current = status;
+  levelRef.current = level;
+
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then(value => { if (mounted) reducedMotionRef.current = value; })
+      .catch(() => {});
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', value => {
+      reducedMotionRef.current = value;
+    });
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
+
+  useEffect(() => () => {
+    disposeRef.current?.();
+    disposeRef.current = null;
+  }, []);
+
+  const onContextCreate = useCallback((gl: any) => {
+    disposeRef.current?.();
+    let alive = true;
+    let frameHandle = 0;
+    let startTime = 0;
+    let lastFrame = 0;
+    let program: any;
+    let buffer: any;
+
+    try {
+      const vertex = compileShader(gl, gl.VERTEX_SHADER, vertexShader);
+      const fragment = compileShader(gl, gl.FRAGMENT_SHADER, fragmentShader);
+      program = gl.createProgram();
+      gl.attachShader(program, vertex);
+      gl.attachShader(program, fragment);
+      gl.linkProgram(program);
+      gl.deleteShader(vertex);
+      gl.deleteShader(fragment);
+
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        throw new Error(gl.getProgramInfoLog(program) || 'EZRA orb program linking failed');
+      }
+
+      buffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(
+        gl.ARRAY_BUFFER,
+        new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]),
+        gl.STATIC_DRAW
+      );
+
+      const positionLocation = gl.getAttribLocation(program, 'position');
+      const resolutionLocation = gl.getUniformLocation(program, 'uResolution');
+      const timeLocation = gl.getUniformLocation(program, 'uTime');
+      const energyLocation = gl.getUniformLocation(program, 'uEnergy');
+      const baseLocation = gl.getUniformLocation(program, 'uBaseColor');
+      const accentLocation = gl.getUniformLocation(program, 'uAccentColor');
+      const glowLocation = gl.getUniformLocation(program, 'uGlowColor');
+      const pulseLocation = gl.getUniformLocation(program, 'uPulse');
+      const modeLocation = gl.getUniformLocation(program, 'uMode');
+
+      gl.useProgram(program);
+      gl.enableVertexAttribArray(positionLocation);
+      gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+      gl.disable(gl.DEPTH_TEST);
+      gl.disable(gl.BLEND);
+      gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+      gl.uniform2f(resolutionLocation, gl.drawingBufferWidth, gl.drawingBufferHeight);
+
+      const currentPalette: Palette = {
+        base: [...palettes.idle.base],
+        accent: [...palettes.idle.accent],
+        glow: [...palettes.idle.glow],
+      };
+      let smoothedEnergy = 0;
+      let smoothedPulse = 0.18;
+      const render = (timestamp: number) => {
+        if (!alive) return;
+        if (timestamp - lastFrame < 33) {
+          frameHandle = requestAnimationFrame(render);
+          return;
+        }
+        const deltaSeconds = lastFrame ? Math.min((timestamp - lastFrame) / 1000, 0.1) : 1 / 30;
+        lastFrame = timestamp;
+        if (!startTime) startTime = timestamp;
+        const state = getState(statusRef.current);
+        const stateMode = state === 'listening' ? 1 : state === 'thinking' ? 2 : state === 'speaking' ? 3 : 0;
+        const targetPalette = palettes[state];
+        const paletteRate = 1 / (motion.orb.paletteBlendSeconds || 0.21);
+        const blend = reducedMotionRef.current ? 1 : 1 - Math.exp(-deltaSeconds * paletteRate);
+        for (let channel = 0; channel < 3; channel += 1) {
+          currentPalette.base[channel] += (targetPalette.base[channel] - currentPalette.base[channel]) * blend;
+          currentPalette.accent[channel] += (targetPalette.accent[channel] - currentPalette.accent[channel]) * blend;
+          currentPalette.glow[channel] += (targetPalette.glow[channel] - currentPalette.glow[channel]) * blend;
+        }
+        const statePulse = state === 'listening' ? 0.78 : state === 'speaking' ? 0.86 : state === 'thinking' ? 0.42 : 0.16;
+        const targetEnergy = state === 'listening' ? Math.max(0, Math.min(1, levelRef.current)) : 0;
+        const energyBlend = 1 - Math.exp(-deltaSeconds * (targetEnergy > smoothedEnergy ? 12 : 5));
+        smoothedEnergy += (targetEnergy - smoothedEnergy) * energyBlend;
+        const targetPulse = Math.min(1, statePulse + smoothedEnergy * (state === 'listening' ? 0.48 : 0.10));
+        const pulseBlend = 1 - Math.exp(-deltaSeconds * 4.2);
+        smoothedPulse += (targetPulse - smoothedPulse) * pulseBlend;
+        const energy = smoothedEnergy;
+        const pulse = smoothedPulse;
+        const time = reducedMotionRef.current ? 0 : (timestamp - startTime) / 1000;
+
+        gl.clearColor(0.018, 0.009, 0.025, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.useProgram(program);
+        gl.uniform1f(timeLocation, time);
+        gl.uniform1f(energyLocation, energy);
+        gl.uniform1f(pulseLocation, pulse);
+        gl.uniform1f(modeLocation, stateMode);
+        gl.uniform3f(baseLocation, ...currentPalette.base);
+        gl.uniform3f(accentLocation, ...currentPalette.accent);
+        gl.uniform3f(glowLocation, ...currentPalette.glow);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        gl.endFrameEXP();
+        frameHandle = requestAnimationFrame(render);
+      };
+
+      frameHandle = requestAnimationFrame(render);
+    } catch (error) {
+      console.warn('EZRA orb renderer could not initialize:', error);
+      setRendererFailed(true);
+    }
+
+    disposeRef.current = () => {
+      alive = false;
+      if (frameHandle) cancelAnimationFrame(frameHandle);
+      if (buffer) gl.deleteBuffer(buffer);
+      if (program) gl.deleteProgram(program);
+    };
+  }, []);
+
   return (
-    <View style={styles.stage}>
-      <Canvas
-        camera={{ position: [0, 0, 4.5], fov: 38 }}
-        gl={{ alpha: true, antialias: true, powerPreference: 'low-power' }}
-        style={styles.canvas}
-      >
-        <OrbScene status={status} level={level} />
-      </Canvas>
-      <View pointerEvents="none" style={styles.ornamentLayer}>
-        <View style={[styles.orbitSpark, styles.sparkTop, (listening || speaking) && styles.sparkActive]} />
-        <View style={[styles.orbitSpark, styles.sparkRight]} />
-        <View style={[styles.orbitSpark, styles.sparkLeft, thinking && styles.sparkActive]} />
-        <View style={[styles.orbitSpark, styles.sparkBottom]} />
-      </View>
+    <View style={[styles.stage, { width: stageSize, height: stageSize }]}>
+      {rendererFailed ? (
+        <View style={styles.fallback}>
+          <View style={[styles.fallbackAura, { width: stageSize * 0.98, height: stageSize * 0.98, borderRadius: stageSize * 0.49 }]} />
+          <View style={[styles.fallbackSphere, { width: stageSize * 0.82, height: stageSize * 0.82, borderRadius: stageSize * 0.41 }]}>
+            <View style={[styles.fallbackHighlight, { width: stageSize * 0.32, height: stageSize * 0.17, top: stageSize * 0.075, left: stageSize * 0.12, borderRadius: stageSize * 0.18 }]} />
+            <View style={[styles.fallbackCore, { width: stageSize * 0.26, height: stageSize * 0.26, borderRadius: stageSize * 0.13 }]} />
+          </View>
+        </View>
+      ) : (
+        <GLView style={styles.canvas} onContextCreate={onContextCreate} />
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  stage: { width: '100%', height: 344, alignItems: 'center', justifyContent: 'center' },
-  canvas: { backgroundColor: 'transparent' },
-  ornamentLayer: { ...StyleSheet.absoluteFillObject },
-  orbitSpark: { position: 'absolute', width: 5, height: 5, borderRadius: 3, backgroundColor: '#E9A6D5', opacity: 0.58, shadowColor: '#E83CA8', shadowOpacity: 0.9, shadowRadius: 9, elevation: 4 },
-  sparkTop: { top: 18, left: '49%' },
-  sparkRight: { right: '9%', top: '43%', width: 3, height: 3, backgroundColor: '#B69AFF' },
-  sparkLeft: { left: '9%', top: '35%', width: 4, height: 4, backgroundColor: '#D86AB7' },
-  sparkBottom: { bottom: 22, right: '25%', width: 3, height: 3, backgroundColor: '#B69AFF' },
-  sparkActive: { opacity: 1, transform: [{ scale: 1.45 }] },
+  stage: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    backgroundColor: 'transparent',
+  },
+  canvas: {
+    width: '100%',
+    height: '100%',
+  },
+  fallback: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
+  fallbackAura: { position: 'absolute', backgroundColor: colors.orbIdleGlow, opacity: 0.24, shadowColor: colors.orbIdleAccent, shadowOpacity: 1, shadowRadius: 50, elevation: 20 },
+  fallbackSphere: { overflow: 'hidden', borderWidth: 2, borderColor: colors.orbIdleAccent, backgroundColor: colors.orbIdleBase, alignItems: 'center', justifyContent: 'center', shadowColor: colors.orbSpeakingGlow, shadowOpacity: 0.9, shadowRadius: 34, elevation: 24 },
+  fallbackHighlight: { position: 'absolute', backgroundColor: 'rgba(255,225,247,0.22)', transform: [{ rotate: '-32deg' }] },
+  fallbackCore: { backgroundColor: 'rgba(255,115,200,0.2)', borderWidth: 1, borderColor: 'rgba(255,191,231,0.35)' },
 });

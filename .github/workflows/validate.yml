@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - ezra/arabic-navigation-polish
+      - ezra/habibi-android-spike
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -21,6 +22,56 @@ jobs:
           node-version: 20.19.4
       - name: Install dependencies
         run: npm install
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check EZRA Supabase Edge Function
+        run: deno check supabase/functions/smart-service/index.ts
+      - name: Test EZRA Supabase session security
+        run: deno test supabase/functions/smart-service/auth_test.ts
+      - name: Test EZRA personality contract
+        run: deno test supabase/functions/smart-service/persona_test.ts
+      - name: Test EZRA Groq request and response contract
+        run: deno test supabase/functions/smart-service/groq_test.ts
+      - name: Test EZRA Gemini request and response contract
+        run: deno test supabase/functions/smart-service/gemini_test.ts
+      - name: Test EZRA AI provider and model settings
+        run: deno test src/ai/aiModelSettings_test.ts
+      - name: Test EZRA microphone sensitivity controls
+        run: deno test src/voice/micSensitivity_test.ts
+      - name: Test EZRA voice language detection and profile
+        run: deno test src/voice/voiceProfile_test.ts
+      - name: Test EZRA assistant mode guidance and safety
+        run: deno test src/modes/assistantModes_test.ts
+      - name: Test EZRA Android contact command parsing
+        run: deno test src/phone/commandParser_test.ts
+      - name: Test EZRA direct SMS command parsing
+        run: deno test src/phone/smsCommandParser_test.ts
+      - name: Test EZRA expanded phone control commands
+        run: deno test src/phone/phoneControlCommands_test.ts
+      - name: Test EZRA expanded files notifications and media commands
+        run: deno test src/phone/phoneActionCommands_test.ts
+      - name: Test EZRA screenshot voice commands
+        run: deno test src/phone/screenCaptureCommands_test.ts
+      - name: Test EZRA accessibility commands
+        run: deno test src/phone/accessibilityCommands_test.ts
+      - name: Test EZRA knowledge library synchronization
+        run: deno test src/knowledge/knowledgeSync_test.ts
+      - name: Test EZRA knowledge library management
+        run: deno test src/knowledge/knowledgeLibraryTools_test.ts
+      - name: Test EZRA Arabic-aware knowledge retrieval
+        run: deno test src/knowledge/knowledgeRetrieval_test.ts
+      - name: Test EZRA document extraction helpers
+        run: deno test src/documents/documentTextUtils_test.ts
+      - name: Test EZRA study progress synchronization
+        run: deno test src/study/studyProgressSync_test.ts
+      - name: Test EZRA dental learning library
+        run: deno test src/study/studyLibrary_test.ts
+      - name: Test EZRA bilingual dental knowledge retrieval
+        run: deno test src/study/dentalKnowledge_test.ts
+      - name: Test EZRA companion profile synchronization
+        run: deno test src/companion/companionProfileSync_test.ts
       - name: Check Expo configuration and dependencies
         run: npx expo-doctor
       - name: Set up Java 17
