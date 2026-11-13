@@ -1,6 +1,8 @@
 // EZRA AI — Groq free-tier chat service
 import { verifySupabaseUser } from "./auth.ts";
 import { buildGroqChatPayload, extractGroqReply } from "./groq.ts";
+import { buildGeminiPayload, extractGeminiReply } from "./gemini.ts";
+import { normalizeAiModel, normalizeAiProvider } from "../../../src/ai/aiModelSettings.ts";
 // Keep GROQ_API_KEY in Supabase Edge Function secrets. Never place it in the mobile app.
 
 const corsHeaders = {
@@ -62,20 +64,14 @@ Deno.serve(async (req: Request) => {
   }
   const userId = authResult.userId;
 
-  const apiKey = Deno.env.get("GROQ_API_KEY");
-  if (!apiKey) {
-    return new Response(
-      JSON.stringify({ error: "EZRA AI is not configured yet. Add the GROQ_API_KEY Supabase secret." }),
-      { status: 503, headers: jsonHeaders },
-    );
-  }
-
   try {
     const body = await req.json();
     const input = typeof body?.input === "string" ? body.input.trim() : "";
     const imageDataUrl = typeof body?.imageDataUrl === "string" ? body.imageDataUrl : "";
     const voiceMode = body?.voiceMode === true;
     const responseLanguage = body?.responseLanguage === "en" ? "en" : "ar";
+    const provider = normalizeAiProvider(body?.provider);
+    const model = normalizeAiModel(provider, body?.model);
 
     if (imageDataUrl && (!/^data:image\/(jpeg|png|webp);base64,/i.test(imageDataUrl) || imageDataUrl.length > 4 * 1024 * 1024)) {
       return new Response(JSON.stringify({ error: "The image format is unsupported or the image is too large." }), {
@@ -126,29 +122,58 @@ Deno.serve(async (req: Request) => {
     }
 
 
-    const groqPayload = buildGroqChatPayload({ input, imageDataUrl, voiceMode, responseLanguage, approvedMemories });
-
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(groqPayload),
-    });
-
-    const result = await response.json();
+    let response: Response;
+    let result: unknown;
+    if (provider === "gemini") {
+      const apiKey = Deno.env.get("GEMINI_API_KEY");
+      if (!apiKey) {
+        return new Response(
+          JSON.stringify({ error: "Google Gemini is not configured. Add your free AI Studio key as the GEMINI_API_KEY Supabase Edge Function secret, then deploy the function." }),
+          { status: 503, headers: jsonHeaders },
+        );
+      }
+      const geminiPayload = buildGeminiPayload({ input, imageDataUrl, voiceMode, responseLanguage, approvedMemories });
+      response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+          body: JSON.stringify(geminiPayload),
+        },
+      );
+      result = await response.json();
+    } else {
+      const apiKey = Deno.env.get("GROQ_API_KEY");
+      if (!apiKey) {
+        return new Response(
+          JSON.stringify({ error: "EZRA AI is not configured yet. Add the GROQ_API_KEY Supabase secret." }),
+          { status: 503, headers: jsonHeaders },
+        );
+      }
+      const groqPayload = buildGroqChatPayload({ input, imageDataUrl, voiceMode, responseLanguage, approvedMemories, model });
+      response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(groqPayload),
+      });
+      result = await response.json();
+    }
 
     if (!response.ok) {
-      console.error("Groq API error:", response.status, result?.error?.message ?? "Unknown provider error");
+      console.error(`${provider} API error:`, response.status, (result as any)?.error?.message ?? "Unknown provider error");
       const status = response.status === 429 ? 429 : 502;
       const message = response.status === 429
         ? "The free AI usage limit has been reached for now. Please try again later."
-        : "The AI service is temporarily unavailable. Please try again.";
+        : "The selected AI provider is temporarily unavailable or the selected model is not enabled.";
       return new Response(JSON.stringify({ error: message }), { status, headers: jsonHeaders });
     }
 
-    const reply = extractGroqReply(result);
+    const reply = provider === "gemini"
+      ? extractGeminiReply(result)
+      : extractGroqReply(result);
     if (!reply) {
       return new Response(JSON.stringify({ error: "The AI returned an empty response. Please try again." }), {
         status: 502, headers: jsonHeaders,
