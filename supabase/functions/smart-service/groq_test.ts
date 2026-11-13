@@ -38,6 +38,12 @@ Deno.test("image input routes to vision model with both text and image content",
   }
 });
 
+
+Deno.test("text model selection is restricted to supported Groq models", () => {
+  assertEquals(buildGroqChatPayload({ ...base, model: "openai/gpt-oss-20b" }).model, "openai/gpt-oss-20b");
+  assertEquals(buildGroqChatPayload({ ...base, model: "gemini-2.5-flash" }).model, "openai/gpt-oss-120b");
+});
+
 Deno.test("only supplied approved memories are included in the prompt", () => {
   const payload = buildGroqChatPayload({ ...base, approvedMemories: ["prefers concise answers"] });
   assertStringIncludes(payload.messages[0].content, "prefers concise answers");
