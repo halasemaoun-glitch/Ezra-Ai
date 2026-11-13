@@ -32,8 +32,8 @@ Deno.test('cloud rows map to the local knowledge document shape', () => {
   }
 });
 
-Deno.test('merge keeps the newest copy and caps the library at eight documents', () => {
-  const local = normalizeKnowledgeDocuments(Array.from({ length: 8 }, (_, index) => ({
+Deno.test('merge keeps the newest copy and caps the library at one hundred documents', () => {
+  const local = normalizeKnowledgeDocuments(Array.from({ length: 100 }, (_, index) => ({
     id: `doc-${index}`,
     name: `local-${index}.txt`,
     content: 'local',
@@ -56,7 +56,7 @@ Deno.test('merge keeps the newest copy and caps the library at eight documents',
     addedAt: '2026-11-04T00:00:00.000Z',
   }]);
   const merged = mergeKnowledgeDocuments(local, cloud);
-  if (merged.length !== 8 || merged.find(item => item.id === 'doc-0')?.content !== 'cloud') {
+  if (merged.length !== 100 || merged.find(item => item.id === 'doc-0')?.content !== 'cloud') {
     throw new Error('Knowledge merge did not preserve the latest version and eight-item limit');
   }
 });
