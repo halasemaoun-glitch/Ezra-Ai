@@ -2321,7 +2321,6 @@ export default function App() {
               ? (aiPreferences.provider === 'gemini'
               ? 'لم تؤكد الخدمة تشغيل Gemini. يلزم نشر تحديث smart-service وإضافة GEMINI_API_KEY في أسرار Supabase أولاً.'
               : 'لم تؤكد الخدمة تشغيل نموذج Groq المختار. يلزم نشر تحديث smart-service لتفعيل اختيار النموذج.')
-              : null
               : null,
             aiError?.message,
             context?.status ? `HTTP status: ${context.status}` : null,
