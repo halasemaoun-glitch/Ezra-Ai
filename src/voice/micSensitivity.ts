@@ -11,7 +11,7 @@ export function normalizeMicSensitivity(value: unknown): number {
 /** Expo speech-recognition volumechange values are provider-reported levels, commonly 0..10. */
 export function scaleMicLevel(rawLevel: number, sensitivity: number): number {
   const safeRaw = Number.isFinite(rawLevel) ? Math.max(0, Math.min(10, rawLevel)) : 0;
-  const gain = 0.65 + normalizeMicSensitivity(sensitivity) / 200;
+  const gain = 0.75 + normalizeMicSensitivity(sensitivity) / 200;
   return Math.max(0, Math.min(1, (safeRaw / 10) * gain));
 }
 
