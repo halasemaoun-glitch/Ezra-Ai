@@ -2271,7 +2271,7 @@ export default function App() {
           .sort((a, b) => b.score - a.score)
           .slice(0, 4) : [];
         const knowledgeGuidance = relevantKnowledge.length
-          ? relevantKnowledge.map(({ document, isUserTaught }) => `${isUserTaught ? 'User-taught personal study note (not independently verified; cross-check clinical claims against current authoritative guidance)' : 'User knowledge-library source'}: ${document.name}\n${document.content.slice(0, 5000)}`).join('\n\n').slice(0, 16000) : '';
+          ? relevantKnowledge.map(({ document, isUserTaught }) => `${isUserTaught ? 'User-taught personal study note (not independently verified; cross-check clinical claims against current authoritative guidance)' : 'User knowledge-library source'}: ${document.name}\n${selectRelevantDocumentText(document.content, userInput, 5000)}`).join('\n\n').slice(0, 16000) : '';
         const relevantDentalReferences = assistantMode === 'dentist' || assistantMode === 'study'
           ? retrieveDentalReferences(userInput, DENTAL_REFERENCE_LIBRARY, { limit: 5, minScore: 1 })
           : [];
