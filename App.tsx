@@ -444,17 +444,17 @@ export default function App() {
       'ezra:habibiDialect',
     ]).then(values => {
       const savedModelPath = values[0]?.[1] ?? '';
-      if (savedModelPath.includes('/habibi-alg/') && savedModelPath.endsWith('/habibi-alg-orig.gguf')) {
+      if (savedModelPath.includes('/habibi-unified/') && savedModelPath.endsWith('/habibi-unified-orig.gguf')) {
         setHabibiModelPath(savedModelPath);
       } else {
-        // Do not silently keep using the older Unified checkpoint after switching EZRA to the Algerian-specialized model.
         setHabibiModelPath('');
         if (savedModelPath) AsyncStorage.multiRemove(['ezra:habibiModelPath', 'ezra:habibiEnabled']).catch(() => {});
       }
       if (values[1]?.[1]) setHabibiReferencePath(values[1][1]);
       if (values[2]?.[1]) setHabibiReferenceTranscript(values[2][1]);
-      setHabibiDialect('ALG');
-      AsyncStorage.setItem('ezra:habibiDialect', 'ALG').catch(() => {});
+      const savedDialect = values[3]?.[1] === 'LEV' ? 'LEV' : 'ALG';
+      setHabibiDialect(savedDialect);
+      AsyncStorage.setItem('ezra:habibiDialect', savedDialect).catch(() => {});
     }).catch(error => console.warn('Could not restore Habibi setup:', error));
   }, []);
 
@@ -468,9 +468,9 @@ export default function App() {
       if (freeBytes < 2_000_000_000) {
         throw new Error('المساحة الحرة أقل من 2 GB. أفرغ مساحة إضافية قبل تنزيل نموذج Habibi.');
       }
-      const directory = `${FileSystem.documentDirectory}habibi-alg/`;
+      const directory = `${FileSystem.documentDirectory}habibi-unified/`;
       await FileSystem.makeDirectoryAsync(directory, { intermediates: true }).catch(() => {});
-      const modelPath = `${directory}habibi-alg-orig.gguf`;
+      const modelPath = `${directory}habibi-unified-orig.gguf`;
       const vocabPath = `${directory}vocab.txt`;
       const existing = await FileSystem.getInfoAsync(modelPath);
       if (existing.exists && existing.size && existing.size > 1_000_000_000) {
@@ -479,7 +479,7 @@ export default function App() {
       } else {
         if (existing.exists) await FileSystem.deleteAsync(modelPath, { idempotent: true });
         const task = FileSystem.createDownloadResumable(
-          'https://huggingface.co/trklou/audio.cpp/resolve/main/habibi-alg/habibi-alg-orig.gguf',
+          'https://huggingface.co/trklou/audio.cpp/resolve/main/habibi-unified/habibi-unified-orig.gguf',
           modelPath,
           {},
           progress => {
@@ -502,7 +502,7 @@ export default function App() {
       const vocabInfo = await FileSystem.getInfoAsync(vocabPath);
       if (!vocabInfo.exists || !vocabInfo.size || vocabInfo.size < 1000) {
         const vocab = await FileSystem.downloadAsync(
-          'https://huggingface.co/trklou/audio.cpp/resolve/main/habibi-alg/vocab.txt',
+          'https://huggingface.co/trklou/audio.cpp/resolve/main/habibi-unified/vocab.txt',
           vocabPath
         );
         if (vocab.status < 200 || vocab.status >= 300) throw new Error('تعذّر تنزيل ملف مفردات Habibi.');
@@ -580,11 +580,11 @@ export default function App() {
         FileSystem.getInfoAsync(vocabPath),
         FileSystem.getInfoAsync(habibiReferencePath),
       ]);
-      if (!habibiModelPath.includes('/habibi-alg/') || !habibiModelPath.endsWith('/habibi-alg-orig.gguf')) {
-        throw new Error('يجب استخدام نموذج Habibi ALG المتخصص باللهجة الجزائرية. أعد تنزيل النموذج الجزائري.');
+      if (!habibiModelPath.includes('/habibi-unified/') || !habibiModelPath.endsWith('/habibi-unified-orig.gguf')) {
+        throw new Error('يجب استخدام نموذج Habibi الموحد متعدد اللهجات. أعد تنزيل النموذج.');
       }
       if (!modelInfo.exists || !modelInfo.size || modelInfo.size < 1_000_000_000) {
-        throw new Error('ملف نموذج Habibi ALG غير موجود أو غير مكتمل. أعد تنزيل النموذج الجزائري.');
+        throw new Error('ملف نموذج Habibi الموحد غير موجود أو غير مكتمل. أعد تنزيل النموذج.');
       }
       if (!vocabInfo.exists || !vocabInfo.size || vocabInfo.size < 1_000) {
         throw new Error('ملف مفردات Habibi غير موجود أو غير مكتمل. أعد تنزيل النموذج.');
@@ -604,13 +604,13 @@ export default function App() {
       }
       await AsyncStorage.multiSet([
         ['ezra:habibiReferenceTranscript', habibiReferenceTranscript.trim()],
-        ['ezra:habibiDialect', 'ALG'],
+        ['ezra:habibiDialect', habibiDialect],
       ]);
       const result = await EzraHabibiTts.initialize(
         habibiModelPath,
         habibiReferencePath,
         habibiReferenceTranscript.trim(),
-        'ALG',
+        habibiDialect,
         1
       );
       setHabibiEngineReady(result.ready);
@@ -3846,14 +3846,14 @@ export default function App() {
                     <Text style={styles.settingHint}>صوت رجالي دافئ وعميق · تُكتشف لغة القراءة من نص الرد</Text>
                     <Text style={styles.settingHint}>Habibi-TTS هو المحرك العربي الأساسي بعد تنزيل النموذج واعتماد عينة صوت؛ صوت الهاتف احتياطي عند عدم جاهزيته.</Text>
                     <Text style={styles.settingHint}>تنبيه الذاكرة: تهيئة Habibi تتطلب 2.2 GB RAM متاحة على الأقل قبل تحميل النموذج إلى الذاكرة؛ هذا شرط أمان وليس ضمانًا للتشغيل على كل هاتف.</Text>
-                    <Text style={styles.settingHint}>الصوت العربي: اللهجة الجزائرية عبر Habibi ALG · الإنجليزية: محرك النظام</Text>
+                    <Text style={styles.settingHint}>الصوت العربي: الجزائرية أو الشامية عبر Habibi · الإنجليزية: محرك النظام</Text>
                     <Text style={styles.settingHint}>الصوت الاحتياطي يعتمد على الأصوات المثبّتة في Android؛ خفض طبقة الصوت وحده لا يضمن صوتًا رجاليًا.</Text>
                   </View>
                 </View>
                 <View style={[styles.settingRow, { flexDirection: 'column', alignItems: 'stretch', gap: 10 }]}>
                   <View style={styles.settingCopy}>
                     <Text style={styles.settingTitle}>محرك الصوت المحلي Habibi-TTS</Text>
-                    <Text style={styles.settingHint}>{habibiEngineReady ? 'جاهز · العربية الجزائرية عبر Habibi ALG' : habibiModelPath ? 'نموذج ALG محفوظ · يحتاج عينة صوت وتفعيل' : 'نزّل نموذج Habibi ALG المتخصص بالجزائرية (حجمه كبير) ليعمل محليًا دون API صوت مدفوع.'}</Text>
+                    <Text style={styles.settingHint}>{habibiEngineReady ? 'جاهز · العربية عبر Habibi متعدد اللهجات' : habibiModelPath ? 'نموذج Habibi الموحد محفوظ · يحتاج عينة صوت وتفعيل' : 'نزّلي نموذج Habibi الموحد متعدد اللهجات ليعمل محليًا دون API صوت مدفوع.'}</Text>
                   </View>
                   <TouchableOpacity
                     style={[styles.memorySaveButton, { marginTop: 0, opacity: habibiModelDownloading ? 0.6 : 1 }]}
@@ -3878,10 +3878,15 @@ export default function App() {
                     multiline
                   />
                   <Text style={styles.settingHint}>العينة يجب أن تكون صوت رجل واضحًا، WAV PCM 16-bit، من نصف ثانية إلى 1.3 ثانية، مع نص مطابق تمامًا. تسجيلك السابق يبقى احتياطيًا ولن نستخدمه هنا.</Text>
-                  <View style={[styles.rateButton, styles.languageButtonActive, { alignSelf: 'flex-end', paddingHorizontal: 16 }]}>
-                    <Text style={styles.rateButtonText}>اللهجة الجزائرية · ALG</Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' }}>
+                    <TouchableOpacity style={[styles.rateButton, habibiDialect === 'ALG' && styles.languageButtonActive, { paddingHorizontal: 16 }]} onPress={() => { setHabibiDialect('ALG'); setHabibiEngineReady(false); void EzraHabibiTts?.shutdown().catch(() => {}); void AsyncStorage.setItem('ezra:habibiDialect', 'ALG'); void AsyncStorage.removeItem('ezra:habibiEnabled'); }} disabled={habibiEngineBusy}>
+                      <Text style={styles.rateButtonText}>الجزائرية · ALG</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.rateButton, habibiDialect === 'LEV' && styles.languageButtonActive, { paddingHorizontal: 16 }]} onPress={() => { setHabibiDialect('LEV'); setHabibiEngineReady(false); void EzraHabibiTts?.shutdown().catch(() => {}); void AsyncStorage.setItem('ezra:habibiDialect', 'LEV'); void AsyncStorage.removeItem('ezra:habibiEnabled'); }} disabled={habibiEngineBusy}>
+                      <Text style={styles.rateButtonText}>الشامية · LEV</Text>
+                    </TouchableOpacity>
                   </View>
-                  <Text style={styles.settingHint}>يستخدم EZRA النموذج المتخصص Habibi-TTS ALG بدل النموذج الموحد، مع تثبيت رمز اللهجة ALG لضمان عدم تحميل نموذج بلهجة مختلفة.</Text>
+                  <Text style={styles.settingHint}>النموذج الموحد يدعم الجزائرية والشامية بطابع سوري وفلسطيني وأردني. اختاري اللهجة ثم أعيدي تفعيل Habibi لتطبيقها على الصوت العربي.</Text>
                   <TouchableOpacity
                     style={[styles.memorySaveButton, { marginTop: 0, opacity: habibiEngineBusy ? 0.6 : 1 }]}
                     onPress={() => { void initializeHabibiEngine(); }}
