@@ -60,6 +60,8 @@ jobs:
         run: deno test src/knowledge/knowledgeSync_test.ts
       - name: Test EZRA knowledge library management
         run: deno test src/knowledge/knowledgeLibraryTools_test.ts
+      - name: Test EZRA Arabic-aware knowledge retrieval
+        run: deno test src/knowledge/knowledgeRetrieval_test.ts
       - name: Test EZRA document extraction helpers
         run: deno test src/documents/documentTextUtils_test.ts
       - name: Test EZRA study progress synchronization
