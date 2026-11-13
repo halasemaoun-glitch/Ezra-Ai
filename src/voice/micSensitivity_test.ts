@@ -17,6 +17,7 @@ Deno.test('higher sensitivity increases the displayed mic level', () => {
   const normal = scaleMicLevel(4, 50);
   const high = scaleMicLevel(4, 100);
   if (!(low < normal && normal < high)) throw new Error('sensitivity gain must be monotonic');
+  if (scaleMicLevel(5, 50) !== 0.5) throw new Error('default sensitivity must preserve the current mic level');
   if (scaleMicLevel(20, 100) !== 1) throw new Error('mic level must be capped');
 });
 
