@@ -39,6 +39,7 @@ import { colors, motion, radius, spacing, typography, shadows } from './src/them
 import { ASSISTANT_MODE_OPTIONS, getAssistantModeGuidance, getAssistantModeSuggestions, type AssistantMode } from './src/modes/assistantModes';
 import LearningToolsModal from './src/components/LearningToolsModal';
 import { DENTAL_REFERENCE_LIBRARY } from './src/study/studyLibrary';
+import { retrieveDentalReferences } from './src/study/dentalKnowledge';
 import { supabase } from './src/lib/supabase';
 import { DEFAULT_EZRA_VOICE, detectEzraSpeechLanguage } from './src/voice/voiceProfile';
 import { AI_MODELS, AI_PROVIDER_OPTIONS, DEFAULT_AI_MODELS, normalizeAiModel, normalizeAiProvider, type AiProvider } from './src/ai/aiModelSettings';
@@ -2231,26 +2232,16 @@ export default function App() {
           .sort((a, b) => b.score - a.score)
           .slice(0, 2) : [];
         const knowledgeGuidance = relevantKnowledge.length
-          ? relevantKnowledge.map(({ document }) => `Source: ${document.name}\n${document.content.slice(0, 1100)}`).join('\n\n').slice(0, 2200)
-          : '';
-
-        const relevantDentalReferences = assistantMode === 'dentist' || assistantMode === 'study'
-          ? DENTAL_REFERENCE_LIBRARY
-              .map(reference => {
-                const referenceText = [reference.title, reference.summary, ...reference.keyPoints]
-                  .join(' ').toLowerCase().replace(/[\u064B-\u065F\u0670]/g, '');
-                const score = queryTerms.reduce((total, term) => total + (referenceText.split(term).length - 1), 0);
-                return { reference, score };
-              })
-              .filter(item => item.score > 0)
-              .sort((a, b) => b.score - a.score)
-              .slice(0, 2)
+          ? relevantKnowledge.map(({ document }) => `Source: ${document.name}\n${document        const relevantDentalReferences = assistantMode === 'dentist' || assistantMode === 'study'
+          ? retrieveDentalReferences(userInput, DENTAL_REFERENCE_LIBRARY, { limit: 5, minScore: 1 })
           : [];
         const dentalReferenceGuidance = relevantDentalReferences.length
-          ? relevantDentalReferences.map(({ reference }) =>
-              `Built-in dental learning reference — ${reference.title} (category: ${reference.category})\n${reference.summary}\n${reference.keyPoints.join('\n')}`
-            ).join('\n\n').slice(0, 2400)
-          : '';
+          ? relevantDentalReferences.map(({ reference, score }) =>
+              `Built-in dental learning reference — ${reference.title} (category: ${reference.category}; relevance: ${score})\\n${reference.summary}\\n${reference.keyPoints.join('\\n')}\\nSources: ${(reference.sources ?? []).map(source => source.label + ' ' + source.url).join(' | ')}`
+            ).join('\\n\\n').slice(0, 6500)
+          : (assistantMode === 'dentist' || assistantMode === 'study'
+              ? 'No matching built-in dental reference was retrieved. Answer from reliable general knowledge only when confident, state uncertainty, and do not invent citations or clinical facts.'
+              : '');
 
         const aiGuidance = [
           aiPreferences.responseDepth === 'مختصر'
