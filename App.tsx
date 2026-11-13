@@ -3600,7 +3600,7 @@ export default function App() {
                       </View>
                       <Text style={{ color: '#A99AA8', fontSize: 10, lineHeight: 17, textAlign: 'right' }}>
                         {aiPreferences.provider === 'gemini'
-                          ? 'يتطلب Gemini مفتاحًا مجانياً من Google AI Studio محفوظًا في Supabase باسم GEMINI_API_KEY. لا تضعي المفتاح داخل التطبيق أو GitHub. عند غياب المفتاح سيظهر تنبيه إعداد واضح.'
+                          ? 'يتطلب Gemini مفتاحًا مجانياً من Google AI Studio محفوظًا في Supabase باسم GEMINI_API_KEY، ثم نشر تحديث smart-service. لا تضعي المفتاح داخل التطبيق أو GitHub. تنبيه خصوصية: قد تستخدم Google محتوى الخطة المجانية لتحسين منتجاتها؛ لا ترسلي بيانات حساسة.'
                           : 'Groq هو المزود المهيأ حاليًا. GPT-OSS 120B للمهام المعقدة و20B أخف للمحادثات. عند إرسال صورة يستخدم Groq نموذج Qwen Vision تلقائيًا.'}
                       </Text>
                       <View style={{ alignSelf: 'flex-end', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, backgroundColor: '#20352C' }}><Text style={{ color: '#A9D7B9', fontSize: 10, fontWeight: '700' }}>اخترنا نماذج لها حصص مجانية · لا تفعيل للمدفوع داخل EZRA</Text></View>
