@@ -1079,8 +1079,8 @@ export default function App() {
 
   const addKnowledgeDocument = async () => {
     if (!session || !knowledgeLoaded || knowledgeLoading || !!knowledgeError) return;
-    if (knowledgeDocuments.filter(item => !item.deletedAt).length >= 8) {
-      Alert.alert('وصلت إلى الحد الأقصى', 'يمكنك حفظ 8 مستندات حالياً. احذف مستنداً قديماً لإضافة مستند جديد.');
+    if (knowledgeDocuments.filter(item => !item.deletedAt).length >= 100) {
+      Alert.alert('وصلت إلى الحد الأقصى', 'يمكنك حفظ 100 مادة حالياً. احذفي مادة قديمة لإضافة مادة جديدة.');
       return;
     }
     try {
@@ -1131,6 +1131,41 @@ export default function App() {
     } catch (error) {
       console.error('Could not add knowledge document:', error);
       Alert.alert('تعذّرت إضافة الملف', error instanceof Error ? error.message : 'لم نتمكن من قراءة الملف أو حفظه. حاول مرة أخرى.');
+    }
+  };
+
+  const teachKnowledge = async (title: string, content: string): Promise<void> => {
+    if (!session) throw new Error('سجّلي الدخول أولاً لحفظ الدروس في حسابك.');
+    const cleanTitle = title.trim().slice(0, 120);
+    const cleanContent = content.trim();
+    if (!cleanTitle || !cleanContent) throw new Error('أضيفي عنواناً ومحتوى للدرس.');
+    if (cleanContent.length > 24000) throw new Error('اختصري الدرس إلى 24 ألف حرف كحد أقصى.');
+    const activeDocuments = knowledgeDocuments.filter(item => !item.deletedAt);
+    if (activeDocuments.length >= 100) throw new Error('وصلت مكتبة المعرفة إلى حد 100 مادة. احذفي مادة قديمة قبل إضافة أخرى.');
+    const now = new Date().toISOString();
+    const document: KnowledgeDocument = {
+      id: `taught-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name: `تعليم EZRA - ${cleanTitle}`,
+      content: `مادة تعليمية أضافتها صاحبة الحساب بنفسها. العنوان: ${cleanTitle}\\n\\n${cleanContent}`,
+      sizeBytes: new TextEncoder().encode(cleanContent).length,
+      addedAt: now,
+      updatedAt: now,
+      deletedAt: null,
+    };
+    const next = [document, ...knowledgeDocuments];
+    await AsyncStorage.setItem(`ezra:knowledgeLibrary:${session.user.id}`, JSON.stringify(next));
+    setKnowledgeDocuments(next);
+    try {
+      const { error } = await supabase
+        .from('knowledge_documents')
+        .upsert(knowledgeDocumentsToCloud([document], session.user.id), { onConflict: 'owner_id,id' });
+      if (error) throw error;
+      setKnowledgeSyncStatus('synced');
+      Alert.alert('حُفظ الدرس بنجاح', 'أصبح ضمن مكتبة EZRA التعليمية، ومزامناً مع حسابك ليسترجعه عند الحاجة.');
+    } catch (error) {
+      console.error('Taught dental knowledge saved locally but cloud sync failed:', error);
+      setKnowledgeSyncStatus('error');
+      Alert.alert('حُفظ على هذا الجهاز', 'تم حفظ الدرس محلياً، لكن تعذّرت مزامنته مع حسابك الآن. سيبقى على الجهاز ويمكن إعادة المزامنة لاحقاً.');
     }
   };
 
@@ -2227,14 +2262,16 @@ export default function App() {
         const relevantKnowledge = conversationInput.length <= 7000 ? knowledgeDocuments.filter(document => !document.deletedAt)
           .map(document => {
             const normalizedContent = document.content.toLowerCase().replace(/[\u064B-\u065F\u0670]/g, '');
-            const score = queryTerms.reduce((total, term) => total + (normalizedContent.split(term).length - 1), 0);
-            return { document, score };
+            const rawScore = queryTerms.reduce((total, term) => total + (normalizedContent.split(term).length - 1), 0);
+            const isUserTaught = document.name.startsWith('تعليم EZRA - ');
+            const score = rawScore * (isUserTaught ? 2 : 1);
+            return { document, score, isUserTaught };
           })
           .filter(item => item.score > 0)
           .sort((a, b) => b.score - a.score)
-          .slice(0, 2) : [];
+          .slice(0, 4) : [];
         const knowledgeGuidance = relevantKnowledge.length
-          ? relevantKnowledge.map(({ document }) => `Source: ${document.name}\n${document.content.slice(0, 6000)}`).join('\n\n').slice(0, 12000) : '';
+          ? relevantKnowledge.map(({ document, isUserTaught }) => `${isUserTaught ? 'User-taught personal study note (not independently verified; cross-check clinical claims against current authoritative guidance)' : 'User knowledge-library source'}: ${document.name}\n${document.content.slice(0, 5000)}`).join('\n\n').slice(0, 16000) : '';
         const relevantDentalReferences = assistantMode === 'dentist' || assistantMode === 'study'
           ? retrieveDentalReferences(userInput, DENTAL_REFERENCE_LIBRARY, { limit: 5, minScore: 1 })
           : [];
@@ -3351,7 +3388,7 @@ export default function App() {
                     </View>
                     <View style={{ flexDirection: 'row', gap: 8 }}>
                       <View style={{ flex: 1, padding: 13, borderRadius: 14, backgroundColor: '#1B151E', borderWidth: 1, borderColor: '#493747', alignItems: 'center', gap: 4 }}>
-                        <Text style={{ color: '#E9C3DF', fontSize: 22, fontWeight: '800' }}>{knowledgeDocuments.filter(item => !item.deletedAt).length}/8</Text>
+                        <Text style={{ color: '#E9C3DF', fontSize: 22, fontWeight: '800' }}>{knowledgeDocuments.filter(item => !item.deletedAt).length}/100</Text>
                         <Text style={{ color: '#B9AAB7', fontSize: 10 }}>ملفات محفوظة</Text>
                       </View>
                       <View style={{ flex: 1, padding: 13, borderRadius: 14, backgroundColor: '#1B151E', borderWidth: 1, borderColor: '#493747', alignItems: 'center', gap: 4 }}>
@@ -3364,7 +3401,7 @@ export default function App() {
                       <Text style={{ color: '#B9AAB7', fontSize: 12, textAlign: 'right' }}>TXT · MD · CSV · JSON · PDF · DOCX · PPTX · XLSX</Text>
                       <Text style={{ color: '#8F8290', fontSize: 10, lineHeight: 17, textAlign: 'right' }}>حتى 8 مستندات، وبحد أقصى 5 ميغابايت للملف الأصلي و1 ميغابايت للنص المستخرج. ملفات PDF المصوّرة تحتاج OCR غير المتاح حالياً.</Text>
                     </View>
-                    <TouchableOpacity onPress={addKnowledgeDocument} disabled={!knowledgeLoaded || knowledgeLoading || !!knowledgeError || knowledgeDocuments.filter(item => !item.deletedAt).length >= 8} style={{ borderRadius: 15, paddingVertical: 14, alignItems: 'center', backgroundColor: '#754765', borderWidth: 1, borderColor: '#C58DBB', opacity: !knowledgeLoaded || knowledgeLoading || !!knowledgeError || knowledgeDocuments.filter(item => !item.deletedAt).length >= 8 ? 0.55 : 1 }}>
+                    <TouchableOpacity onPress={addKnowledgeDocument} disabled={!knowledgeLoaded || knowledgeLoading || !!knowledgeError || knowledgeDocuments.filter(item => !item.deletedAt).length >= 100} style={{ borderRadius: 15, paddingVertical: 14, alignItems: 'center', backgroundColor: '#754765', borderWidth: 1, borderColor: '#C58DBB', opacity: !knowledgeLoaded || knowledgeLoading || !!knowledgeError || knowledgeDocuments.filter(item => !item.deletedAt).length >= 100 ? 0.55 : 1 }}>
                       <Text style={{ color: '#FFF0F8', fontSize: 14, fontWeight: '800' }}>{knowledgeLoading ? 'جارٍ تحميل المكتبة…' : '＋ إضافة ملف إلى مكتبة المعرفة'}</Text>
                     </TouchableOpacity>
                     <TextInput value={knowledgeSearch} onChangeText={setKnowledgeSearch} placeholder="ابحث باسم الملف أو داخل محتواه…" placeholderTextColor="#817482" style={{ minHeight: 46, borderRadius: 13, borderWidth: 1, borderColor: '#594253', backgroundColor: '#17121A', color: '#F5EAF2', paddingHorizontal: 13, textAlign: 'right', writingDirection: 'rtl' }} accessibilityLabel="البحث في أسماء الملفات ومحتوياتها" />
@@ -3977,6 +4014,7 @@ export default function App() {
           userId={session?.user.id ?? null}
           onClose={() => setLearningToolsVisible(false)}
           onAskEzra={prompt => { setMessage(prompt); setLearningToolsVisible(false); }}
+          onTeachKnowledge={teachKnowledge}
         />
 
         <Modal
