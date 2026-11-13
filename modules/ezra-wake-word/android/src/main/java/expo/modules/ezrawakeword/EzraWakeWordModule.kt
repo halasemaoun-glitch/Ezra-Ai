@@ -357,6 +357,11 @@ class EzraWakeWordModule : Module() {
         "photos" to setOf("com.google.android.apps.photos"),
         "play store" to setOf("com.android.vending"),
         "spotify" to setOf("com.spotify.music"),
+        "instagram" to setOf("com.instagram.android"),
+        "facebook" to setOf("com.facebook.katana"),
+        "messenger" to setOf("com.facebook.orca"),
+        "telegram" to setOf("org.telegram.messenger"),
+        "tiktok" to setOf("com.zhiliaoapp.musically", "com.ss.android.ugc.trill"),
         "calculator" to setOf("com.google.android.calculator"),
         "files" to setOf("com.google.android.documentsui")
       )
