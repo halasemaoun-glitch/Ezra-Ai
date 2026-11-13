@@ -8,7 +8,7 @@ Private personal AI companion built with Expo SDK 54 and React Native, with Andr
 - Dark burgundy/pink interface with Home, Chat, and Settings destinations and an animated orb.
 - Supabase email/password authentication and owner-scoped conversation and memory data.
 - AI replies through the authenticated `smart-service` Supabase Edge Function. Groq and Google Gemini adapters are supported in source; provider keys remain server-side.
-- Selectable free-tier models include Groq `openai/gpt-oss-120b` / `openai/gpt-oss-20b` and Gemini `gemini-2.5-flash` / `gemini-2.5-flash-lite`. Groq image requests use `qwen/qwen3.8-27b` automatically.
+- Selectable free-tier models include Groq `openai/gpt-oss-120b` / `openai/gpt-oss-20b` and Gemini `gemini-3.8-flash` / `gemini-3.1-flash-lite`. Groq image requests use `qwen/qwen3.8-27b` automatically.
 - Conversation history and user-approved memory personalization.
 - Companion, Dentist, and Study modes with mode-specific guidance.
 - Evidence-linked dental learning library with 13 reference topics, 16 flashcards, 12 quiz questions, and 6 clinical case simulations. Sources include ADA, AAPD, AAE, EFP, and IADT. These are educational tools, not remote diagnosis or treatment.
