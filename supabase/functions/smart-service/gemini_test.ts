@@ -23,7 +23,7 @@ Deno.test("Gemini voice payload uses concise speech limits", () => {
 });
 
 Deno.test("extracts Gemini text across response parts and rejects malformed replies", () => {
-  assertEquals(extractGeminiReply({ candidates: [{ content: { parts: [{ text: "  Hello" }, { text: " EZRA! " }] } }] }), "Hello EZRA!");
+  assertEquals(extractGeminiReply({ candidates: [{ content: { parts: [{ text: "internal reasoning", thought: true }, { text: "  Hello" }, { text: " EZRA! " }] } }] }), "Hello EZRA!");
   assertEquals(extractGeminiReply(null), null);
   assertEquals(extractGeminiReply({ candidates: [] }), null);
   assertEquals(extractGeminiReply({ candidates: [{ content: { parts: [{ text: " " }] } }] }), null);
