@@ -1,6 +1,7 @@
 import {
   DEFAULT_MIC_SENSITIVITY,
   getMicInterruptionThreshold,
+  getMicInterruptionFramesRequired,
   getMinimumSpeechLengthMs,
   getPossibleSilenceLengthMs,
   getCompleteSilenceLengthMs,
@@ -29,12 +30,13 @@ Deno.test('higher sensitivity lowers the voice interruption threshold', () => {
   const normal = getMicInterruptionThreshold(50);
   const high = getMicInterruptionThreshold(100);
   if (!(low > normal && normal > high)) throw new Error('interruption threshold must be inverse to sensitivity');
-  if (Math.abs(normal - 0.62) > 0.0001) throw new Error('default threshold should preserve current behavior');
+  if (Math.abs(normal - 0.4) > 0.0001) throw new Error('default threshold should respond to normal conversational speech');
+  if (getMicInterruptionFramesRequired(0) !== 5 || getMicInterruptionFramesRequired(50) !== 4 || getMicInterruptionFramesRequired(100) !== 3) throw new Error('interruption debounce must shorten as sensitivity increases');
 });
 
 Deno.test('sensitivity adjusts Android speech duration and silence hints monotonically', () => {
   if (getMinimumSpeechLengthMs(0) <= getMinimumSpeechLengthMs(100)) throw new Error('low sensitivity should require longer speech');
   if (getPossibleSilenceLengthMs(0) <= getPossibleSilenceLengthMs(100)) throw new Error('higher sensitivity should accept shorter pauses');
   if (getCompleteSilenceLengthMs(0) <= getCompleteSilenceLengthMs(100)) throw new Error('higher sensitivity should finalize shorter pauses');
-  if (getMinimumSpeechLengthMs(50) !== 300 || getPossibleSilenceLengthMs(50) !== 1100 || getCompleteSilenceLengthMs(50) !== 1900) throw new Error('default recognition hints mismatch');
+  if (getMinimumSpeechLengthMs(50) !== 320 || getPossibleSilenceLengthMs(50) !== 800 || getCompleteSilenceLengthMs(50) !== 1450) throw new Error('default recognition hints mismatch');
 });
