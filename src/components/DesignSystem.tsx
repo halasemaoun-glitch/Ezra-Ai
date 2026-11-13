@@ -19,7 +19,7 @@ export function EzraText({
   children,
   ...props
 }: React.ComponentProps<typeof Text> & { variant?: EzraTextVariant; color?: string }) {
-  return <Text {...props} style={[typography[variant], { color }, style]}>{children}</Text>;
+  return <Text {...props} style={[{ writingDirection: 'rtl', textAlign: 'right' }, typography[variant], { color }, style]}>{children}</Text>;
 }
 
 type EzraButtonProps = {
@@ -115,6 +115,8 @@ export function EzraTextField({ label, error, containerStyle, style, onFocus, on
             color: colors.textPrimary,
             paddingHorizontal: spacing.lg,
             paddingVertical: spacing.md,
+            writingDirection: 'rtl',
+            textAlign: 'right',
             ...typography.input,
           },
           style,
