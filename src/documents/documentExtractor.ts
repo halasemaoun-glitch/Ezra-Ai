@@ -4,7 +4,7 @@ import {
   isSupportedDocumentExtension,
 } from './documentTextUtils';
 
-export const MAX_DOCUMENT_SOURCE_BYTES = 5 * 1024 * 1024;
+export const MAX_DOCUMENT_SOURCE_BYTES = 50 * 1024 * 1024;
 export const MAX_EXTRACTED_DOCUMENT_BYTES = 1024 * 1024;
 
 export type ExtractedDocument = {
