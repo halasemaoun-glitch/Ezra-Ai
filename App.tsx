@@ -2629,7 +2629,7 @@ export default function App() {
     voiceStartInFlightRef.current = true;
     try {
       const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-      if (!appIsActiveRef.current) {
+      if (!appIsActiveRef.current || !autoListenRef.current) {
         voiceStartInFlightRef.current = false;
         return;
       }
@@ -2679,6 +2679,14 @@ export default function App() {
   };
 
   const startListening = async () => {
+    if (voiceStartInFlightRef.current && !isListening) {
+      autoListenRef.current = false;
+      setAutoListen(false);
+      AsyncStorage.setItem('ezra:autoListen', 'false').catch(() => {});
+      voiceStartInFlightRef.current = false;
+      ExpoSpeechRecognitionModule.abort();
+      return;
+    }
     if (backgroundWakeEnabled && EzraWakeWord) {
       await EzraWakeWord.stop().catch(error => console.warn('Could not pause wake service:', error));
       wakeServiceStartedRef.current = false;
@@ -3740,7 +3748,21 @@ export default function App() {
                 </View>
                 <View style={styles.settingRow}>
                   <View style={styles.settingCopy}><Text style={styles.settingTitle}>الاستماع التلقائي</Text><Text style={styles.settingHint}>يستمع بعد فتح الشاشة وبعد كل رد</Text></View>
-                  <Switch value={autoListen} onValueChange={value => { autoListenRef.current = value; setAutoListen(value); if (!value) { setVoiceRetrying(false); setVoiceRetryMessage(''); } AsyncStorage.setItem('ezra:autoListen', String(value)).catch(() => {}); if (!value && isListening) ExpoSpeechRecognitionModule.stop(); }} trackColor={{ false: '#39323D', true: '#875477' }} thumbColor={autoListen ? '#F2C8E5' : '#AAA'} />
+                  <Switch value={autoListen} onValueChange={value => {
+                    autoListenRef.current = value;
+                    setAutoListen(value);
+                    if (!value) {
+                      setVoiceRetrying(false);
+                      setVoiceRetryMessage('');
+                      voiceTranscriptRef.current = '';
+                      if (isListening || voiceStartInFlightRef.current || voiceRecognitionActiveRef.current) {
+                        voiceStartInFlightRef.current = false;
+                        ExpoSpeechRecognitionModule.abort();
+                        setIsListening(false);
+                      }
+                    }
+                    AsyncStorage.setItem('ezra:autoListen', String(value)).catch(() => {});
+                  }} trackColor={{ false: '#39323D', true: '#875477' }} thumbColor={autoListen ? '#F2C8E5' : '#AAA'} />
                 </View>
                 <View style={[styles.settingRow, { flexDirection: 'column', alignItems: 'stretch', gap: 10 }]}>
                   <View style={styles.settingCopy}>
