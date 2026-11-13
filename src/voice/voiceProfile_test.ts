@@ -20,3 +20,9 @@ Deno.test("fallback locale is normalized and default voice supports Arabic and E
   if (detectEzraSpeechLanguage("Hello there", "fr-FR") !== "fr") throw new Error("Fallback locale was not normalized");
   if (!DEFAULT_EZRA_VOICE.languages.includes("ar") || !DEFAULT_EZRA_VOICE.languages.includes("en")) throw new Error("Voice language support is incomplete");
 });
+
+Deno.test("automatic speech language follows the reply text, not only the selected reply preference", () => {
+  if (detectEzraSpeechLanguage("Hello, how are you?", "ar") !== "en") throw new Error("English reply was not detected when Arabic was the fallback");
+  if (detectEzraSpeechLanguage("مرحباً، كيف حالك؟", "en") !== "ar") throw new Error("Arabic reply was not detected when English was the fallback");
+  if (detectEzraSpeechLanguage("Bonjour, merci beaucoup", "ar") !== "fr") throw new Error("French phrase was not detected");
+});
