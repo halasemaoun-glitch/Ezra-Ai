@@ -2,7 +2,7 @@
 import { verifySupabaseUser } from "./auth.ts";
 import { buildGroqChatPayload, extractGroqReply } from "./groq.ts";
 import { buildGeminiPayload, extractGeminiReply } from "./gemini.ts";
-import { normalizeAiModel, normalizeAiProvider } from "../../../src/ai/aiModelSettings.ts";
+import { GROQ_VISION_MODEL, normalizeAiModel, normalizeAiProvider } from "../../../src/ai/aiModelSettings.ts";
 // Keep GROQ_API_KEY in Supabase Edge Function secrets. Never place it in the mobile app.
 
 const corsHeaders = {
@@ -180,7 +180,8 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    return new Response(JSON.stringify({ reply }), { status: 200, headers: jsonHeaders });
+    const servedModel = provider === "groq" && imageDataUrl ? GROQ_VISION_MODEL : model;
+    return new Response(JSON.stringify({ reply, provider, model: servedModel }), { status: 200, headers: jsonHeaders });
   } catch (error) {
     console.error("EZRA smart-service error:", error);
     return new Response(JSON.stringify({ error: "Something went wrong. Please try again." }), {
