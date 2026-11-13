@@ -2604,9 +2604,9 @@ export default function App() {
             language: 'ar',
             rate: speechRate,
             pitch: speechPitch,
-            onDone: () => { EzraWakeWord.start().catch(error => console.warn('Could not resume wake service:', error)); },
-            onStopped: () => { EzraWakeWord.start().catch(error => console.warn('Could not resume wake service:', error)); },
-            onError: () => { EzraWakeWord.start().catch(error => console.warn('Could not resume wake service:', error)); },
+            onDone: () => resumeBackgroundWake(),
+            onStopped: () => resumeBackgroundWake(),
+            onError: () => resumeBackgroundWake(),
           });
         } else if (command) {
           // Keep the wake service paused while EZRA processes and speaks the command.
