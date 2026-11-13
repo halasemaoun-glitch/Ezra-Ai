@@ -28,5 +28,6 @@ Deno.test("marks high-impact actions for a separate confirmation", () => {
 
 Deno.test("parses explicit text entry only for a focused field", () => {
   assertEquals(parseAccessibilityCommand("يا إزرا اكتب في الحقل مرحباً بك"), { kind: "type", text: "مرحبا بك" });
+  assertEquals(parseAccessibilityCommand("اكتب في خانة الرسالة أهلاً"), { kind: "type", text: "اهلا" });
   assertEquals(parseAccessibilityCommand("اكتب هذا الدرس"), null);
 });
