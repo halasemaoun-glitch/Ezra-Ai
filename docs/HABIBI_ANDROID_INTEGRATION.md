@@ -74,3 +74,8 @@ The upstream audio.cpp C ABI has already compiled successfully for Android arm64
 
 - The app now applies the existing automatic language detector when a reply is spoken: Arabic-script replies route to Habibi when it is ready, recognized non-Arabic language phrases use their matching Android TTS locale, and otherwise Latin-script text defaults to English rather than inheriting an Arabic UI preference. Mixed Arabic/Latin replies are still treated as Arabic as a whole; sentence-level code-switching remains future work.
 - The current native Habibi checkpoint is ALG only. English remains on Android system TTS, whose available voice gender and naturalness depend on the installed provider and must be selected/listened to on the device.
+
+
+## Stability branch native build
+
+- The `ezra/stability-voice-memory-files` branch is now included in the native Habibi cross-compile and APK workflow. Voice application changes on this branch must be built through that workflow so the APK includes the compiled `libaudiocpp.so` runtime; the generic APK workflow alone is not a Habibi-enabled build.
