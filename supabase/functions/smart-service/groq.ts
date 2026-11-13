@@ -1,4 +1,5 @@
 import { buildEzraSystemPrompt } from "./persona.ts";
+import { GROQ_VISION_MODEL, normalizeAiModel } from "../../../src/ai/aiModelSettings.ts";
 
 export type GroqRequestOptions = {
   input: string;
@@ -6,6 +7,7 @@ export type GroqRequestOptions = {
   voiceMode: boolean;
   responseLanguage: "ar" | "en";
   approvedMemories: string[];
+  model?: string;
 };
 
 type GroqUserContent = string | Array<
@@ -32,7 +34,7 @@ export function buildGroqChatPayload(options: GroqRequestOptions): GroqChatPaylo
       ]
     : input;
   return {
-    model: imageDataUrl ? "qwen/qwen3.8-27b" : "openai/gpt-oss-120b",
+    model: imageDataUrl ? GROQ_VISION_MODEL : normalizeAiModel("groq", options.model),
     messages: [
       {
         role: "system",
