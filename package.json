@@ -28,7 +28,8 @@
     "three": "^0.180.0",
     "@react-three/fiber": "^9.8.1",
     "expo-clipboard": "~8.0.7",
-    "reamkit": "1.35.0"
+    "reamkit": "1.35.0",
+    "react-native-quick-crypto": "^1.1.9"
   },
   "devDependencies": {
     "typescript": "~5.9.2",
