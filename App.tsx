@@ -1948,16 +1948,8 @@ export default function App() {
     if (Platform.OS !== 'android' || !EzraWakeWord) return false;
     const contactName = parseCallContactName(commandText);
     if (!contactName) return false;
-    setSending(true);
-    Alert.alert(
-      'تأكيد المكالمة',
-      `هل تريدين بدء مكالمة هاتفية مباشرة مع «${contactName}»؟`,
-      [
-        { text: 'إلغاء', style: 'cancel', onPress: () => setSending(false) },
-        { text: 'اتصال الآن', onPress: () => { void executeCallCommand(commandText, voiceReply); } },
-      ],
-      { cancelable: false }
-    );
+    // The user's explicit voice/text command is the authorization; do not add a second confirmation dialog.
+    await executeCallCommand(commandText, voiceReply);
     return true;
   };
 
