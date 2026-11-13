@@ -2233,6 +2233,7 @@ export default function App() {
           .slice(0, 2) : [];
         const knowledgeGuidance = relevantKnowledge.length
           ? relevantKnowledge.map(({ document }) => `Source: ${document.name}\n${document.content.slice(0, 6000)}`).join('\n\n').slice(0, 12000) : '';
+        const relevantDentalReferences = assistantMode === 'dentist' || assistantMode === 'study'
           ? retrieveDentalReferences(userInput, DENTAL_REFERENCE_LIBRARY, { limit: 5, minScore: 1 })
           : [];
         const dentalReferenceGuidance = relevantDentalReferences.length
