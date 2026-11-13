@@ -1147,7 +1147,7 @@ export default function App() {
       id: `taught-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       name: `تعليم EZRA - ${cleanTitle}`,
       content: `مادة تعليمية أضافتها صاحبة الحساب بنفسها. العنوان: ${cleanTitle}\\n\\n${cleanContent}`,
-      sizeBytes: new TextEncoder().encode(cleanContent).length,
+      sizeBytes: cleanContent.length,
       addedAt: now,
       updatedAt: now,
       deletedAt: null,
@@ -2259,7 +2259,7 @@ export default function App() {
           .match(/[a-z0-9\u0600-\u06ff]{3,}/g) ?? [];
         const knowledgeStopWords = new Set(['the','and','for','with','this','that','from','what','when','where','which','كيف','ماذا','هذا','هذه','على','الى','إلى','من','عن','هل','ما','لماذا','متى','اين','أين','انا','أنا','انت','أنت']);
         const queryTerms = [...new Set(knowledgeTerms.filter(term => !knowledgeStopWords.has(term)))].slice(0, 40);
-        const relevantKnowledge = conversationInput.length <= 7000 ? knowledgeDocuments.filter(document => !document.deletedAt)
+        const relevantKnowledge = conversationInput.length <= 7000 ? knowledgeDocuments.filter(document => !document.deletedAt && (!document.name.startsWith('تعليم EZRA - ') || assistantMode === 'dentist' || assistantMode === 'study'))
           .map(document => {
             const normalizedContent = document.content.toLowerCase().replace(/[\u064B-\u065F\u0670]/g, '');
             const rawScore = queryTerms.reduce((total, term) => total + (normalizedContent.split(term).length - 1), 0);
