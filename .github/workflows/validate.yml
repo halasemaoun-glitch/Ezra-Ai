@@ -34,6 +34,12 @@ jobs:
         run: deno test supabase/functions/smart-service/persona_test.ts
       - name: Test EZRA Groq request and response contract
         run: deno test supabase/functions/smart-service/groq_test.ts
+      - name: Test EZRA Gemini request and response contract
+        run: deno test supabase/functions/smart-service/gemini_test.ts
+      - name: Test EZRA AI provider and model settings
+        run: deno test src/ai/aiModelSettings_test.ts
+      - name: Test EZRA microphone sensitivity controls
+        run: deno test src/voice/micSensitivity_test.ts
       - name: Test EZRA voice language detection and profile
         run: deno test src/voice/voiceProfile_test.ts
       - name: Test EZRA assistant mode guidance and safety
