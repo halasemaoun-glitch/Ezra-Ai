@@ -13,8 +13,8 @@ Deno.test('normalizes only supported AI providers', () => {
 
 Deno.test('keeps selected models inside each provider allowlist', () => {
   if (normalizeAiModel('groq', 'openai/gpt-oss-20b') !== 'openai/gpt-oss-20b') throw new Error('Groq model selection failed');
-  if (normalizeAiModel('groq', 'gemini-2.5-flash') !== DEFAULT_AI_MODELS.groq) throw new Error('cross-provider model was accepted');
-  if (normalizeAiModel('gemini', 'gemini-2.5-flash-lite') !== 'gemini-2.5-flash-lite') throw new Error('Gemini model selection failed');
+  if (normalizeAiModel('groq', 'gemini-3.8-flash') !== DEFAULT_AI_MODELS.groq) throw new Error('cross-provider model was accepted');
+  if (normalizeAiModel('gemini', 'gemini-3.1-flash-lite') !== 'gemini-3.1-flash-lite') throw new Error('Gemini model selection failed');
   if (normalizeAiModel('gemini', 'not-a-model') !== DEFAULT_AI_MODELS.gemini) throw new Error('unknown model was accepted');
 });
 
