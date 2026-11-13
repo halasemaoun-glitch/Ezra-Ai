@@ -4,8 +4,10 @@ on:
   push:
     branches:
       - ezra/habibi-android-spike
+      - ezra/stability-voice-memory-files
     paths:
       - "modules/ezra-habibi-tts/**"
+      - "App.tsx"
       - "modules/ezra-wake-word/**"
       - "plugins/withEzraWakeWord.js"
       - "src/voice/**"
