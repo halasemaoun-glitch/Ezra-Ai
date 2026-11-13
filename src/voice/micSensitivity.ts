@@ -25,6 +25,14 @@ export function getMicInterruptionFramesRequired(sensitivity: number): number {
   return 5 - Math.floor(normalizeMicSensitivity(sensitivity) / 50);
 }
 
+/** Count only consecutive above-threshold frames; a quiet frame resets the attack window. */
+export function advanceMicInterruptionFrames(currentFrames: number, normalizedLevel: number, sensitivity: number): number {
+  const level = Number.isFinite(normalizedLevel) ? Math.max(0, Math.min(1, normalizedLevel)) : 0;
+  if (level < getMicInterruptionThreshold(sensitivity)) return 0;
+  const current = Number.isFinite(currentFrames) ? Math.max(0, Math.floor(currentFrames)) : 0;
+  return Math.min(getMicInterruptionFramesRequired(sensitivity), current + 1);
+}
+
 /** Android recognition hint: lower sensitivity requires a longer stable speech segment. */
 export function getMinimumSpeechLengthMs(sensitivity: number): number {
   return Math.round(420 - normalizeMicSensitivity(sensitivity) * 2);
