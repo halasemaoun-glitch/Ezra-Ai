@@ -409,6 +409,7 @@ const styles = StyleSheet.create({
   category: { color: '#D28AB8', fontSize: 10, fontWeight: '800', textAlign: 'right' },
   referenceTitle: { color: '#F8ECF5', fontSize: 16, fontWeight: '800', textAlign: 'right' },
   body: { color: '#D0C5D0', fontSize: 12, lineHeight: 21, textAlign: 'right' },
+  safety: { color: '#F0C6A8', fontSize: 11, lineHeight: 19, textAlign: 'right', backgroundColor: '#35251F', borderColor: '#79503A', borderWidth: 1, borderRadius: 10, padding: 10 },
   keyPointsTitle: { color: '#E9C4DD', fontSize: 12, fontWeight: '800', textAlign: 'right', marginTop: 3 },
   bulletRow: { flexDirection: 'row-reverse', alignItems: 'flex-start', gap: 8 },
   bullet: { color: '#D88ABC', fontSize: 15, lineHeight: 20 },
