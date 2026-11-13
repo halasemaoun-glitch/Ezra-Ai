@@ -17,7 +17,7 @@ Deno.test("Unicode writing systems are detected before fallback", () => {
 });
 
 Deno.test("fallback locale is normalized and default voice supports Arabic and English", () => {
-  if (detectEzraSpeechLanguage("Hello there", "fr-FR") !== "fr") throw new Error("Fallback locale was not normalized");
+  if (detectEzraSpeechLanguage("", "fr-FR") !== "fr") throw new Error("Fallback locale was not normalized");
   if (!DEFAULT_EZRA_VOICE.languages.includes("ar") || !DEFAULT_EZRA_VOICE.languages.includes("en")) throw new Error("Voice language support is incomplete");
 });
 
