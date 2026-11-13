@@ -63,3 +63,45 @@ export function retrieveDentalReferences(
     .sort((a,b) => b.score-a.score || a.reference.title.localeCompare(b.reference.title))
     .slice(0, limit);
 }
+
+
+import type { DentalClinicalCase } from './clinicalCases.ts';
+
+export type DentalClinicalCaseMatch = { clinicalCase: DentalClinicalCase; score: number };
+
+export function retrieveDentalClinicalCases(
+  query: string,
+  cases: DentalClinicalCase[],
+  options: { limit?: number; minScore?: number } = {},
+): DentalClinicalCaseMatch[] {
+  const limit = Math.max(1, Math.min(8, Math.floor(options.limit ?? 3)));
+  const minScore = Math.max(0, options.minScore ?? 2);
+  const tokens = tokenizeDentalQuery(query);
+  if (!tokens.length) return [];
+  const phrase = normalizeDentalQuery(query);
+  return cases.map(clinicalCase => {
+    const differentialText = clinicalCase.differentials
+      .map(item => [item.diagnosis, ...item.supportingClues, ...item.opposingOrMissingClues].join(' ')).join(' ');
+    const content = normalizeDentalQuery([
+      clinicalCase.title, clinicalCase.specialty, clinicalCase.presentation,
+      ...clinicalCase.historyToCollect, ...clinicalCase.clinicalFindings,
+      ...clinicalCase.redFlags, differentialText, ...clinicalCase.investigations,
+      ...clinicalCase.management, ...clinicalCase.complications, ...clinicalCase.followUp,
+    ].join(' '));
+    const title = normalizeDentalQuery(clinicalCase.title);
+    let score = 0;
+    for (const token of tokens) {
+      if (title.includes(token)) score += 7;
+      const occurrences = countOccurrences(content, token);
+      score += Math.min(occurrences, 5) * 2;
+      for (const synonym of SYNONYMS[token] ?? []) {
+        const normalized = normalizeDentalQuery(synonym);
+        if (normalized && content.includes(normalized)) score += 2;
+      }
+    }
+    if (phrase.length >= 7 && content.includes(phrase)) score += 10;
+    return { clinicalCase, score };
+  }).filter(match => match.score >= minScore)
+    .sort((a, b) => b.score - a.score || a.clinicalCase.title.localeCompare(b.clinicalCase.title))
+    .slice(0, limit);
+}
