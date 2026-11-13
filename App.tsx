@@ -2318,7 +2318,10 @@ export default function App() {
           const context = (aiError as any)?.context;
           const details = [
             selectedAiConfigUnavailable
-              ? 'لم تؤكد خدمة EZRA تشغيل المزود والنموذج المختارين. يحتاج تحديث smart-service إلى النشر، كما يحتاج Gemini إلى إضافة GEMINI_API_KEY في أسرار Supabase أولاً.'
+              ? (aiPreferences.provider === 'gemini'
+              ? 'لم تؤكد الخدمة تشغيل Gemini. يلزم نشر تحديث smart-service وإضافة GEMINI_API_KEY في أسرار Supabase أولاً.'
+              : 'لم تؤكد الخدمة تشغيل نموذج Groq المختار. يلزم نشر تحديث smart-service لتفعيل اختيار النموذج.')
+              : null
               : null,
             aiError?.message,
             context?.status ? `HTTP status: ${context.status}` : null,
