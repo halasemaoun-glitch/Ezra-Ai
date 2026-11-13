@@ -86,6 +86,7 @@ type EzraWakeWordNative = {
   isAccessibilityEnabled: () => boolean;
   openAccessibilitySettings: () => Promise<boolean>;
   clickAccessibilityText: (target: string) => Promise<boolean>;
+  typeAccessibilityText: (text: string) => Promise<boolean>;
   scrollAccessibility: (direction: string) => Promise<boolean>;
   performAccessibilityGlobalAction: (action: string) => Promise<boolean>;
   createAlarm: (hour: number, minute: number, label: string) => Promise<boolean>;
@@ -1790,16 +1791,21 @@ export default function App() {
         } else {
           const ok = command.kind === 'click'
             ? await EzraWakeWord!.clickAccessibilityText(command.target)
-            : command.kind === 'scroll'
-              ? await EzraWakeWord!.scrollAccessibility(command.direction)
-              : await EzraWakeWord!.performAccessibilityGlobalAction(command.action);
+            : command.kind === 'type'
+              ? await EzraWakeWord!.typeAccessibilityText(command.text)
+              : command.kind === 'scroll'
+                ? await EzraWakeWord!.scrollAccessibility(command.direction)
+                : await EzraWakeWord!.performAccessibilityGlobalAction(command.action);
           reply = ok
-            ? command.kind === 'click' ? `ضغطت على «${command.target}».`
+            ? command.kind === 'type' ? 'أدخلت النص في الحقل النشط فقط. لم أضغط زر الإرسال.'
+              : command.kind === 'click' ? `ضغطت على «${command.target}».`
               : command.kind === 'scroll' ? 'تم تنفيذ التمرير.'
               : 'تم تنفيذ أمر التنقل.'
-            : command.kind === 'click'
-              ? `لم أجد عنصراً قابلاً للضغط باسم «${command.target}» في الشاشة الحالية.`
-              : 'لم يتمكن Android من تنفيذ هذا الإجراء في الشاشة الحالية.';
+            : command.kind === 'type'
+              ? 'لم أجد حقلاً نشطاً قابلاً لتحرير النص. اضغطي أولاً على خانة الكتابة في التطبيق المفتوح.'
+              : command.kind === 'click'
+                ? `لم أجد عنصراً قابلاً للضغط باسم «${command.target}» في الشاشة الحالية.`
+                : 'لم يتمكن Android من تنفيذ هذا الإجراء في الشاشة الحالية.';
         }
       } catch (error) {
         console.warn('EZRA accessibility action failed:', error);
