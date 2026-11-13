@@ -320,7 +320,7 @@ export default function App() {
   const [micSensitivity, setMicSensitivity] = useState(DEFAULT_MIC_SENSITIVITY);
   const micSensitivityRef = useRef(DEFAULT_MIC_SENSITIVITY);
   const [voiceRetrying, setVoiceRetrying] = useState(false);
-  const [arabicRecognitionFallback, setArabicRecognitionFallback] = useState(false);
+  const [arabicRecognitionFallback, setArabicRecognitionFallback] = useState(0);
   const [voiceRetryMessage, setVoiceRetryMessage] = useState('');
   const [autoListen, setAutoListen] = useState(true);
   const [backgroundWakeEnabled, setBackgroundWakeEnabled] = useState(false);
@@ -1619,7 +1619,7 @@ export default function App() {
     const transcript = latestResult?.transcript;
     if (transcript) {
       voiceRetryCountRef.current = 0;
-      setArabicRecognitionFallback(false);
+      setArabicRecognitionFallback(0);
       voiceTranscriptRef.current = transcript;
       setMessage(transcript);
     }
@@ -1642,17 +1642,24 @@ export default function App() {
       // Do not discard words already recognized before Android reported no-speech.
       if (partialTranscript) {
         setMessage(partialTranscript);
-        setVoiceRetryMessage('تم التقاط جزء من كلامك، جارٍ إكماله…');
+        voiceTranscriptRef.current = '';
+        setVoiceRetryMessage('تم التقاط كلامك، جارٍ إرساله إلى EZRA…');
         setVoiceRetrying(false);
+        if (appIsActiveRef.current && autoListenRef.current && voiceHome) {
+          voiceTurnInProgressRef.current = true;
+          setTimeout(() => sendMessage(true, partialTranscript), 80);
+        }
         return;
       }
-      // Some Android speech services do not provide an Algerian ar-DZ model.
-      // Retry once with the more widely available Saudi Arabic locale.
-      if (responseLanguage !== 'en' && !arabicRecognitionFallback) {
-        setArabicRecognitionFallback(true);
-        setVoiceRetryMessage('أعيد المحاولة بإعداد عربي أوسع…');
+      // Try the device's broader Arabic recognizer locales if the Algerian locale
+      // returns no speech. A generic Arabic locale is the final compatibility fallback.
+      if (responseLanguage !== 'en' && arabicRecognitionFallback < 2) {
+        setArabicRecognitionFallback(current => current + 1);
+        setVoiceRetryMessage(arabicRecognitionFallback === 0
+          ? 'أعيد المحاولة باللهجة العربية الأوسع…'
+          : 'أعيد المحاولة بالتعرّف العربي العام…');
       } else {
-        setVoiceRetryMessage('لم أسمع كلامًا، سأحاول مجددًا…');
+        setVoiceRetryMessage('لم ألتقط صوتًا واضحًا. تأكدي من إذن الميكروفون وخدمة التعرّف على الكلام…');
       }
       voiceRetryCountRef.current = 0;
       setVoiceRetrying(true);
@@ -2751,17 +2758,14 @@ export default function App() {
         if (cancelled) return;
         if (command === '__EZRA_WAKE_ONLY__') {
           const greeting = 'نعم، أنا هنا. كيف أساعدك؟';
+          const wakeMessageId = 'wake-' + Date.now();
+          setVoiceHome(true);
           setMessage(greeting);
-          Speech.speak(greeting, {
-            language: 'ar',
-            rate: speechRate,
-            pitch: speechPitch,
-            onDone: () => resumeBackgroundWake(),
-            onStopped: () => resumeBackgroundWake(),
-            onError: () => resumeBackgroundWake(),
-          });
+          setMessages(previous => [...previous, { id: wakeMessageId, sender: 'ezra', text: greeting }]);
+          void speak(greeting, wakeMessageId);
         } else if (command) {
-          // Keep the wake service paused while EZRA processes and speaks the command.
+          // Bring the assistant orb forward and keep the wake service paused while EZRA processes the command.
+          setVoiceHome(true);
           setPendingWakeCommand(command);
         }
       } catch (error) {
@@ -2798,7 +2802,8 @@ export default function App() {
       interruptVoiceFramesRef.current = 0;
       // Use the language explicitly selected by the user; do not auto-switch recognition locales.
       ExpoSpeechRecognitionModule.start({
-        lang: responseLanguage === 'en' ? 'en-US' : (arabicRecognitionFallback ? 'ar-SA' : 'ar-DZ'),
+        lang: responseLanguage === 'en' ? 'en-US' : (arabicRecognitionFallback === 0 ? 'ar-DZ' : arabicRecognitionFallback === 1 ? 'ar-SA' : 'ar'),
+        contextualStrings: responseLanguage === 'en' ? ['EZRA', 'Ezra'] : ['إزرا', 'ازرا', 'يا إزرا', 'EZRA'],
         interimResults: true,
         continuous: false,
         // Apply the user's sensitivity preference to Android's minimum utterance
@@ -2812,7 +2817,7 @@ export default function App() {
         } : {}),
         volumeChangeEventOptions: { enabled: true, intervalMillis: 90 },
       });
-    } catch {
+    } catch (error) {
       voiceStartInFlightRef.current = false;
       setIsListening(false);
       if (autoListenRef.current && appIsActiveRef.current && voiceHome && voiceRetryCountRef.current < 5) {
@@ -2826,7 +2831,7 @@ export default function App() {
         setVoiceRetryMessage('');
         Alert.alert('تعذّر استمرار الاستماع', 'لم يتمكن الهاتف من بدء التعرّف الصوتي بعد عدة محاولات. تحقق من خدمة الصوت ثم أعد تفعيله.');
       }
-      console.warn('Automatic voice listening could not start.');
+      console.warn('Automatic voice listening could not start:', error);
     }
   };
 
