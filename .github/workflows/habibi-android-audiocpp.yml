@@ -5,6 +5,7 @@ on:
     branches:
       - ezra/habibi-android-spike
       - ezra/stability-voice-memory-files
+      - ezra/fix-document-voice-wake
     paths:
       - "modules/ezra-habibi-tts/**"
       - "App.tsx"
