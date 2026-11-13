@@ -159,7 +159,21 @@ class EzraWakeWordModule : Module() {
         selectionArgs,
         "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} ASC"
       )
-      cursor?.use { if (it.moveToFirst()) it.getString(1).orEmpty() else "" } ?: ""
+      val matches = cursor?.use { result ->
+        val found = mutableListOf<Pair<String, String>>()
+        while (result.moveToNext()) {
+          found += result.getString(0).orEmpty() to result.getString(1).orEmpty()
+        }
+        found
+      }.orEmpty()
+      val exactMatches = matches.filter { it.first.equals(normalizedName, ignoreCase = true) }
+      val candidates = if (exactMatches.isNotEmpty()) exactMatches else matches
+      val uniqueNumbers = candidates.map { it.second.trim() }.filter { it.isNotBlank() }.distinct()
+      when (uniqueNumbers.size) {
+        0 -> ""
+        1 -> uniqueNumbers.first()
+        else -> "__AMBIGUOUS__"
+      }
     }
 
     AsyncFunction("dialNumber") { requestedNumber: String ->
