@@ -4,8 +4,10 @@ on:
   push:
     branches:
       - ezra/habibi-android-spike
+      - ezra/stability-voice-memory-files
     paths:
       - '.github/workflows/build-apk.yml'
+      - 'App.tsx'
       - 'app.json'
       - 'package.json'
       - 'plugins/**'
@@ -28,7 +30,7 @@ jobs:
       - name: Checkout latest EZRA branch
         uses: actions/checkout@v4
         with:
-          ref: ezra/habibi-android-spike
+          ref: ${{ github.ref_name }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
