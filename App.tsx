@@ -2309,9 +2309,10 @@ export default function App() {
         }
 
         const { data: aiData, error: aiError } = aiRequest.result;
+        const groqVisionRequest = aiPreferences.provider === 'groq' && attachment?.kind === 'image' && !!attachment.base64;
         const selectedAiConfigUnavailable = aiPreferences.provider === 'gemini'
           ? aiData?.provider !== 'gemini' || aiData?.model !== aiPreferences.model
-          : aiPreferences.model !== DEFAULT_AI_MODELS.groq && aiData?.model !== aiPreferences.model;
+          : !groqVisionRequest && aiPreferences.model !== DEFAULT_AI_MODELS.groq && aiData?.model !== aiPreferences.model;
         if (aiError || typeof aiData?.reply !== 'string' || !aiData.reply.trim() || selectedAiConfigUnavailable) {
           setAssistantConnection('offline');
           const context = (aiError as any)?.context;
