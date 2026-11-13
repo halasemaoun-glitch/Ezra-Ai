@@ -320,6 +320,7 @@ export default function App() {
   const [micSensitivity, setMicSensitivity] = useState(DEFAULT_MIC_SENSITIVITY);
   const micSensitivityRef = useRef(DEFAULT_MIC_SENSITIVITY);
   const [voiceRetrying, setVoiceRetrying] = useState(false);
+  const [arabicRecognitionFallback, setArabicRecognitionFallback] = useState(false);
   const [voiceRetryMessage, setVoiceRetryMessage] = useState('');
   const [autoListen, setAutoListen] = useState(true);
   const [backgroundWakeEnabled, setBackgroundWakeEnabled] = useState(false);
@@ -1618,6 +1619,7 @@ export default function App() {
     const transcript = latestResult?.transcript;
     if (transcript) {
       voiceRetryCountRef.current = 0;
+      setArabicRecognitionFallback(false);
       voiceTranscriptRef.current = transcript;
       setMessage(transcript);
     }
@@ -1627,7 +1629,8 @@ export default function App() {
     voiceRecognitionActiveRef.current = false;
     setIsListening(false);
     setVoiceLevel(0);
-    voiceTranscriptRef.current = '';
+    // Keep any partial transcript: Android may emit an error after returning useful words.
+    const partialTranscript = voiceTranscriptRef.current.trim();
     const blocked = event.error === 'not-allowed' || event.error === 'service-not-allowed';
     if (blocked) {
       autoListenRef.current = false;
@@ -1636,9 +1639,22 @@ export default function App() {
       setVoiceRetryMessage('');
       Alert.alert('إذن الميكروفون أو خدمة الصوت', 'تحقق من إذن الميكروفون ومن تفعيل خدمة التعرّف على الكلام في إعدادات الهاتف.');
     } else if (event.error === 'no-speech') {
-      // Silence is normal on a voice-first screen; retry without treating it as a service failure.
+      // Do not discard words already recognized before Android reported no-speech.
+      if (partialTranscript) {
+        setMessage(partialTranscript);
+        setVoiceRetryMessage('تم التقاط جزء من كلامك، جارٍ إكماله…');
+        setVoiceRetrying(false);
+        return;
+      }
+      // Some Android speech services do not provide an Algerian ar-DZ model.
+      // Retry once with the more widely available Saudi Arabic locale.
+      if (responseLanguage !== 'en' && !arabicRecognitionFallback) {
+        setArabicRecognitionFallback(true);
+        setVoiceRetryMessage('أعيد المحاولة بإعداد عربي أوسع…');
+      } else {
+        setVoiceRetryMessage('لم أسمع كلامًا، سأحاول مجددًا…');
+      }
       voiceRetryCountRef.current = 0;
-      setVoiceRetryMessage('لم أسمع كلامًا، سأحاول مجددًا…');
       setVoiceRetrying(true);
     } else if (event.error === 'aborted') {
       setVoiceRetrying(false);
@@ -1686,7 +1702,7 @@ export default function App() {
     if (!voicePrefsLoaded || !appIsActive || !session || !voiceHome || !autoListen || backgroundWakeEnabled || isListening || sending || speakingMessageId || chatLoading) return;
     const timer = setTimeout(() => beginListening(), voiceRetrying ? 900 : 500);
     return () => clearTimeout(timer);
-  }, [voicePrefsLoaded, appIsActive, session?.user.id, voiceHome, autoListen, backgroundWakeEnabled, responseLanguage, isListening, sending, speakingMessageId, chatLoading, voiceRetrying]);
+  }, [voicePrefsLoaded, appIsActive, session?.user.id, voiceHome, autoListen, backgroundWakeEnabled, responseLanguage, isListening, sending, speakingMessageId, chatLoading, voiceRetrying, arabicRecognitionFallback]);
 
   useEffect(() => {
     if (!appIsActive || !voiceHome || !autoListen || backgroundWakeEnabled || !voiceTurnInProgressRef.current || !voiceRequestStartedRef.current || sending || speakingMessageId || isListening) return;
@@ -2782,7 +2798,7 @@ export default function App() {
       interruptVoiceFramesRef.current = 0;
       // Use the language explicitly selected by the user; do not auto-switch recognition locales.
       ExpoSpeechRecognitionModule.start({
-        lang: responseLanguage === 'en' ? 'en-US' : 'ar-DZ',
+        lang: responseLanguage === 'en' ? 'en-US' : (arabicRecognitionFallback ? 'ar-SA' : 'ar-DZ'),
         interimResults: true,
         continuous: false,
         // Apply the user's sensitivity preference to Android's minimum utterance
