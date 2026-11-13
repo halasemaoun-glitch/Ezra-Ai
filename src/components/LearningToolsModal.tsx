@@ -18,6 +18,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -28,7 +29,7 @@ import {
 } from '../study/studyLibrary';
 import type { AssistantMode } from '../modes/assistantModes';
 
-type ToolTab = 'library' | 'cards' | 'quiz' | 'cases';
+type ToolTab = 'library' | 'cards' | 'quiz' | 'teach' | 'cases';
 
 const STUDY_PROGRESS_KEY = 'ezra:studyProgress:v1';
 
@@ -38,9 +39,10 @@ type Props = {
   onClose: () => void;
   onAskEzra: (prompt: string) => void;
   userId: string | null;
+  onTeachKnowledge: (title: string, content: string) => Promise<void>;
 };
 
-export default function LearningToolsModal({ visible, mode, onClose, onAskEzra, userId }: Props) {
+export default function LearningToolsModal({ visible, mode, onClose, onAskEzra, userId, onTeachKnowledge }: Props) {
   const [tab, setTab] = useState<ToolTab>('library');
   const [topicId, setTopicId] = useState(DENTAL_REFERENCE_LIBRARY[0].id);
   const [cardIndex, setCardIndex] = useState(0);
@@ -54,6 +56,9 @@ export default function LearningToolsModal({ visible, mode, onClose, onAskEzra, 
   const [progressLoaded, setProgressLoaded] = useState(false);
   const [loadedForUserId, setLoadedForUserId] = useState<string | null>(null);
   const [syncState, setSyncState] = useState<'loading' | 'synced' | 'error' | 'local'>('loading');
+  const [teachTitle, setTeachTitle] = useState('');
+  const [teachContent, setTeachContent] = useState('');
+  const [teaching, setTeaching] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -207,6 +212,22 @@ export default function LearningToolsModal({ visible, mode, onClose, onAskEzra, 
     onAskEzra('حوّل موضوعنا الحالي أو الدرس الذي أرسله إلى 10 بطاقات مراجعة. اكتب السؤال في جهة والإجابة المختصرة في الجهة الأخرى، وركّز على الفهم والمصطلحات المهمة.');
   };
 
+  const saveTeaching = async () => {
+    const title = teachTitle.trim();
+    const content = teachContent.trim();
+    if (!title || !content || teaching) return;
+    setTeaching(true);
+    try {
+      await onTeachKnowledge(title, content);
+      setTeachTitle('');
+      setTeachContent('');
+    } catch (error) {
+      Alert.alert('تعذّر حفظ الدرس', error instanceof Error ? error.message : 'حاولي مرة أخرى.');
+    } finally {
+      setTeaching(false);
+    }
+  };
+
   const askForCustomQuiz = () => {
     onAskEzra('اختبرني في موضوعنا الحالي باختبار تفاعلي من 5 أسئلة اختيار من متعدد. اطرح سؤالاً واحداً في كل مرة، وانتظر إجابتي قبل كشف الحل، ثم اشرح سبب الإجابة الصحيحة.');
   };
@@ -231,6 +252,7 @@ export default function LearningToolsModal({ visible, mode, onClose, onAskEzra, 
                 ['library', 'مكتبة الأسنان'],
                 ['cards', 'بطاقات المراجعة'],
                 ['quiz', 'اختبر نفسك'],
+                ['teach', 'علّمني واحفظ'],
                 ['cases', 'حالات سريرية'],
               ] as [ToolTab, string][]).map(([value, label]) => (
                 <TouchableOpacity key={value} onPress={() => chooseTab(value)} style={[styles.tab, tab === value && styles.tabActive]} accessibilityRole="button" accessibilityState={{ selected: tab === value }}>
@@ -364,6 +386,27 @@ export default function LearningToolsModal({ visible, mode, onClose, onAskEzra, 
                     </>
                   )}
                 </>
+              ) : tab === 'teach' ? (
+                <>
+                  <Text style={styles.sectionTitle}>علّمي EZRA واحفظي علمك</Text>
+                  <Text style={styles.helper}>اكتبي عنوان الدرس ثم الصقي شرحك أو حالة سريرية أو ملاحظاتك. سيحفظها EZRA في مكتبة معرفتك الخاصة ويسترجع المقاطع المرتبطة عندما تسألينه في وضع طبيب الأسنان أو الدراسة.</Text>
+                  <Text style={styles.teachLabel}>عنوان الدرس أو الحالة</Text>
+                  <TextInput value={teachTitle} onChangeText={setTeachTitle} placeholder="مثال: تشخيص التهاب اللب غير العكوس" placeholderTextColor="#817482" style={styles.teachInput} textAlign="right" maxLength={120} />
+                  <Text style={styles.teachLabel}>المعلومة التي تريدين تعليمه إياها</Text>
+                  <TextInput value={teachContent} onChangeText={setTeachContent} placeholder="اكتبي الشرح، خطوات التشخيص، نتائج الفحوص، الخطة العلاجية، الملاحظات أو الحالة كاملة…" placeholderTextColor="#817482" style={[styles.teachInput, styles.teachContentInput]} multiline textAlign="right" textAlignVertical="top" maxLength={24000} />
+                  <Text style={styles.helper}>يمكنك إضافة درس جديد كل مرة. احتفظي بالمراجع أو اسم الكتاب ورقم الصفحة داخل النص إن توفرت. سيبقى ما تحفظينه مرتبطاً بحسابك، وتستطيعين لاحقاً مراجعته أو حذفه من مكتبة المعرفة.</Text>
+                  <TouchableOpacity style={[styles.askButton, (!teachTitle.trim() || !teachContent.trim() || teaching || !userId) && { opacity: 0.5 }]} onPress={saveTeaching} disabled={!teachTitle.trim() || !teachContent.trim() || teaching || !userId} accessibilityRole="button">
+                    <Text style={styles.askButtonText}>{teaching ? 'جارٍ حفظ ما تعلّمه…' : '＋ احفظ هذا الدرس في ذاكرة EZRA'}</Text>
+                  </TouchableOpacity>
+                  {!userId ? <Text style={styles.safety}>سجّلي الدخول أولاً حتى تتم مزامنة ما تعلّمينه مع حسابك.</Text> : null}
+                  <View style={styles.referenceCard}>
+                    <Text style={styles.referenceTitle}>كيف سيستخدم EZRA ما تعلّمه؟</Text>
+                    <Text style={styles.body}>• يحفظ الدرس محلياً ويزامنه مع حسابك عند توفر الاتصال</Text>
+                    <Text style={styles.body}>• يبحث عن المقاطع الأقرب إلى سؤالك بدلاً من إدخال المكتبة كلها في كل إجابة</Text>
+                    <Text style={styles.body}>• يميّز ملاحظاتك التعليمية عن الإرشادات الطبية الموثوقة، وينبّه عند وجود تعارض أو معلومة تحتاج إلى تحقق</Text>
+                    <Text style={styles.safety}>الحفظ لا يدرّب نموذج الذكاء الاصطناعي نفسه؛ بل يضيف مرجعاً شخصياً دائماً يسترجعه EZRA عند الإجابة.</Text>
+                  </View>
+                </>
               ) : (
                 <ClinicalCaseSimulator completedCaseIds={progress.completedCaseIds} onCaseCompleted={caseId => { if (!progress.completedCaseIds.includes(caseId)) saveProgress({ completedCaseIds: [...progress.completedCaseIds, caseId] }); }} />
               )}
@@ -416,6 +459,9 @@ const styles = StyleSheet.create({
   bulletText: { flex: 1, color: '#CFC2CE', fontSize: 11, lineHeight: 19, textAlign: 'right' },
   askButton: { minHeight: 46, borderRadius: 14, backgroundColor: '#532642', borderWidth: 1, borderColor: '#B75B91', alignItems: 'center', justifyContent: 'center', marginTop: 5 },
   askButtonText: { color: '#FFF0FA', fontSize: 12, fontWeight: '800' },
+  teachLabel: { color: '#E9C4DD', fontSize: 12, fontWeight: '800', textAlign: 'right' },
+  teachInput: { minHeight: 48, borderRadius: 13, borderWidth: 1, borderColor: '#594253', backgroundColor: '#17121A', color: '#F5EAF2', paddingHorizontal: 13, paddingVertical: 12, textAlign: 'right', writingDirection: 'rtl', fontSize: 12 },
+  teachContentInput: { minHeight: 220, lineHeight: 21 },
   progressRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
   progressText: { color: '#C7B4C7', fontSize: 10, fontWeight: '700' },
   flashcard: { minHeight: 230, borderRadius: 22, backgroundColor: '#211629', borderWidth: 1, borderColor: '#865078', padding: 22, alignItems: 'center', justifyContent: 'center', gap: 18 },
