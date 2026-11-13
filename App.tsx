@@ -40,6 +40,7 @@ import { ASSISTANT_MODE_OPTIONS, getAssistantModeGuidance, getAssistantModeSugge
 import LearningToolsModal from './src/components/LearningToolsModal';
 import { DENTAL_REFERENCE_LIBRARY } from './src/study/studyLibrary';
 import { retrieveDentalReferences } from './src/study/dentalKnowledge';
+import { DENTAL_CLINICAL_CASES } from './src/study/clinicalCases';
 import { supabase } from './src/lib/supabase';
 import { DEFAULT_EZRA_VOICE, detectEzraSpeechLanguage } from './src/voice/voiceProfile';
 import { AI_MODELS, AI_PROVIDER_OPTIONS, DEFAULT_AI_MODELS, normalizeAiModel, normalizeAiProvider, type AiProvider } from './src/ai/aiModelSettings';
@@ -2244,6 +2245,13 @@ export default function App() {
               ? 'No matching built-in dental reference was retrieved. Answer from reliable general knowledge only when confident, state uncertainty, and do not invent citations or clinical facts.'
               : '');
 
+        const relevantClinicalCases = assistantMode === 'dentist' || assistantMode === 'study'
+          ? retrieveDentalClinicalCases(userInput, DENTAL_CLINICAL_CASES, { limit: 3, minScore: 2 })
+          : [];
+        const clinicalCaseGuidance = relevantClinicalCases.map(({ clinicalCase, score }) =>
+          `Clinical case reference (${score}): ${clinicalCase.title} — ${clinicalCase.specialty}\\nPresentation: ${clinicalCase.presentation}\\nHistory to collect: ${clinicalCase.historyToCollect.join('; ')}\\nClinical findings: ${clinicalCase.clinicalFindings.join('; ')}\\nRed flags: ${clinicalCase.redFlags.join('; ')}\\nDifferential diagnoses: ${clinicalCase.differentials.map(item => item.diagnosis + ' | supports: ' + item.supportingClues.join(', ') + ' | missing/opposing: ' + item.opposingOrMissingClues.join(', ')).join(' || ')}\\nInvestigations: ${clinicalCase.investigations.join('; ')}\\nManagement principles: ${clinicalCase.management.join('; ')}\\nComplications: ${clinicalCase.complications.join('; ')}\\nFollow-up: ${clinicalCase.followUp.join('; ')}\\nEvidence: ${clinicalCase.sources.map(source => source.label + ' ' + source.url).join(' | ')}`
+        ).join('\\n\\n').slice(0, 10500);
+
         const aiGuidance = [
           aiPreferences.responseDepth === 'مختصر'
             ? 'Answer length preference: concise. Give the direct answer first and omit unnecessary detail.'
@@ -2270,6 +2278,7 @@ export default function App() {
             : '',
           dentalReferenceGuidance
             ? `Relevant built-in foundational dental learning notes. Treat these as educational reference summaries, not patient-specific diagnosis or treatment instructions. Do not infer beyond their content; explain uncertainty and recommend authoritative course or clinical references where needed:\n${dentalReferenceGuidance}`
+          clinicalCaseGuidance ? `Relevant structured dental clinical cases. Use these as educational case examples, not as a diagnosis. Explain signs, ranked differentials, investigations, management options, complications and follow-up; identify missing data and urgent red flags. Do not turn a teaching case into patient-specific instructions or invent evidence:\n${clinicalCaseGuidance}` : '',
             : '',
         ].filter(Boolean);
         const personalizedInput = personalizationSections.length
