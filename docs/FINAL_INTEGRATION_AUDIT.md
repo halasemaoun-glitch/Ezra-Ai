@@ -140,3 +140,35 @@ A feature is marked **implemented** when its source integration exists. It is ma
 - Hardened the screen-capture permission request so missing Activity/context and activity-launch exceptions always resolve the pending promise and clear its in-flight state rather than leaving future capture requests blocked.
 - CI validates the SMS parser, all existing Deno suites, Expo config, native Android project generation, Kotlin compilation, TypeScript, and Android bundle export.
 - Scope remains the development branch only; no merge, APK, Edge Function deployment, or paid service change is part of this review.
+
+
+## Phase 12 — microphone sensitivity and free AI provider/model selection (source implementation)
+
+- Added a persisted 0–100 microphone sensitivity control in Voice settings. It scales the speech-recognition volume meter and adjusts the sustained audio threshold used when deciding whether the user is interrupting EZRA's spoken response. The Android speech-recognition provider still controls its own underlying speech-start detection; this setting does not claim to recalibrate hardware gain.
+- Added Deno tests for sensitivity normalization, bounded volume scaling, and monotonic interruption thresholds.
+- Added selectable Groq text models `openai/gpt-oss-120b` and `openai/gpt-oss-20b`, with the existing Qwen vision model retained for Groq image requests.
+- Added a server-side Gemini adapter for `gemini-2.5-flash` and `gemini-2.5-flash-lite`. It requires a free Google AI Studio key stored only as Supabase Edge Function secret `GEMINI_API_KEY`; no key is embedded in the app or repository.
+- The app validates returned provider/model metadata to prevent silently claiming a model switch when an older deployed function ignores the selection.
+- **Deployment boundary:** no Supabase Edge Function was deployed. Groq remains the configured/default deployed provider; Gemini and non-default model selection become active only after configuring the appropriate secret and deploying the updated `smart-service` function. No paid billing path is enabled.
+- Deno regression suites cover AI provider/model allowlists, Groq payload selection, Gemini request/response parsing, and microphone sensitivity helpers.
+
+## Phase 13 — expanded dental learning content (source implementation)
+
+- Expanded the built-in library to 13 dental reference topics, including pulpal diagnosis, periodontal staging/grading, fluoride and caries risk, dental trauma, and pediatric caries risk.
+- Added primary/authoritative source links from ADA, AAPD, AAE, EFP, and IADT to relevant topics; the learning modal now opens those sources directly.
+- Expanded study materials to 16 flashcards, 12 quiz questions with explanations, and six clinical case simulations.
+- Added automated library checks for unique IDs, complete topic summaries, HTTPS reference URLs, valid quiz answers, and minimum content counts.
+- Educational content remains general learning material, not a substitute for clinical examination or local clinical protocols.
+
+## Phase 14 — navigation and Arabic RTL review (source-level review)
+
+- Android Back from a nested Settings section now returns to the Settings section list before closing the modal.
+- Reversed key Arabic navigation and control rows: main header, assistant-mode choices, main tab bar, composer, history actions, learning tabs/progress/actions, and clinical case selector.
+- Kept message text direction content-sensitive so Arabic messages render RTL and English messages render LTR.
+- Remaining verification boundary: the repository has no React Native component/integration test runner. This is a source-level navigation/RTL review; automated CI compilation and bundle checks do not replace a rendered UI interaction review.
+
+## Final completion validation status
+
+- Added regression tests for microphone sensitivity, AI provider/model selection, Gemini request/response handling, and the expanded dental study library.
+- The latest validation workflow must pass on the final branch head before declaring source/build verification complete.
+- Scope remains `ezra/habibi-android-spike`; no merge to `main`, no APK creation, no Supabase migration, no Edge Function deployment, and no paid service/billing changes are part of this work.
