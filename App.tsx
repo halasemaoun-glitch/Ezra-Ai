@@ -2113,31 +2113,49 @@ export default function App() {
     const smsMatch = parseSmsCommand(commandText);
     if (smsMatch) {
       const { contactName, message: smsBody } = smsMatch;
-      setSending(true);
-      try {
-        const contactsPermission = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_CONTACTS);
-        if (contactsPermission !== PermissionsAndroid.RESULTS.GRANTED) {
-          await sayResult('أحتاج إذن جهات الاتصال للعثور على الرقم.');
-        } else {
-          const phone = await EzraWakeWord.findContactPhone(contactName);
-          if (!phone) {
-            await sayResult(`لم أجد جهة اتصال باسم ${contactName}.`);
-          } else {
-            const smsPermission = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.SEND_SMS);
-            if (smsPermission !== PermissionsAndroid.RESULTS.GRANTED) {
-              await sayResult('أحتاج إذن إرسال الرسائل النصية حتى أرسل مباشرة. يمكنك تفعيله من إعدادات EZRA.');
-            } else {
-              const sent = await EzraWakeWord.sendSmsDirect(phone, smsBody);
-              await sayResult(sent ? `أرسل Android طلب الرسالة إلى ${contactName}. هذا لا يؤكد وصولها إلى هاتفه بعد.` : 'تعذّر إرسال الرسالة. تحققي من الشبكة والشريحة.');
-            }
-          }
-        }
-      } catch (error) {
-        console.warn('EZRA direct SMS failed:', error);
-        await sayResult('تعذّر إرسال الرسالة. تحققي من أذونات الرسائل ووجود شريحة فعّالة.');
-      } finally {
-        setSending(false);
+      if (smsBody.length > 4000) {
+        await sayResult('الرسالة طويلة جداً. اختصريها إلى 4000 حرف أو أقل.');
+        return true;
       }
+      Alert.alert(
+        'مراجعة الرسالة قبل الإرسال',
+        `إلى: ${contactName}\\n\\nنص الرسالة:\\n${smsBody}\\n\\nهل تريدين إرسالها الآن؟`,
+        [
+          { text: 'إلغاء', style: 'cancel' },
+          {
+            text: 'إرسال الرسالة',
+            onPress: () => {
+              void (async () => {
+                setSending(true);
+                try {
+                  const contactsPermission = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_CONTACTS);
+                  if (contactsPermission !== PermissionsAndroid.RESULTS.GRANTED) {
+                    await sayResult('أحتاج إذن جهات الاتصال للعثور على الرقم.');
+                  } else {
+                    const phone = await EzraWakeWord.findContactPhone(contactName);
+                    if (!phone) {
+                      await sayResult(`لم أجد جهة اتصال باسم ${contactName}.`);
+                    } else {
+                      const smsPermission = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.SEND_SMS);
+                      if (smsPermission !== PermissionsAndroid.RESULTS.GRANTED) {
+                        await sayResult('أحتاج إذن إرسال الرسائل النصية حتى أرسل مباشرة. يمكنك تفعيله من إعدادات EZRA.');
+                      } else {
+                        const sent = await EzraWakeWord.sendSmsDirect(phone, smsBody);
+                        await sayResult(sent ? `أرسل Android طلب الرسالة إلى ${contactName}. هذا لا يؤكد وصولها إلى هاتفه بعد.` : 'تعذّر إرسال الرسالة. تحققي من الشبكة والشريحة.');
+                      }
+                    }
+                  }
+                } catch (error) {
+                  console.warn('EZRA direct SMS failed:', error);
+                  await sayResult('تعذّر إرسال الرسالة. تحققي من أذونات الرسائل ووجود شريحة فعّالة.');
+                } finally {
+                  setSending(false);
+                }
+              })();
+            },
+          },
+        ]
+      );
       return true;
     }
 
@@ -3584,6 +3602,7 @@ export default function App() {
                         <Text key={item.target} style={{ color: '#B9AAB7', fontSize: 10, lineHeight: 18, textAlign: 'right' }}>{item.label}: «{item.examples[0]}»</Text>
                       ))}
                       <Text style={{ color: '#B9AAB7', fontSize: 10, lineHeight: 18, textAlign: 'right' }}>«افتح التقويم» · «افتح جيميل» · «التالي في الموسيقى» · «استأنف الموسيقى» · «افتح البلوتوث»</Text>
+                      <Text style={{ color: '#D9B7D0', fontSize: 10, lineHeight: 18, textAlign: 'right' }}>لرسائل التطبيقات: افتحي المحادثة واضغطي خانة الكتابة، ثم قولي «اكتب في الحقل …». لا يرسل EZRA النص تلقائياً؛ راجعيه ثم اطلبي الضغط على زر الإرسال، وسيظهر تأكيد قبل الإجراء.</Text>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                       <Text style={{ color: '#F2D9E9', fontSize: 14, fontWeight: '800' }}>أذونات الميزات</Text>
