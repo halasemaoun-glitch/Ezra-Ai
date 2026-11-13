@@ -9,8 +9,10 @@ import {
   studyProgressToCloudRow,
   type StudyProgress,
 } from '../study/studyProgressSync';
-import ClinicalCaseSimulator from './ClinicalCaseSimulator';
+import ClinicalCaseSimulator, { CLINICAL_CASE_COUNT } from './ClinicalCaseSimulator';
 import {
+  Alert,
+  Linking,
   Modal,
   SafeAreaView,
   ScrollView,
@@ -244,7 +246,7 @@ export default function LearningToolsModal({ visible, mode, onClose, onAskEzra, 
                   <Text style={styles.studyProgressText}>{syncState === 'loading' ? 'جارٍ مزامنة تقدّمك…' : syncState === 'synced' ? 'متزامن مع حسابك' : syncState === 'error' ? 'تعذّرت المزامنة؛ تقدّمك محفوظ محلياً' : 'سجّل الدخول لمزامنة تقدّمك'}</Text>
                   {syncState === 'error' ? <TouchableOpacity onPress={retrySync} accessibilityRole="button"><Text style={styles.retrySyncText}>إعادة المحاولة</Text></TouchableOpacity> : null}
                 </View>
-                <Text style={styles.studyProgressText}>بطاقات راجعتها: {progress.reviewedCardIds.length}/{DENTAL_STUDY_CARDS.length}  ·  حالات أكملتها: {progress.completedCaseIds.length}/4</Text>
+                <Text style={styles.studyProgressText}>بطاقات راجعتها: {progress.reviewedCardIds.length}/{DENTAL_STUDY_CARDS.length}  ·  حالات أكملتها: {progress.completedCaseIds.length}/{CLINICAL_CASE_COUNT}</Text>
                 <Text style={styles.studyProgressText}>محاولات الاختبار: {progress.quizAttempts}  ·  أفضل نتيجة: {progress.bestQuizScore}/{DENTAL_QUIZ.length}</Text>
               </View>
               {tab === 'library' ? (
@@ -269,6 +271,17 @@ export default function LearningToolsModal({ visible, mode, onClose, onAskEzra, 
                         <Text style={styles.bulletText}>{point}</Text>
                       </View>
                     ))}
+                    {selectedTopic.caution ? <Text style={styles.safety}>{selectedTopic.caution}</Text> : null}
+                    {selectedTopic.sources?.length ? (
+                      <View style={{ gap: 7, marginTop: 5 }}>
+                        <Text style={styles.keyPointsTitle}>مراجع علمية موثوقة</Text>
+                        {selectedTopic.sources.map(source => (
+                          <TouchableOpacity key={source.url} onPress={() => { void Linking.openURL(source.url).catch(() => Alert.alert('تعذّر فتح المرجع', 'تحقق من اتصال الإنترنت ثم حاول مجدداً.')); }} accessibilityRole="link" accessibilityLabel={source.label} style={{ paddingVertical: 9, paddingHorizontal: 11, borderRadius: 10, backgroundColor: '#211923', borderWidth: 1, borderColor: '#493747' }}>
+                            <Text style={{ color: '#E7B3D5', fontSize: 11, lineHeight: 17, textAlign: 'right' }}>{source.label} ↗</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    ) : null}
                     <TouchableOpacity style={styles.askButton} onPress={askAboutTopic} accessibilityRole="button">
                       <Text style={styles.askButtonText}>ناقش هذا الموضوع مع EZRA</Text>
                     </TouchableOpacity>
