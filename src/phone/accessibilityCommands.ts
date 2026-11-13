@@ -1,5 +1,6 @@
 export type AccessibilityCommand =
   | { kind: 'click'; target: string }
+  | { kind: 'type'; text: string }
   | { kind: 'scroll'; direction: 'up' | 'down' }
   | { kind: 'global'; action: 'back' | 'home' | 'notifications' | 'quick_settings' };
 
@@ -29,6 +30,9 @@ export function parseAccessibilityCommand(command: string): AccessibilityCommand
   if (/(?:مرر|اسحب|اصعد|اطلع|scroll)\s*(?:الى\s*)?(?:الاعلى|الاعلي|للاعلى|للاعلي|لفوق|up)/.test(value) || /^(?:اصعد|اطلع|مرر للاعلى|scroll up)$/.test(value)) {
     return { kind: 'scroll', direction: 'up' };
   }
+
+  const typeText = value.match(/^(?:اكتب|ادخل|أدخل|type)\\s+(?:في\\s+الحقل|داخل\\s+الحقل|في\\s+مربع\\s+النص|in\\s+the\\s+field)\\s+([\\s\\S]{1,4000})$/);
+  if (typeText) return { kind: 'type', text: typeText[1].trim() };
 
   const click = value.match(/^(?:اضغط|انقر|اكبس|اختار|حدد|tap|click|press)\s+(?:على\s+|علي\s+)?(?:زر\s+)?(.{1,80})$/);
   if (click) {
