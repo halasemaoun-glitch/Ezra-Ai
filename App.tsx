@@ -3106,18 +3106,18 @@ export default function App() {
               <Text style={styles.mainTabLabel}>الإعدادات</Text>
             </TouchableOpacity>
           </View>
-          <Modal visible={settingsVisible} transparent animationType="slide" onRequestClose={() => setSettingsVisible(false)}>
+          <Modal visible={settingsVisible} transparent animationType="slide" onRequestClose={() => { if (settingsSection !== null) setSettingsSection(null); else setSettingsVisible(false); }}>
             <View style={styles.settingsBackdrop}>
               <View style={styles.settingsPanel}>
-                <View style={styles.historyHeader}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                <View style={[styles.historyHeader, { flexDirection: 'row-reverse' }]}>
+                  <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 10, flex: 1 }}>
                     {settingsSection !== null ? (
                       <TouchableOpacity
                         style={styles.historyClose}
                         onPress={() => setSettingsSection(null)}
                         accessibilityRole="button"
                         accessibilityLabel="العودة إلى أقسام الإعدادات"
-                      ><Text style={styles.historyCloseText}>‹</Text></TouchableOpacity>
+                      ><Text style={styles.historyCloseText}>›</Text></TouchableOpacity>
                     ) : null}
                     <Text style={styles.historyTitle}>{settingsSection === null ? 'الإعدادات' : settingsSection === 'voice' ? 'إعدادات الصوت' : settingsSection}</Text>
                   </View>
@@ -3552,7 +3552,7 @@ export default function App() {
                     </View>
                     <View style={{ gap: 10 }}>
                       <Text style={{ color: '#F2D9E9', fontSize: 14, fontWeight: '800', textAlign: 'right' }}>طول الإجابة</Text>
-                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <View style={{ flexDirection: 'row-reverse', gap: 8 }}>
                         {(['مختصر', 'متوازن', 'مفصل'] as const).map(option => (
                           <TouchableOpacity key={option} onPress={() => updateAiPreferences({ responseDepth: option })} accessibilityRole="button" accessibilityState={{ selected: aiPreferences.responseDepth === option }} style={{ flex: 1, paddingVertical: 12, borderRadius: 13, alignItems: 'center', backgroundColor: aiPreferences.responseDepth === option ? '#633D59' : '#211923', borderWidth: 1, borderColor: aiPreferences.responseDepth === option ? '#D58AB8' : '#493747' }}>
                             <Text style={{ color: '#F5EAF2', fontSize: 12, fontWeight: '700' }}>{option}</Text>
@@ -3581,7 +3581,7 @@ export default function App() {
                     </View>
                     <View style={{ padding: 15, borderRadius: 15, backgroundColor: '#1B151E', borderWidth: 1, borderColor: '#493747', gap: 10 }}>
                       <Text style={{ color: '#F2D9E9', fontSize: 13, fontWeight: '800', textAlign: 'right' }}>مزود الذكاء الاصطناعي</Text>
-                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <View style={{ flexDirection: 'row-reverse', gap: 8 }}>
                         {AI_PROVIDER_OPTIONS.map(option => (
                           <TouchableOpacity key={option.id} onPress={() => updateAiPreferences({ provider: option.id, model: DEFAULT_AI_MODELS[option.id] })} accessibilityRole="button" accessibilityState={{ selected: aiPreferences.provider === option.id }} style={{ flex: 1, padding: 11, borderRadius: 12, borderWidth: 1, borderColor: aiPreferences.provider === option.id ? '#D58AB8' : '#493747', backgroundColor: aiPreferences.provider === option.id ? '#4A2B43' : '#211923', gap: 5 }}>
                             <Text style={{ color: '#F5EAF2', fontSize: 12, fontWeight: '800', textAlign: 'right' }}>{aiPreferences.provider === option.id ? '✓ ' : ''}{option.label}</Text>
@@ -3626,7 +3626,7 @@ export default function App() {
                     <Text style={styles.settingTitle}>لغة EZRA</Text>
                     <Text style={styles.settingHint}>اختاري لغة الرد والصوت والاستماع؛ لن يبدّلها التطبيق تلقائياً.</Text>
                   </View>
-                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={{ flexDirection: 'row-reverse', gap: 10 }}>
                     <TouchableOpacity
                       accessibilityRole="button"
                       accessibilityState={{ selected: responseLanguage === 'ar' }}
@@ -4420,7 +4420,7 @@ const styles = StyleSheet.create({
   rateButtonText: { color: '#F0C9E4', fontSize: 21 },
   settingsFootnote: { color: '#827684', fontSize: 10, textAlign: 'right', marginTop: 18, lineHeight: 17 },
   voiceHome: { flex: 1, alignItems: 'center', justifyContent: 'space-between', paddingTop: 24, paddingBottom: 8, paddingHorizontal: 20, backgroundColor: '#08070D' },
-  mainTabBar: { width: '100%', minHeight: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', borderTopWidth: 1, borderTopColor: colors.borderSubtle, backgroundColor: colors.backgroundRaised, borderRadius: radius.lg, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, marginTop: spacing.sm },
+  mainTabBar: { width: '100%', minHeight: 64, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-around', borderTopWidth: 1, borderTopColor: colors.borderSubtle, backgroundColor: colors.backgroundRaised, borderRadius: radius.lg, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, marginTop: spacing.sm },
   mainTab: { flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', gap: spacing.xxs, borderRadius: radius.md },
   mainTabActive: { backgroundColor: 'rgba(173,75,143,0.16)', borderWidth: 1, borderColor: colors.borderStrong },
   mainTabIcon: { color: '#897888', fontSize: 19, lineHeight: 22 },
@@ -4469,14 +4469,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingTop: 12,
     paddingBottom: 14,
-    flexDirection: 'row',
+    flexDirection: 'row-reverse',
     flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
     rowGap: 10,
     backgroundColor: 'rgba(14,5,12,0.72)',
   },
-  brand: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  brand: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
   avatar: {
     width: 43,
     height: 43,
@@ -4495,7 +4495,7 @@ const styles = StyleSheet.create({
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
   onlineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#9EBD9D' },
   status: { color: '#96919D', fontSize: 9, letterSpacing: 0.6 },
-  headerActions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: 6 },
+  headerActions: { flexDirection: 'row-reverse', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-start', gap: 6 },
   historyButton: { paddingHorizontal: 13, paddingVertical: 10, borderRadius: 22, backgroundColor: 'rgba(54,31,45,0.76)', borderWidth: 1, borderColor: '#654052' },
   newChatButton: {
     paddingHorizontal: 14,
@@ -4525,7 +4525,7 @@ const styles = StyleSheet.create({
   historyCloseText: { color: '#E7B9D8', fontSize: 25, lineHeight: 28 },
   historyEmpty: { color: '#A69BAA', textAlign: 'center', marginTop: 45, fontSize: 13 },
   historyItem: { padding: 15, marginBottom: 9, borderRadius: 14, backgroundColor: '#211F27', borderWidth: 1, borderColor: '#39323D' },
-  historyItemRow: { flexDirection: 'row', alignItems: 'stretch', gap: 8, marginBottom: 9 },
+  historyItemRow: { flexDirection: 'row-reverse', alignItems: 'stretch', gap: 8, marginBottom: 9 },
   historyItemOpen: { flex: 1, marginBottom: 0 },
   historyDeleteButton: { paddingHorizontal: 12, justifyContent: 'center', alignItems: 'center', borderRadius: 12, backgroundColor: '#38252B', borderWidth: 1, borderColor: '#63404B' },
   historyDeleteText: { color: '#E7B9D8', fontSize: 10, fontWeight: '600' },
@@ -4549,7 +4549,7 @@ const styles = StyleSheet.create({
   memoryItem: { padding: 13, borderRadius: 13, backgroundColor: '#211F27', borderWidth: 1, borderColor: '#39323D' },
   memoryItemText: { color: '#F1ECF2', fontSize: 12, lineHeight: 19, textAlign: 'right' },
   memoryStatus: { color: '#B58DAE', fontSize: 10, textAlign: 'right', marginTop: 8 },
-  memoryActions: { flexDirection: 'row', justifyContent: 'flex-start', gap: 7, marginTop: 10 },
+  memoryActions: { flexDirection: 'row-reverse', justifyContent: 'flex-start', gap: 7, marginTop: 10 },
   memoryApprove: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 9, backgroundColor: '#3B3040' },
   memoryReject: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 9, backgroundColor: '#49313A' },
   memoryDelete: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 9, backgroundColor: '#38252B' },
@@ -4558,7 +4558,7 @@ const styles = StyleSheet.create({
   assistantModeHeading: { alignItems: 'flex-end', gap: 3 },
   assistantModeTitle: { color: colors.textPrimary, fontSize: 12, fontWeight: '800' },
   assistantModeDescription: { color: colors.textSecondary, fontSize: 10, textAlign: 'right' },
-  assistantModeOptions: { flexDirection: 'row', gap: spacing.xs },
+  assistantModeOptions: { flexDirection: 'row-reverse', gap: spacing.xs },
   assistantModeChip: { flex: 1, minHeight: 40, paddingHorizontal: spacing.xs, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   assistantModeChipActive: { backgroundColor: colors.accentDeep, borderColor: colors.accentBright },
   assistantModeChipText: { color: colors.textSecondary, fontSize: 10, fontWeight: '700', textAlign: 'center' },
@@ -4648,7 +4648,7 @@ const styles = StyleSheet.create({
     minHeight: 64,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
-    flexDirection: 'row',
+    flexDirection: 'row-reverse',
     alignItems: 'center',
     backgroundColor: colors.surfaceGlass,
     borderWidth: 1,
