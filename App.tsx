@@ -41,6 +41,7 @@ import LearningToolsModal from './src/components/LearningToolsModal';
 import { DENTAL_REFERENCE_LIBRARY } from './src/study/studyLibrary';
 import { supabase } from './src/lib/supabase';
 import { DEFAULT_EZRA_VOICE } from './src/voice/voiceProfile';
+import { AI_MODELS, AI_PROVIDER_OPTIONS, DEFAULT_AI_MODELS, normalizeAiModel, normalizeAiProvider, type AiProvider } from './src/ai/aiModelSettings';
 import { DEFAULT_MIC_SENSITIVITY, getMicInterruptionThreshold, normalizeMicSensitivity, scaleMicLevel } from './src/voice/micSensitivity';
 import { parseCallContactName } from './src/phone/commandParser';
 import { parseSmsCommand, parseIncompleteSmsCommand } from './src/phone/smsCommandParser';
@@ -279,7 +280,7 @@ export default function App() {
   const [companionProfileLoadedUserId, setCompanionProfileLoadedUserId] = useState<string | null>(null);
   const [companionProfileUpdatedAt, setCompanionProfileUpdatedAt] = useState('1970-01-01T00:00:00.000Z');
   const [companionSyncStatus, setCompanionSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
-  const [aiPreferences, setAiPreferences] = useState({ responseDepth: 'متوازن', answerStyle: 'دقيق ومتوازن', stepByStep: true });
+  const [aiPreferences, setAiPreferences] = useState<{ responseDepth: string; answerStyle: string; stepByStep: boolean; provider: AiProvider; model: string }>({ responseDepth: 'متوازن', answerStyle: 'دقيق ومتوازن', stepByStep: true, provider: 'groq', model: DEFAULT_AI_MODELS.groq });
   const [aiPreferencesLoaded, setAiPreferencesLoaded] = useState(false);
   const [assistantMode, setAssistantMode] = useState<AssistantMode>('companion');
   const [assistantModeLoaded, setAssistantModeLoaded] = useState(false);
@@ -818,6 +819,8 @@ export default function App() {
             responseDepth: ['مختصر', 'متوازن', 'مفصل'].includes(saved.responseDepth) ? saved.responseDepth : previous.responseDepth,
             answerStyle: ['دقيق ومتوازن', 'إبداعي', 'تحليلي'].includes(saved.answerStyle) ? saved.answerStyle : previous.answerStyle,
             stepByStep: typeof saved.stepByStep === 'boolean' ? saved.stepByStep : previous.stepByStep,
+            provider: normalizeAiProvider(saved.provider),
+            model: normalizeAiModel(saved.provider, saved.model),
           }));
         }
       } catch (error) {
@@ -2278,6 +2281,8 @@ export default function App() {
               input: personalizedInput,
               voiceMode: voiceReply,
               responseLanguage,
+              provider: aiPreferences.provider,
+              model: aiPreferences.model,
               ...(attachment?.kind === 'image' && attachment.base64
                 ? { imageDataUrl: `data:${attachment.mimeType || 'image/jpeg'};base64,${attachment.base64}` }
                 : {}),
@@ -3568,16 +3573,36 @@ export default function App() {
                       </View>
                       <Switch value={aiPreferences.stepByStep} onValueChange={value => updateAiPreferences({ stepByStep: value })} trackColor={{ false: '#39323D', true: '#875477' }} thumbColor={aiPreferences.stepByStep ? '#F2C8E5' : '#AAA'} />
                     </View>
-                    <View style={{ padding: 15, borderRadius: 15, backgroundColor: '#1B151E', borderWidth: 1, borderColor: '#493747', gap: 7 }}>
-                      <Text style={{ color: '#F2D9E9', fontSize: 13, fontWeight: '800', textAlign: 'right' }}>مزوّد الذكاء الاصطناعي الحالي</Text>
-                      <Text style={{ color: '#F5EAF2', fontSize: 12, textAlign: 'right' }}>Groq · openai/gpt-oss-120b</Text>
-                      <Text style={{ color: '#A99AA8', fontSize: 11, lineHeight: 18, textAlign: 'right' }}>تحليل الصور يستخدم Qwen عبر Groq. اختيار المزوّد والنموذج مُدار بأمان من الخدمة، ولا تُخزّن مفاتيح API داخل التطبيق. قد تطبق الخدمة المجانية حدود استخدام مؤقتة.</Text>
-                      <View style={{ alignSelf: 'flex-end', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, backgroundColor: '#20352C' }}><Text style={{ color: '#A9D7B9', fontSize: 10, fontWeight: '700' }}>الخدمة الحالية · مجانية ضمن حدود المزوّد</Text></View>
+                    <View style={{ padding: 15, borderRadius: 15, backgroundColor: '#1B151E', borderWidth: 1, borderColor: '#493747', gap: 10 }}>
+                      <Text style={{ color: '#F2D9E9', fontSize: 13, fontWeight: '800', textAlign: 'right' }}>مزود الذكاء الاصطناعي</Text>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        {AI_PROVIDER_OPTIONS.map(option => (
+                          <TouchableOpacity key={option.id} onPress={() => updateAiPreferences({ provider: option.id, model: DEFAULT_AI_MODELS[option.id] })} accessibilityRole="button" accessibilityState={{ selected: aiPreferences.provider === option.id }} style={{ flex: 1, padding: 11, borderRadius: 12, borderWidth: 1, borderColor: aiPreferences.provider === option.id ? '#D58AB8' : '#493747', backgroundColor: aiPreferences.provider === option.id ? '#4A2B43' : '#211923', gap: 5 }}>
+                            <Text style={{ color: '#F5EAF2', fontSize: 12, fontWeight: '800', textAlign: 'right' }}>{aiPreferences.provider === option.id ? '✓ ' : ''}{option.label}</Text>
+                            <Text style={{ color: '#B9AAB7', fontSize: 9, lineHeight: 15, textAlign: 'right' }}>{option.description}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                      <Text style={{ color: '#F2D9E9', fontSize: 13, fontWeight: '800', textAlign: 'right' }}>النموذج</Text>
+                      <View style={{ gap: 8 }}>
+                        {AI_MODELS[aiPreferences.provider].map(option => (
+                          <TouchableOpacity key={option.id} onPress={() => updateAiPreferences({ model: option.id })} accessibilityRole="button" accessibilityState={{ selected: aiPreferences.model === option.id }} style={{ padding: 12, borderRadius: 12, borderWidth: 1, borderColor: aiPreferences.model === option.id ? '#D58AB8' : '#493747', backgroundColor: aiPreferences.model === option.id ? '#39253A' : '#211923', gap: 4 }}>
+                            <Text style={{ color: '#F5EAF2', fontSize: 12, fontWeight: '800', textAlign: 'right' }}>{aiPreferences.model === option.id ? '✓ ' : ''}{option.label}</Text>
+                            <Text style={{ color: '#B9AAB7', fontSize: 10, lineHeight: 16, textAlign: 'right' }}>{option.description}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                      <Text style={{ color: '#A99AA8', fontSize: 10, lineHeight: 17, textAlign: 'right' }}>
+                        {aiPreferences.provider === 'gemini'
+                          ? 'يتطلب Gemini مفتاحًا مجانياً من Google AI Studio محفوظًا في Supabase باسم GEMINI_API_KEY. لا تضعي المفتاح داخل التطبيق أو GitHub. عند غياب المفتاح سيظهر تنبيه إعداد واضح.'
+                          : 'Groq هو المزود المهيأ حاليًا. GPT-OSS 120B للمهام المعقدة و20B أخف للمحادثات. عند إرسال صورة يستخدم Groq نموذج Qwen Vision تلقائيًا.'}
+                      </Text>
+                      <View style={{ alignSelf: 'flex-end', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, backgroundColor: '#20352C' }}><Text style={{ color: '#A9D7B9', fontSize: 10, fontWeight: '700' }}>اخترنا نماذج لها حصص مجانية · لا تفعيل للمدفوع داخل EZRA</Text></View>
                     </View>
-                    <TouchableOpacity onPress={() => Alert.alert('إعادة الضبط', 'هل تريدين إعادة إعدادات الذكاء الاصطناعي إلى القيم الافتراضية؟', [{ text: 'إلغاء', style: 'cancel' }, { text: 'إعادة الضبط', style: 'destructive', onPress: () => updateAiPreferences({ responseDepth: 'متوازن', answerStyle: 'دقيق ومتوازن', stepByStep: true }) }])} accessibilityRole="button" style={{ paddingVertical: 13, borderRadius: 13, alignItems: 'center', borderWidth: 1, borderColor: '#875477', backgroundColor: '#211923' }}>
+                    <TouchableOpacity onPress={() => Alert.alert('إعادة الضبط', 'هل تريدين إعادة إعدادات الذكاء الاصطناعي إلى القيم الافتراضية؟', [{ text: 'إلغاء', style: 'cancel' }, { text: 'إعادة الضبط', style: 'destructive', onPress: () => updateAiPreferences({ responseDepth: 'متوازن', answerStyle: 'دقيق ومتوازن', stepByStep: true, provider: 'groq', model: DEFAULT_AI_MODELS.groq }) }])} accessibilityRole="button" style={{ paddingVertical: 13, borderRadius: 13, alignItems: 'center', borderWidth: 1, borderColor: '#875477', backgroundColor: '#211923' }}>
                       <Text style={{ color: '#F2C8E5', fontSize: 12, fontWeight: '800' }}>إعادة الإعدادات الافتراضية</Text>
                     </TouchableOpacity>
-                    <Text style={{ color: '#8F8290', fontSize: 10, lineHeight: 17, textAlign: 'right' }}>ملاحظة: هذه الخيارات تضبط أسلوب الإجابة ولا تغيّر النموذج أو ترفع حدوده التقنية. تفضيلاتك محفوظة محلياً على هذا الجهاز.</Text>
+                    <Text style={{ color: '#8F8290', fontSize: 10, lineHeight: 17, textAlign: 'right' }}>تُحفظ اختيارات المزود والنموذج محلياً. حدود الاستخدام المجاني تحددها Google أو Groq وتتغير؛ إذا انتهت الحصة فلن يرفع EZRA الخطة أو يفعّل الفوترة تلقائياً.</Text>
                   </View>
                 ) : settingsSection !== 'voice' ? (
                   <View style={{ flex: 1, minHeight: 250, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 }}>
