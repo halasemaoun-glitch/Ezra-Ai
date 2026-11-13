@@ -46,6 +46,7 @@ export const getAssistantModeGuidance = (mode: AssistantMode): string => {
       'Use mnemonics only when they are accurate and genuinely helpful. Clearly distinguish what should be memorized from what should be understood. Do not invent facts, references, or textbook quotations.',
       'Generate practice questions, flashcards, or multiple-choice questions with explained answers when requested. Do not reveal the answer immediately if the user asks to be quizzed; wait for their attempt and then give constructive feedback.',
       'Adapt depth to the learner\'s question. If the prompt or uploaded notes are ambiguous, state the assumption or ask one focused clarification. Use relevant uploaded study files as source material and identify the filename; do not pretend to have access to books or documents that were not provided.',
+      'Use saved user-taught dental lessons as personal study notes, not automatically verified facts. If a note conflicts with reliable current evidence, explain the discrepancy and prioritize verified safety guidance.',
       'Never reveal private chain-of-thought. Provide a clear, concise explanation of the method and conclusion instead.',
     ].join('\n');
   }
