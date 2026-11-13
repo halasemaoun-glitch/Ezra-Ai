@@ -41,6 +41,7 @@ import LearningToolsModal from './src/components/LearningToolsModal';
 import { DENTAL_REFERENCE_LIBRARY } from './src/study/studyLibrary';
 import { supabase } from './src/lib/supabase';
 import { DEFAULT_EZRA_VOICE } from './src/voice/voiceProfile';
+import { DEFAULT_MIC_SENSITIVITY, getMicInterruptionThreshold, normalizeMicSensitivity, scaleMicLevel } from './src/voice/micSensitivity';
 import { parseCallContactName } from './src/phone/commandParser';
 import { parseSmsCommand, parseIncompleteSmsCommand } from './src/phone/smsCommandParser';
 import { isScreenCaptureCommand } from './src/phone/screenCaptureCommands';
@@ -309,6 +310,8 @@ export default function App() {
   const [attachment, setAttachment] = useState<Attachment | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [voiceLevel, setVoiceLevel] = useState(0);
+  const [micSensitivity, setMicSensitivity] = useState(DEFAULT_MIC_SENSITIVITY);
+  const micSensitivityRef = useRef(DEFAULT_MIC_SENSITIVITY);
   const [voiceRetrying, setVoiceRetrying] = useState(false);
   const [voiceRetryMessage, setVoiceRetryMessage] = useState('');
   const [autoListen, setAutoListen] = useState(true);
@@ -855,7 +858,7 @@ export default function App() {
   );
 
   useEffect(() => {
-    AsyncStorage.multiGet(['ezra:autoSpeak', 'ezra:speechRate', 'ezra:recognitionLanguage', 'ezra:autoListen', 'ezra:ttsVoice', 'ezra:speechPitch', 'ezra:backgroundWake', 'ezra:ttsEnglishVoice', 'ezra:responseLanguage']).then(values => {
+    AsyncStorage.multiGet(['ezra:autoSpeak', 'ezra:speechRate', 'ezra:recognitionLanguage', 'ezra:autoListen', 'ezra:ttsVoice', 'ezra:speechPitch', 'ezra:backgroundWake', 'ezra:ttsEnglishVoice', 'ezra:responseLanguage', 'ezra:micSensitivity']).then(values => {
       const savedAutoSpeak = values[0]?.[1];
       const savedRate = values[1]?.[1];
       const savedAutoListen = values[3]?.[1];
@@ -876,6 +879,9 @@ export default function App() {
       }
       const savedResponseLanguage = values[8]?.[1] === 'en' ? 'en' : 'ar';
       setResponseLanguage(savedResponseLanguage);
+      const restoredMicSensitivity = normalizeMicSensitivity(values[9]?.[1] ?? DEFAULT_MIC_SENSITIVITY);
+      micSensitivityRef.current = restoredMicSensitivity;
+      setMicSensitivity(restoredMicSensitivity);
       AsyncStorage.removeItem('ezra:recognitionLanguage').catch(() => {});
       if (savedAutoListen !== null) {
         const enabled = savedAutoListen === 'true';
@@ -1435,7 +1441,7 @@ export default function App() {
     setIsListening(true);
   });
   useSpeechRecognitionEvent('volumechange', event => {
-    const normalized = event.value <= 0 ? 0 : Math.min(1, event.value / 10);
+    const normalized = scaleMicLevel(event.value, micSensitivityRef.current);
     setVoiceLevel(previous => previous * 0.58 + normalized * 0.42);
 
     // During EZRA playback, require several consecutive strong mic-energy frames
@@ -1443,7 +1449,7 @@ export default function App() {
     // so the user's words continue into the transcript after playback stops.
     if (voiceCaptureDuringSpeechRef.current && speakingMessageId && voiceHome && autoListenRef.current && appIsActiveRef.current) {
       // Require a sustained, clear voice signal so EZRA's own speaker echo is less likely to interrupt it.
-      interruptVoiceFramesRef.current = normalized >= 0.62
+      interruptVoiceFramesRef.current = normalized >= getMicInterruptionThreshold(micSensitivityRef.current)
         ? interruptVoiceFramesRef.current + 1
         : Math.max(0, interruptVoiceFramesRef.current - 1);
       if (interruptVoiceFramesRef.current >= 5) {
@@ -3674,6 +3680,22 @@ export default function App() {
                 <View style={styles.settingRow}>
                   <View style={styles.settingCopy}><Text style={styles.settingTitle}>الاستماع التلقائي</Text><Text style={styles.settingHint}>يستمع بعد فتح الشاشة وبعد كل رد</Text></View>
                   <Switch value={autoListen} onValueChange={value => { autoListenRef.current = value; setAutoListen(value); if (!value) { setVoiceRetrying(false); setVoiceRetryMessage(''); } AsyncStorage.setItem('ezra:autoListen', String(value)).catch(() => {}); if (!value && isListening) ExpoSpeechRecognitionModule.stop(); }} trackColor={{ false: '#39323D', true: '#875477' }} thumbColor={autoListen ? '#F2C8E5' : '#AAA'} />
+                </View>
+                <View style={[styles.settingRow, { flexDirection: 'column', alignItems: 'stretch', gap: 10 }]}>
+                  <View style={styles.settingCopy}>
+                    <Text style={styles.settingTitle}>حساسية الميكروفون</Text>
+                    <Text style={styles.settingHint}>{micSensitivity <= 25 ? 'منخفضة' : micSensitivity >= 75 ? 'مرتفعة' : 'متوازنة'} · {micSensitivity}%</Text>
+                    <Text style={styles.settingHint}>ارفعي الحساسية إذا كان EZRA لا يلتقط صوتك بسهولة، وخفّضيها إذا كان يلتقط الضوضاء أو يقاطع كلامه بسبب الصدى. يؤثر هذا الضبط في مستوى الصوت وعتبة مقاطعة الرد؛ أما تحويل الكلام إلى نص فيبقى تابعًا لمحرك التعرف في Android.</Text>
+                  </View>
+                  <View style={{ height: 7, borderRadius: 8, backgroundColor: '#342A36', overflow: 'hidden' }}>
+                    <View style={{ height: 7, width: `${micSensitivity}%`, backgroundColor: '#C47AA8' }} />
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                    <TouchableOpacity accessibilityRole="button" accessibilityLabel="خفض حساسية الميكروفون" disabled={micSensitivity <= 0} onPress={() => { const next = normalizeMicSensitivity(micSensitivity - 5); micSensitivityRef.current = next; setMicSensitivity(next); AsyncStorage.setItem('ezra:micSensitivity', String(next)).catch(() => {}); }} style={[styles.rateButton, { opacity: micSensitivity <= 0 ? 0.4 : 1 }]}><Text style={styles.rateButtonText}>−</Text></TouchableOpacity>
+                    <Text style={{ color: '#E8C7DC', fontSize: 12, fontWeight: '700' }}>أقل حساسية ←  → أعلى حساسية</Text>
+                    <TouchableOpacity accessibilityRole="button" accessibilityLabel="رفع حساسية الميكروفون" disabled={micSensitivity >= 100} onPress={() => { const next = normalizeMicSensitivity(micSensitivity + 5); micSensitivityRef.current = next; setMicSensitivity(next); AsyncStorage.setItem('ezra:micSensitivity', String(next)).catch(() => {}); }} style={[styles.rateButton, { opacity: micSensitivity >= 100 ? 0.4 : 1 }]}><Text style={styles.rateButtonText}>＋</Text></TouchableOpacity>
+                  </View>
+                  <TouchableOpacity accessibilityRole="button" onPress={() => { micSensitivityRef.current = DEFAULT_MIC_SENSITIVITY; setMicSensitivity(DEFAULT_MIC_SENSITIVITY); AsyncStorage.setItem('ezra:micSensitivity', String(DEFAULT_MIC_SENSITIVITY)).catch(() => {}); }} style={{ alignSelf: 'flex-end', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, borderWidth: 1, borderColor: '#69465F' }}><Text style={{ color: '#E8B8D7', fontSize: 10, fontWeight: '700' }}>استعادة الحساسية الافتراضية</Text></TouchableOpacity>
                 </View>
                 <View style={styles.settingRow}>
                   <View style={styles.settingCopy}><Text style={styles.settingTitle}>قراءة ردود EZRA تلقائيًا</Text><Text style={styles.settingHint}>ينطق الرد بعد وصوله</Text></View>
