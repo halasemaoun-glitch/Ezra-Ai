@@ -1890,7 +1890,7 @@ export default function App() {
     return true;
   };
 
-  const handleCallCommand = async (commandText: string, voiceReply: boolean) => {
+  const executeCallCommand = async (commandText: string, voiceReply: boolean) => {
     if (Platform.OS !== 'android' || !EzraWakeWord) return false;
     const contactName = parseCallContactName(commandText);
     if (!contactName) return false;
@@ -1939,6 +1939,22 @@ export default function App() {
     setMessage('');
     if (voiceReply || autoSpeak) speak(reply, replyId);
     setSending(false);
+    return true;
+  };
+
+  const handleCallCommand = async (commandText: string, voiceReply: boolean) => {
+    if (Platform.OS !== 'android' || !EzraWakeWord) return false;
+    const contactName = parseCallContactName(commandText);
+    if (!contactName) return false;
+    setSending(true);
+    Alert.alert(
+      'تأكيد المكالمة',
+      `هل تريدين بدء مكالمة هاتفية مباشرة مع «${contactName}»؟`,
+      [
+        { text: 'إلغاء', style: 'cancel', onPress: () => setSending(false) },
+        { text: 'اتصال الآن', onPress: () => { void executeCallCommand(commandText, voiceReply); } },
+      ]
+    );
     return true;
   };
 
