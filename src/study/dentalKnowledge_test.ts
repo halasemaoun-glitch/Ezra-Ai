@@ -1,5 +1,6 @@
 import { DENTAL_REFERENCE_LIBRARY } from './studyLibrary.ts';
-import { normalizeDentalQuery, retrieveDentalReferences, tokenizeDentalQuery } from './dentalKnowledge.ts';
+import { DENTAL_CLINICAL_CASES } from './clinicalCases.ts';
+import { normalizeDentalQuery, retrieveDentalReferences, retrieveDentalClinicalCases, tokenizeDentalQuery } from './dentalKnowledge.ts';
 
 const assert = (condition: unknown, message: string) => {
   if (!condition) throw new Error(message);
@@ -31,10 +32,6 @@ Deno.test('trauma retrieval preserves authoritative source links', () => {
   const trauma = matches.find(match => match.reference.id === 'dental-trauma');
   assert(!!trauma?.reference.sources?.some(source => source.url.startsWith('https://')), 'trauma reference should include HTTPS source');
 });
-
-
-import { DENTAL_CLINICAL_CASES } from './clinicalCases.ts';
-import { retrieveDentalClinicalCases } from './dentalKnowledge.ts';
 
 Deno.test('clinical case bank is broad, structured, unique and evidence-linked', () => {
   assert(DENTAL_CLINICAL_CASES.length >= 18, 'expected at least 18 structured clinical cases');
