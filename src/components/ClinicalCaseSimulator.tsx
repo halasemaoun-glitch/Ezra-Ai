@@ -163,7 +163,7 @@ const styles = StyleSheet.create({
   heading: { color: '#F5EAF3', fontSize: 15, fontWeight: '800', textAlign: 'right' },
   helper: { color: '#A99BAA', fontSize: 11, lineHeight: 18, textAlign: 'right' },
   casePicker: { gap: 7 },
-  caseChip: { minHeight: 42, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: '#443447', backgroundColor: '#19141F', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  caseChip: { minHeight: 42, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: '#443447', backgroundColor: '#19141F', flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
   caseChipActive: { backgroundColor: '#46243D', borderColor: '#B75B91' },
   caseChipText: { color: '#C7B8C7', fontSize: 11, textAlign: 'right', flex: 1 },
   caseChipTextActive: { color: '#FFF0FA', fontWeight: '700' },
