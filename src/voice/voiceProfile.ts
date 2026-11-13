@@ -14,8 +14,8 @@ export const DEFAULT_EZRA_VOICE = {
   rate: 0.88,
   pitch: 0.78,
   languages: ['ar', 'en'] as const,
-  // The installed mobile checkpoint is ALG; other dialects are not yet verified.
-  dialects: ['Algerian Arabic'] as const,
+  // Habibi unified supports Algerian (ALG) and Levantine (LEV) dialect tokens.
+  dialects: ['Algerian Arabic', 'Levantine Arabic'] as const,
   automaticOutputLanguage: true,
 };
 
