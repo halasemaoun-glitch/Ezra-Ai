@@ -12,7 +12,6 @@ import com.tom_roush.pdfbox.io.MemoryUsageSetting
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.pdmodel.encryption.InvalidPasswordException
 import com.tom_roush.pdfbox.text.PDFTextStripper
-import java.io.FileInputStream
 import dev.ffmpegkit.tesseract.TesseractConfig
 import dev.ffmpegkit.tesseract.TesseractOCR
 import expo.modules.kotlin.functions.Queues
