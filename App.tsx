@@ -4029,7 +4029,7 @@ export default function App() {
                     placeholderTextColor="#777680"
                     multiline
                   />
-                  <Text style={styles.settingHint}>العينة يجب أن تكون صوت رجل واضحًا، WAV PCM 16-bit، من نصف ثانية إلى 1.3 ثانية، مع نص مطابق تمامًا. تسجيلك السابق يبقى احتياطيًا ولن نستخدمه هنا.</Text>
+                  <Text style={styles.settingHint}>العينة يجب أن تكون صوت رجل واضحًا، WAV PCM 16-bit، من نصف ثانية إلى 1.2 ثانية، مع نص مطابق تمامًا. تسجيلك السابق يبقى احتياطيًا ولن نستخدمه هنا.</Text>
                   <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' }}>
                     <TouchableOpacity style={[styles.rateButton, habibiDialect === 'ALG' && styles.languageButtonActive, { paddingHorizontal: 16 }]} onPress={() => { setHabibiDialect('ALG'); setHabibiEngineReady(false); void EzraHabibiTts?.shutdown().catch(() => {}); void AsyncStorage.setItem('ezra:habibiDialect', 'ALG'); void AsyncStorage.removeItem('ezra:habibiEnabled'); }} disabled={habibiEngineBusy}>
                       <Text style={styles.rateButtonText}>الجزائرية · ALG</Text>
