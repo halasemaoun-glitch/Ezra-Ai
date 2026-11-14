@@ -1,0 +1,12 @@
+apply plugin: 'com.android.library'
+apply plugin: 'expo-module-gradle-plugin'
+
+group = 'expo.modules.ezraliveaudio'
+version = '0.1.0'
+
+android {
+  namespace 'expo.modules.ezraliveaudio'
+  defaultConfig {
+    versionName '0.1.0'
+  }
+}
