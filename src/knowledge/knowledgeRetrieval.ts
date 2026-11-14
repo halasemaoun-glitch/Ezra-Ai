@@ -123,7 +123,7 @@ export function retrieveKnowledgeChunks(
       .slice(0, maxDocuments);
     for (const document of fallbackDocuments) {
       const chunks = splitIntoChunks(document.content, maxChunkCharacters);
-      for (const text of chunks.slice(0, 1)) {
+      for (const text of chunks.slice(0, maxChunksPerDocument)) {
         ranked.push({ document, text, score: 0 });
       }
     }
