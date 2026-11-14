@@ -12,6 +12,8 @@ on:
       - "modules/ezra-wake-word/**"
       - "plugins/withEzraWakeWord.js"
       - "src/voice/**"
+      - "src/documents/**"
+      - "modules/ezra-document-ocr/**"
       - "src/phone/**"
       - "src/EzraOrb3D.tsx"
       - "package.json"
@@ -209,6 +211,12 @@ jobs:
           test -s "$APK"
           unzip -l "$APK" | grep -q "assets/index.android.bundle"
           echo "Verified: APK contains assets/index.android.bundle"
+          unzip -l "$APK" | grep -q "lib/arm64-v8a/libaudiocpp.so"
+          unzip -l "$APK" | grep -q "lib/arm64-v8a/libezra_habibi_jni.so"
+          unzip -l "$APK" | grep -q "lib/arm64-v8a/libleptonica.so"
+          unzip -l "$APK" | grep -q "lib/arm64-v8a/libtesseract.so"
+          unzip -l "$APK" | grep -q "lib/arm64-v8a/libtesseract_jni.so"
+          echo "Verified: Habibi JNI/audio.cpp and Tesseract OCR native libraries are packaged"
 
       - name: Upload EZRA Android APK with Habibi runtime
         uses: actions/upload-artifact@v4
