@@ -3287,12 +3287,14 @@ export default function App() {
     }
 
     const generation = ++speechPlaybackGenerationRef.current;
+    // Set speaking state synchronously, before awaiting native stop calls. Otherwise
+    // the auto-listen effect can reopen the microphone in the gap before TTS starts.
+    activeSpokenTextRef.current = text;
+    setSpeakingMessageId(messageId);
     Speech.stop();
     await EzraHabibiTts?.stopAudio().catch(() => {});
     if (speechPlaybackGenerationRef.current !== generation) return;
     activeHabibiSpeechRef.current = null;
-    activeSpokenTextRef.current = text;
-    setSpeakingMessageId(messageId);
     const speechLanguage = DEFAULT_EZRA_VOICE.automaticOutputLanguage
       ? detectEzraSpeechLanguage(text, responseLanguage)
       : responseLanguage;
