@@ -43,14 +43,21 @@ const NativeLiveAudio = Platform.OS === 'android'
   ? requireNativeModule<EzraLiveAudioNative>('EzraLiveAudio')
   : null;
 
+const MAX_PENDING_MIC_CHUNKS = 50;
+
 function transcriptionText(value: any): string {
   return typeof value?.text === 'string' ? value.text : '';
 }
 
-/** Starts a native 16 kHz microphone and streams it to Gemini Live. */
+/**
+ * Start Android microphone capture before the network handshake. Audio is
+ * buffered briefly while the Gemini Live WebSocket is being authorized and
+ * configured, so the user can speak immediately after tapping the mic.
+ */
 export async function startEzraLiveVoiceSession(
   responseLanguage: 'ar' | 'en',
   callbacks: EzraLiveVoiceCallbacks = {},
+  voiceName = 'Charon',
 ): Promise<EzraLiveVoiceSession> {
   if (Platform.OS !== 'android' || !NativeLiveAudio) {
     throw new Error('المحادثة الصوتية المباشرة متاحة حاليًا على Android فقط.');
@@ -64,6 +71,8 @@ export async function startEzraLiveVoiceSession(
   let micSubscription: { remove: () => void } | null = null;
   let errorSubscription: { remove: () => void } | null = null;
   let stopped = false;
+  const pendingMicChunks: string[] = [];
+  const pendingText: string[] = [];
 
   const stop = async () => {
     if (stopped) return;
@@ -79,11 +88,36 @@ export async function startEzraLiveVoiceSession(
     try { await NativeLiveAudio.stopPlayback(); } catch {}
     connection?.close();
     connection = null;
+    pendingMicChunks.length = 0;
+    pendingText.length = 0;
   };
 
   try {
-    connection = await connectEzraGeminiLive(responseLanguage, {
-      onOpen: () => callbacks.onReady?.(),
+    // Subscribe first, then start capture. Chunks are queued until Live is ready.
+    micSubscription = NativeLiveAudio.addListener('onAudioChunk', event => {
+      if (!active || !('data' in event)) return;
+      if (typeof event.level === 'number') callbacks.onMicLevel?.(event.level);
+      if (connection && connection.socket.readyState === WebSocket.OPEN) {
+        try {
+          connection.sendAudio(event.data);
+        } catch (error) {
+          callbacks.onError?.(error instanceof Error ? error.message : 'تعذّر إرسال صوت الميكروفون.');
+        }
+      } else {
+        pendingMicChunks.push(event.data);
+        if (pendingMicChunks.length > MAX_PENDING_MIC_CHUNKS) pendingMicChunks.shift();
+      }
+    });
+    errorSubscription = NativeLiveAudio.addListener('onAudioError', event => {
+      if (active && 'message' in event) callbacks.onError?.(event.message);
+    });
+
+    await NativeLiveAudio.startRecording();
+    await NativeLiveAudio.startPlayback();
+
+    // Resolve the session now; do not keep the mic button waiting for network.
+    // The connection continues in the background and reports ready/failure by callback.
+    void connectEzraGeminiLive(responseLanguage, voiceName, {
       onMessage: message => {
         if (!active) return;
         const serverContent = message?.serverContent;
@@ -130,9 +164,6 @@ export async function startEzraLiveVoiceSession(
         if (serverContent?.turnComplete) {
           const finalOutput = transcriptionText(serverContent?.outputTranscription ?? message?.outputTranscription);
           if (finalOutput) callbacks.onOutputTranscript?.(finalOutput, true);
-          // turnComplete may arrive before the queued PCM is written. After
-          // every chunk has been submitted, wait for AudioTrack's playback head
-          // to consume the final frame before returning to microphone listening.
           const completedGeneration = playbackGeneration;
           void playbackQueue.then(async () => {
             if (!active || completedGeneration !== playbackGeneration) return;
@@ -148,34 +179,35 @@ export async function startEzraLiveVoiceSession(
         }
       },
       onError: message => {
-        // A transport error is followed by onClose; route the turn through the safe fallback.
-        if (/انقطع الاتصال بخدمة Gemini Live/.test(message)) return;
-        callbacks.onError?.(message);
+        if (active) callbacks.onError?.(message);
       },
       onClose: (code, reason) => {
-        if (!active) return;
-        // Gemini ephemeral tokens are single-use (uses: 1). Reopening a
-        // WebSocket with the consumed token for session resumption is rejected.
-        // Fall back cleanly instead of entering a reconnect loop.
-        callbacks.onClosed?.(code, reason || 'انتهت جلسة Gemini Live؛ سيتم استخدام الصوت الاحتياطي.');
+        if (active) callbacks.onClosed?.(code, reason || 'انتهت جلسة Gemini Live.');
       },
-    });
-
-    await NativeLiveAudio.startPlayback();
-    micSubscription = NativeLiveAudio.addListener('onAudioChunk', event => {
-      if (!active || !('data' in event)) return;
-      if (typeof event.level === 'number') callbacks.onMicLevel?.(event.level);
-      if (!connection || connection.socket.readyState !== WebSocket.OPEN) return;
-      try {
-        connection.sendAudio(event.data);
-      } catch (error) {
-        callbacks.onError?.(error instanceof Error ? error.message : 'تعذّر إرسال صوت الميكروفون.');
+    }).then(nextConnection => {
+      if (!active) {
+        nextConnection.close();
+        return;
       }
+      connection = nextConnection;
+      for (const chunk of pendingMicChunks.splice(0)) {
+        if (!active || nextConnection.socket.readyState !== WebSocket.OPEN) break;
+        try { nextConnection.sendAudio(chunk); } catch (error) {
+          callbacks.onError?.(error instanceof Error ? error.message : 'تعذّر إرسال الصوت المحفوظ مؤقتًا.');
+          break;
+        }
+      }
+      for (const text of pendingText.splice(0)) {
+        if (!active) break;
+        try { nextConnection.sendText(text); } catch (error) {
+          callbacks.onError?.(error instanceof Error ? error.message : 'تعذّر إرسال النص إلى Gemini Live.');
+          break;
+        }
+      }
+      callbacks.onReady?.();
+    }).catch(error => {
+      if (active) callbacks.onError?.(error instanceof Error ? error.message : 'تعذّر الاتصال بـ Gemini Live.');
     });
-    errorSubscription = NativeLiveAudio.addListener('onAudioError', event => {
-      if (active && 'message' in event) callbacks.onError?.(event.message);
-    });
-    await NativeLiveAudio.startRecording();
   } catch (error) {
     await stop();
     throw error;
@@ -183,8 +215,12 @@ export async function startEzraLiveVoiceSession(
 
   return {
     sendText: text => {
-      if (!active || !connection) throw new Error('جلسة الصوت غير متاحة.');
-      connection.sendText(text);
+      if (!active) throw new Error('جلسة الصوت غير متاحة.');
+      if (connection && connection.socket.readyState === WebSocket.OPEN) {
+        connection.sendText(text);
+      } else {
+        pendingText.push(text);
+      }
     },
     stop,
   };
