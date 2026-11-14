@@ -11,10 +11,13 @@ import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.NoiseSuppressor
 import android.media.audiofx.AutomaticGainControl
 import android.os.Process
+import android.os.SystemClock
 import android.util.Base64
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.sqrt
 
 class EzraLiveAudioModule : Module() {
@@ -26,6 +29,8 @@ class EzraLiveAudioModule : Module() {
   @Volatile private var automaticGainControl: AutomaticGainControl? = null
   private val recording = AtomicBoolean(false)
   private val playing = AtomicBoolean(false)
+  private val playbackEpoch = AtomicInteger(0)
+  private val submittedPlaybackFrames = AtomicLong(0)
   @Volatile private var audioManager: AudioManager? = null
   @Volatile private var previousAudioMode: Int? = null
   @Volatile private var previousSpeakerphoneOn: Boolean? = null
@@ -162,6 +167,8 @@ class EzraLiveAudioModule : Module() {
       }
       track.play()
       player = track
+      submittedPlaybackFrames.set(0)
+      playbackEpoch.incrementAndGet()
       playing.set(true)
       mapOf("started" to true, "sampleRate" to sampleRate)
     }
@@ -174,14 +181,45 @@ class EzraLiveAudioModule : Module() {
         val written = track.write(bytes, offset, bytes.size - offset, AudioTrack.WRITE_BLOCKING)
         if (written < 0) throw IllegalStateException("Android audio output failed with code $written.")
         if (written == 0) break
+        submittedPlaybackFrames.addAndGet((written / 2).toLong())
         offset += written
       }
       mapOf("writtenBytes" to offset)
     }
 
+    // Wait until Android's playback head has consumed every PCM frame written
+    // for the current playback generation. WRITE_BLOCKING alone only confirms
+    // that bytes entered AudioTrack's buffer; it does not mean they were heard.
+    AsyncFunction("awaitPlaybackComplete") {
+      val track = player ?: return@AsyncFunction mapOf("completed" to false)
+      val epoch = playbackEpoch.get()
+      val targetFrames = submittedPlaybackFrames.get()
+      val startedAt = SystemClock.elapsedRealtime()
+      val expectedDurationMs = (targetFrames * 1000L / 24000L)
+      val timeoutMs = (expectedDurationMs + 5000L).coerceAtMost(120000L)
+      while (playing.get() && player === track && playbackEpoch.get() == epoch) {
+        val playedFrames = Integer.toUnsignedLong(track.playbackHeadPosition)
+        if (playedFrames >= targetFrames) {
+          return@AsyncFunction mapOf("completed" to true)
+        }
+        if (SystemClock.elapsedRealtime() - startedAt > timeoutMs) {
+          throw IllegalStateException("انتهت مهلة انتظار اكتمال تشغيل صوت Gemini.")
+        }
+        try {
+          Thread.sleep(5)
+        } catch (_: InterruptedException) {
+          Thread.currentThread().interrupt()
+          throw IllegalStateException("تم إيقاف انتظار تشغيل الصوت.")
+        }
+      }
+      mapOf("completed" to false)
+    }
+
     AsyncFunction("clearPlayback") {
       val track = player
       if (track != null && playing.get()) {
+        playbackEpoch.incrementAndGet()
+        submittedPlaybackFrames.set(0)
         try {
           track.pause()
           track.flush()
@@ -195,6 +233,8 @@ class EzraLiveAudioModule : Module() {
 
     AsyncFunction("stopPlayback") {
       playing.set(false)
+      playbackEpoch.incrementAndGet()
+      submittedPlaybackFrames.set(0)
       try { player?.pause() } catch (_: Exception) {}
       try { player?.flush() } catch (_: Exception) {}
       try { player?.stop() } catch (_: Exception) {}
