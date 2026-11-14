@@ -145,7 +145,7 @@ export async function startEzraLiveVoiceSession(
         }
       },
       onError: message => {
-        // A transport error is followed by onClose; let session resumption run first.
+        // A transport error is followed by onClose; route the turn through the safe fallback.
         if (/انقطع الاتصال بخدمة Gemini Live/.test(message)) return;
         callbacks.onError?.(message);
       },
