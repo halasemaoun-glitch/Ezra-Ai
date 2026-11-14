@@ -106,11 +106,19 @@ function installDocumentTextDecoderCompat(): void {
 export const MAX_EXTRACTED_DOCUMENT_BYTES = 50 * 1024 * 1024;
 
 type EzraDocumentOcrNative = {
-  extractPdfText: (uri: string, maxPages: number, maxOutputChars: number) => Promise<{
+  extractPdfText: (
+    uri: string,
+    startPage: number,
+    maxPages: number,
+    maxOutputChars: number,
+    forceOcr: boolean,
+  ) => Promise<{
     text: string;
     pagesProcessed: number;
     totalPages: number;
-    truncated: boolean;
+    nextPage: number;
+    mode: 'embedded' | 'ocr';
+    outputLimitReached: boolean;
   }>;
 };
 
@@ -118,15 +126,64 @@ const EzraDocumentOcr = Platform.OS === 'android'
   ? requireNativeModule<EzraDocumentOcrNative>('EzraDocumentOcr')
   : null;
 
-async function extractScannedPdfText(uri?: string): Promise<string> {
+async function extractScannedPdfText(
+  uri?: string,
+  maxExtractedBytes = MAX_EXTRACTED_DOCUMENT_BYTES,
+  onProgress?: (pagesProcessed: number, totalPages: number) => void,
+): Promise<string> {
   if (Platform.OS !== 'android' || !EzraDocumentOcr || !uri) {
     throw new Error('هذا PDF لا يحتوي على نص رقمي. قراءة الصفحات المصوّرة تحتاج OCR على Android.');
   }
-  const result = await EzraDocumentOcr.extractPdfText(uri, 250, 16_000_000);
-  const text = result.text.trim();
+
+  // Bound every native call to 12 pages so a large scanned book does not
+  // monopolize the JS bridge or hold one long-running native operation.
+  const pageBatchSize = 12;
+  const maxCharsPerBatch = 1_000_000;
+  const chunks: string[] = [];
+  let startPage = 0;
+  let totalPages = 0;
+  let extractedBytes = 0;
+  let forceOcr = false;
+  let outputLimitReached = false;
+
+  while (startPage < (totalPages || Number.POSITIVE_INFINITY)) {
+    const result = await EzraDocumentOcr.extractPdfText(
+      uri,
+      startPage,
+      pageBatchSize,
+      maxCharsPerBatch,
+      forceOcr,
+    );
+    totalPages = result.totalPages;
+    if (!Number.isFinite(totalPages) || totalPages <= 0) {
+      throw new Error('ملف PDF لا يحتوي على صفحات قابلة للقراءة.');
+    }
+    if (result.nextPage <= startPage || result.pagesProcessed < 0) {
+      throw new Error('توقفت معالجة صفحات PDF قبل إكمالها. أعد اختيار الملف وحاول مرة أخرى.');
+    }
+
+    const chunk = result.text.trim();
+    if (chunk) {
+      const chunkBytes = new TextEncoder().encode(chunk).byteLength;
+      if (extractedBytes + chunkBytes > maxExtractedBytes) {
+        throw new Error('النص المستخرج أكبر من الحد المسموح (50 ميغابايت). قسّم المستند إلى ملفات أصغر.');
+      }
+      chunks.push(chunk);
+      extractedBytes += chunkBytes;
+    }
+
+    forceOcr = result.mode === 'ocr';
+    startPage = result.nextPage;
+    outputLimitReached = result.outputLimitReached;
+    onProgress?.(Math.min(startPage, totalPages), totalPages);
+
+    if (outputLimitReached) break;
+  }
+
+  const text = chunks.join('\n\n').trim();
   if (!text) throw new Error('لم يتمكن OCR من العثور على نص واضح في صفحات PDF.');
-  const pageNotice = result.truncated
-    ? `\n\n[ملاحظة: تمت معالجة ${result.pagesProcessed} من أصل ${result.totalPages} صفحة بسبب حدود المعالجة.]`
+  const pageNotice = startPage < totalPages
+    ? `\n\n[ملاحظة: تمت قراءة ${startPage} من أصل ${totalPages} صفحة بسبب حد حجم النص.]`
     : '';
   return `${text}${pageNotice}`;
 }
@@ -175,7 +232,7 @@ export async function extractDocumentText(
       if (extension === 'pdf') {
         // Ream extracts embedded text from digital PDFs. If parsing fails or the
         // PDF is image-only, use the Android on-device Arabic/English OCR engine.
-        content = await extractScannedPdfText(sourceUri);
+        content = await extractScannedPdfText(sourceUri, maxExtractedBytes);
       } else if (/format|unsupported|sniff|invalid|corrupt/i.test(message)) {
         throw new Error('تعذّرت قراءة بنية الملف. تأكد أن امتداده يطابق محتواه وأنه غير تالف.');
       } else if (/textdecoder|encoding|windows-1252|codec/i.test(message)) {
@@ -190,7 +247,7 @@ export async function extractDocumentText(
   }
 
   if (!content.trim() && extension === 'pdf') {
-    content = await extractScannedPdfText(sourceUri);
+    content = await extractScannedPdfText(sourceUri, maxExtractedBytes);
   }
   if (!content.trim()) {
     throw new Error('الملف فارغ أو لا يحتوي على نص قابل للاستخراج.');
@@ -213,6 +270,7 @@ export async function extractDocumentTextFromUri(
   sourceUri: string,
   sourceSizeBytes?: number,
   maxExtractedBytes = MAX_EXTRACTED_DOCUMENT_BYTES,
+  onProgress?: (pagesProcessed: number, totalPages: number) => void,
 ): Promise<ExtractedDocument> {
   const extension = getDocumentExtension(fileName);
   if (!isSupportedDocumentExtension(extension)) {
@@ -225,7 +283,7 @@ export async function extractDocumentTextFromUri(
   // Every Android PDF is processed natively off the JS thread: PDFBox first
   // extracts an embedded text layer, then PdfRenderer/Tesseract handles scanned pages.
   if (extension === 'pdf' && Platform.OS === 'android' && EzraDocumentOcr) {
-    const content = await extractScannedPdfText(sourceUri);
+    const content = await extractScannedPdfText(sourceUri, maxExtractedBytes, onProgress);
     const extractedBytes = new TextEncoder().encode(content).byteLength;
     if (extractedBytes > maxExtractedBytes) {
       throw new Error('النص المستخرج أكبر من الحد المسموح (50 ميغابايت). قسّم المستند إلى ملفات أصغر.');
