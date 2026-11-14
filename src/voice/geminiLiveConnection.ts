@@ -19,7 +19,7 @@ export type GeminiLiveConnection = {
 
 const LIVE_MODEL = 'models/gemini-3.8-live';
 const LIVE_SOCKET_URL =
-  'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained';
+  'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained';
 
 export async function connectEzraGeminiLive(
   responseLanguage: 'ar' | 'en',
@@ -33,6 +33,7 @@ export async function connectEzraGeminiLive(
   }
 
   const token = data.token as string;
+  const systemInstruction = typeof data.systemInstruction === 'string' ? data.systemInstruction : '';
   const expiresAt = typeof data.expiresAt === 'string'
     ? new Date(data.expiresAt).getTime()
     : Date.now() + 30 * 60 * 1000;
@@ -69,6 +70,7 @@ export async function connectEzraGeminiLive(
           setup: {
             model: LIVE_MODEL,
             generationConfig: { responseModalities: ["AUDIO"] },
+            systemInstruction: { parts: [{ text: systemInstruction }] },
             sessionResumption: resumptionHandle ? { handle: resumptionHandle } : {},
             contextWindowCompression: { slidingWindow: {} },
             inputAudioTranscription: {},
