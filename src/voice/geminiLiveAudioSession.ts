@@ -25,6 +25,7 @@ export type EzraLiveVoiceCallbacks = {
   onReady?: () => void;
   onInputTranscript?: (text: string, finished: boolean) => void;
   onOutputTranscript?: (text: string, finished: boolean) => void;
+  onAssistantAudioStarted?: () => void;
   onTurnComplete?: () => void;
   onInterrupted?: () => void;
   onError?: (message: string) => void;
@@ -106,6 +107,7 @@ export async function startEzraLiveVoiceSession(
             const audio = part?.inlineData;
             if (typeof audio?.data !== 'string' || !audio.data) continue;
             const generation = playbackGeneration;
+            callbacks.onAssistantAudioStarted?.();
             playbackQueue = playbackQueue.then(async () => {
               if (!active || generation !== playbackGeneration) return;
               await NativeLiveAudio.playPcmChunk(audio.data);
