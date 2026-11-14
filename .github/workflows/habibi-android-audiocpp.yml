@@ -46,6 +46,11 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Install Android NDK and CMake
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "ndk;27.2.12479018 cmake;3.31.6"
+
       - name: Download previously verified audio.cpp Android runtime
         id: cached-runtime
         uses: actions/download-artifact@v4
