@@ -58,3 +58,13 @@ Deno.test('retrieval still supplies a source excerpt when the question uses diff
     throw new Error('A source document was silently omitted when lexical terms did not match');
   }
 });
+
+Deno.test('fallback samples long documents beyond the opening page when wording does not match', () => {
+  const filler = 'مقدمة عامة لا تحتوي على مصطلحات السؤال. '.repeat(140);
+  const important = 'المعلومة المطلوبة: الرقم المرجعي هو 7842 ويظهر في نهاية الفصل.';
+  const docs = [document('long-source', 'كتاب.pdf', [filler, filler, important].join('\n'))];
+  const result = retrieveKnowledgeChunks(docs, 'ما الرمز المختلف تماماً؟');
+  if (!result.some(item => item.text.includes('7842'))) {
+    throw new Error('Fallback context did not sample later sections of the document');
+  }
+});
