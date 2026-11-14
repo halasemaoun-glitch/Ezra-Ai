@@ -30,6 +30,7 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   android-arm64-engine:
@@ -45,19 +46,38 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Install Android NDK and CMake
-        uses: android-actions/setup-android@v3
+      - name: Download previously verified audio.cpp Android runtime
+        id: cached-runtime
+        uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
-          packages: "ndk;27.2.12479018 cmake;3.31.6"
+          name: ezra-habibi-audiocpp-android-arm64
+          path: habibi-seed
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 43585543073
 
-      - name: Checkout audio.cpp with submodules
+      - name: Reuse verified audio.cpp runtime (source-equivalent v0.9.4)
+        if: steps.cached-runtime.outcome == 'success'
+        run: |
+          test -s habibi-seed/libs/libaudiocpp.so
+          echo "c0ab88f0bca6b2e3a5d636f2aae278d976f418c87778923df3862427bb4f1ea4  habibi-seed/libs/libaudiocpp.so" | sha256sum --check -
+          mkdir -p build-habibi-android/bin audio-cpp/include
+          cp habibi-seed/libs/libaudiocpp.so build-habibi-android/bin/
+          cp habibi-seed/include/audiocpp.h audio-cpp/include/
+          cp habibi-seed/LICENSE audio-cpp/LICENSE
+
+      - name: Checkout audio.cpp with submodules (fallback when cache is unavailable)
+        if: steps.cached-runtime.outcome != 'success'
         run: |
           git clone --depth 1 --branch v0.9.4 --recurse-submodules https://github.com/0xShug0/audio.cpp.git audio-cpp
 
       - name: Apply Q8_0, sequential-CFG, and compact graph-arena RAM optimizations
+        if: steps.cached-runtime.outcome != 'success'
         run: python3 scripts/patch_habibi_q8.py audio-cpp/src/community_models/f5_tts/weights.cpp audio-cpp/src/community_models/f5_tts/synthesize.cpp audio-cpp/src/community_models/f5_tts/runtime.cpp
 
       - name: Configure Habibi runtime for Android arm64
+        if: steps.cached-runtime.outcome != 'success'
         run: |
           export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.2.12479018"
           test -f "$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake"
@@ -88,6 +108,7 @@ jobs:
             -DENGINE_BUILD_MODEL_TESTS=OFF
 
       - name: Compile Habibi C ABI for Android arm64
+        if: steps.cached-runtime.outcome != 'success'
         run: cmake --build build-habibi-android --parallel 4 --target audiocpp
 
       - name: Build EZRA JNI bridge against the native runtime
