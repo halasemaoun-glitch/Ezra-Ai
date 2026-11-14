@@ -1,12 +1,11 @@
 /**
  * EZRA's agreed voice profile.
  *
- * Habibi-TTS remains the intended primary engine. Its Android bridge compiles in
- * CI; until inference and playback are verified on the target phone, App.tsx
- * retains expo-speech as a safe fallback.
+ * Gemini Live generates the primary conversational voice. Android system TTS
+ * remains the free fallback for ordinary text replies when Live is unavailable.
  */
 export const DEFAULT_EZRA_VOICE = {
-  engine: 'habibi-tts' as const,
+  engine: 'gemini-live' as const,
   style: 'male-warm-deep' as const,
   // Slightly slower pacing and a lower fallback pitch create a calmer,
   // warmer masculine presentation on Android system TTS voices.
@@ -14,7 +13,7 @@ export const DEFAULT_EZRA_VOICE = {
   rate: 0.88,
   pitch: 0.78,
   languages: ['ar', 'en'] as const,
-  // Habibi unified supports Algerian (ALG) and Levantine (LEV) dialect tokens.
+  // Gemini Live handles Arabic and English speech natively.
   dialects: ['Algerian Arabic', 'Levantine Arabic'] as const,
   automaticOutputLanguage: true,
 };
