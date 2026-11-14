@@ -126,29 +126,6 @@ const EzraHabibiTts = Platform.OS === 'android'
     }>('EzraHabibiTts')
   : null;
 
-const splitHabibiText = (text: string, maxLength = 24) => {
-  const words = text.trim().split(/\s+/).filter(Boolean);
-  const chunks: string[] = [];
-  let current = '';
-  for (const word of words) {
-    const candidate = current ? `${current} ${word}` : word;
-    if (candidate.length > maxLength && current.length >= 10) {
-      chunks.push(current);
-      current = word;
-    } else {
-      current = candidate;
-    }
-  }
-  if (current) {
-    if (current.length < 10 && chunks.length && chunks[chunks.length - 1].length + current.length < maxLength + 15) {
-      chunks[chunks.length - 1] += ` ${current}`;
-    } else {
-      chunks.push(current);
-    }
-  }
-  return chunks.length ? chunks : [text];
-};
-
 const formatBytes = (bytes: number) => {
   if (!Number.isFinite(bytes) || bytes < 0) return 'غير متاح';
   const gb = bytes / (1024 ** 3);
@@ -399,7 +376,7 @@ export default function App() {
   const [habibiEngineReady, setHabibiEngineReady] = useState(false);
   const [habibiEngineBusy, setHabibiEngineBusy] = useState(false);
   const [habibiEngineError, setHabibiEngineError] = useState('');
-  const activeHabibiSpeechRef = useRef<{ text: string; messageId: string; chunks: string[]; nextIndex: number } | null>(null);
+  const activeHabibiSpeechRef = useRef<{ text: string; messageId: string } | null>(null);
   const activeSpokenTextRef = useRef('');
   const habibiAutoInitStartedRef = useRef(false);
   const [autoSpeak, setAutoSpeak] = useState(true);
@@ -3147,34 +3124,29 @@ export default function App() {
     }
   };
 
-  const playNextHabibiChunk = async () => {
-    const active = activeHabibiSpeechRef.current;
-    if (!active || !EzraHabibiTts) return;
-    if (active.nextIndex >= active.chunks.length) {
-      finishVoiceCaptureAfterPlayback();
-      activeHabibiSpeechRef.current = null;
-      setSpeakingMessageId(current => current === active.messageId ? null : current);
-      resumeBackgroundWake();
-      return;
-    }
-    const chunk = active.chunks[active.nextIndex];
-    active.nextIndex += 1;
+  const playHabibiMessage = async (text: string, messageId: string) => {
+    if (!EzraHabibiTts) return;
+    const active = { text, messageId };
+    activeHabibiSpeechRef.current = active;
     try {
       const outputDirectory = FileSystem.cacheDirectory || FileSystem.documentDirectory || '';
-      const outputPath = `${outputDirectory}ezra-habibi-${Date.now()}-${active.nextIndex}.wav`;
-      const generated = await EzraHabibiTts.synthesize(chunk, outputPath);
+      const outputPath = `${outputDirectory}ezra-habibi-${Date.now()}.wav`;
+      // Send the complete response in one native request. F5-TTS performs its own
+      // duration-aware internal chunking for the 256-frame Android memory budget
+      // and returns one continuous WAV, avoiding JS-level playback gaps.
+      const generated = await EzraHabibiTts.synthesize(text, outputPath);
       if (activeHabibiSpeechRef.current !== active) return;
       await EzraHabibiTts.playAudio(generated.path);
     } catch (error) {
       if (activeHabibiSpeechRef.current !== active) return;
       activeHabibiSpeechRef.current = null;
       setHabibiEngineError(error instanceof Error ? error.message : 'تعذّر توليد الصوت عبر Habibi.');
-      console.warn('Habibi chunk synthesis failed; using Android TTS fallback:', error);
+      console.warn('Habibi synthesis failed; using Android TTS fallback:', error);
       setHabibiEngineReady(false);
       AsyncStorage.removeItem('ezra:habibiEnabled').catch(() => {});
       EzraHabibiTts?.shutdown().catch(() => {});
       const fallbackArabicVoice = ttsVoices.find(voice => voice.identifier === selectedTtsVoice && voice.language.toLowerCase().startsWith('ar'));
-      Speech.speak(active.text, {
+      Speech.speak(text, {
         language: 'ar',
         ...(fallbackArabicVoice ? { voice: fallbackArabicVoice.identifier } : {}),
         rate: speechRate,
@@ -3182,17 +3154,17 @@ export default function App() {
         volume: 1,
         onDone: () => {
           finishVoiceCaptureAfterPlayback();
-          setSpeakingMessageId(current => current === active.messageId ? null : current);
+          setSpeakingMessageId(current => current === messageId ? null : current);
           resumeBackgroundWake();
         },
         onStopped: () => {
           finishVoiceCaptureAfterPlayback();
-          setSpeakingMessageId(current => current === active.messageId ? null : current);
+          setSpeakingMessageId(current => current === messageId ? null : current);
           resumeBackgroundWake();
         },
         onError: () => {
           finishVoiceCaptureAfterPlayback();
-          setSpeakingMessageId(current => current === active.messageId ? null : current);
+          setSpeakingMessageId(current => current === messageId ? null : current);
           resumeBackgroundWake();
         },
       });
@@ -3231,13 +3203,7 @@ export default function App() {
       : responseLanguage;
 
     if (speechLanguage === 'ar' && habibiEngineReady && EzraHabibiTts && Platform.OS === 'android') {
-      activeHabibiSpeechRef.current = {
-        text,
-        messageId,
-        chunks: splitHabibiText(text),
-        nextIndex: 0,
-      };
-      await playNextHabibiChunk();
+      await playHabibiMessage(text, messageId);
       return;
     }
 
@@ -3273,12 +3239,15 @@ export default function App() {
   useEffect(() => {
     if (!EzraHabibiTts) return;
     const finished = EzraHabibiTts.addListener('onPlaybackFinished', () => {
-      if (activeHabibiSpeechRef.current) {
-        playNextHabibiChunk().catch(error => console.warn('Could not continue Habibi playback:', error));
+      const finishedSpeech = activeHabibiSpeechRef.current;
+      activeHabibiSpeechRef.current = null;
+      finishVoiceCaptureAfterPlayback();
+      if (finishedSpeech) {
+        setSpeakingMessageId(current => current === finishedSpeech.messageId ? null : current);
       } else {
         setSpeakingMessageId(null);
-        resumeBackgroundWake();
       }
+      resumeBackgroundWake();
     });
     const failed = EzraHabibiTts.addListener('onPlaybackError', () => {
       const pending = activeHabibiSpeechRef.current;
