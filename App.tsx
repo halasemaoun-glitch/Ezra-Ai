@@ -1757,6 +1757,10 @@ export default function App() {
             }
           }, 1900);
         } else {
+          // A fresh partial hypothesis means the user has resumed speaking;
+          // cancel the previous silence timer so we never cut a phrase in half.
+          if (voiceFinalSegmentTimerRef.current) clearTimeout(voiceFinalSegmentTimerRef.current);
+          voiceFinalSegmentTimerRef.current = null;
           visibleTranscript = appendVoiceTranscriptSegment(voiceTranscriptRef.current, transcript);
         }
       } else {
