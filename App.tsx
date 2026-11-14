@@ -3027,6 +3027,7 @@ export default function App() {
           liveVoiceAssistantMessageIdRef.current = null;
           liveVoiceLocalCommandHandledRef.current = false;
           const liveSession = await startEzraLiveVoiceSession(responseLanguage, {
+            onMicLevel: level => setVoiceLevel(previous => previous * 0.58 + level * 0.42),
             onInputTranscript: (text, finished) => {
               if (finished) {
                 liveVoiceInputTranscriptRef.current = appendVoiceTranscriptSegment(liveVoiceInputTranscriptRef.current, text);
