@@ -13,6 +13,7 @@ type EzraLiveAudioNative = {
   stopRecording: () => Promise<{ stopped: boolean }>;
   startPlayback: () => Promise<{ started: boolean; sampleRate: number }>;
   playPcmChunk: (base64Pcm: string) => Promise<{ writtenBytes: number }>;
+  awaitPlaybackComplete: () => Promise<{ completed: boolean }>;
   clearPlayback: () => Promise<{ cleared: boolean }>;
   stopPlayback: () => Promise<{ stopped: boolean }>;
   addListener: (
@@ -129,16 +130,18 @@ export async function startEzraLiveVoiceSession(
         if (serverContent?.turnComplete) {
           const finalOutput = transcriptionText(serverContent?.outputTranscription ?? message?.outputTranscription);
           if (finalOutput) callbacks.onOutputTranscript?.(finalOutput, true);
-          // Gemini can signal turnComplete before all queued PCM chunks have
-          // finished writing to AudioTrack. Do not return to listening or clear
-          // the speaking state until the complete reply has reached the speaker.
+          // turnComplete may arrive before the queued PCM is written. After
+          // every chunk has been submitted, wait for AudioTrack's playback head
+          // to consume the final frame before returning to microphone listening.
           const completedGeneration = playbackGeneration;
-          void playbackQueue.then(() => {
-            if (active && completedGeneration === playbackGeneration) {
+          void playbackQueue.then(async () => {
+            if (!active || completedGeneration !== playbackGeneration) return;
+            const playback = await NativeLiveAudio.awaitPlaybackComplete();
+            if (playback.completed && active && completedGeneration === playbackGeneration) {
               callbacks.onTurnComplete?.();
             }
           }).catch(error => {
-            if (active) callbacks.onError?.(
+            if (active && completedGeneration === playbackGeneration) callbacks.onError?.(
               error instanceof Error ? error.message : 'تعذّر إكمال تشغيل صوت Gemini.',
             );
           });
