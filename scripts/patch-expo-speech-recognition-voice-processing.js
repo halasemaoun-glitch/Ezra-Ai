@@ -79,7 +79,7 @@ source = replaceExactlyOnce(
 
 source = replaceExactlyOnce(
   source,
-  '        audioRecorder?.stop()\n        stoppedAtMillis = System.currentTimeMillis()\n        audioRecorder?.release()\n',
+  '        isRecordingAudio = false\n        audioRecorder?.stop()\n        acousticEchoCanceler?.release()\n        acousticEchoCanceler = null\n        audioRecorder?.release()\n',
   `        audioRecorder?.stop()
         // Release the effect before releasing the AudioRecord session it is attached to.
         acousticEchoCanceler?.release()
