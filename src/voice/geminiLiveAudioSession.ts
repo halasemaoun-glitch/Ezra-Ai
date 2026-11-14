@@ -60,8 +60,6 @@ export async function startEzraLiveVoiceSession(
   let interruptedAwaitingTurnComplete = false;
   let playbackQueue = Promise.resolve();
   let connection: GeminiLiveConnection | null = null;
-  let resumptionHandle: string | null = null;
-  let resumeInProgress = false;
   let micSubscription: { remove: () => void } | null = null;
   let errorSubscription: { remove: () => void } | null = null;
   let stopped = false;
@@ -87,10 +85,6 @@ export async function startEzraLiveVoiceSession(
       onOpen: () => callbacks.onReady?.(),
       onMessage: message => {
         if (!active) return;
-        const resumptionUpdate = message?.sessionResumptionUpdate;
-        if (resumptionUpdate?.resumable && typeof resumptionUpdate.newHandle === 'string') {
-          resumptionHandle = resumptionUpdate.newHandle;
-        }
         const serverContent = message?.serverContent;
         if (serverContent?.interrupted) {
           interruptedAwaitingTurnComplete = true;
@@ -157,26 +151,10 @@ export async function startEzraLiveVoiceSession(
       },
       onClose: (code, reason) => {
         if (!active) return;
-        if (
-          resumptionHandle &&
-          connection &&
-          Date.now() < connection.expiresAt &&
-          !resumeInProgress
-        ) {
-          resumeInProgress = true;
-          const handle = resumptionHandle;
-          void connection.resume(handle).then(() => {
-            resumeInProgress = false;
-          }).catch(error => {
-            resumeInProgress = false;
-            if (active) callbacks.onClosed?.(
-              code,
-              error instanceof Error ? error.message : (reason || 'تعذّر استئناف جلسة Gemini Live.'),
-            );
-          });
-          return;
-        }
-        callbacks.onClosed?.(code, reason);
+        // Gemini ephemeral tokens are single-use (uses: 1). Reopening a
+        // WebSocket with the consumed token for session resumption is rejected.
+        // Fall back cleanly instead of entering a reconnect loop.
+        callbacks.onClosed?.(code, reason || 'انتهت جلسة Gemini Live؛ سيتم استخدام الصوت الاحتياطي.');
       },
     });
 
