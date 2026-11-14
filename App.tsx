@@ -761,18 +761,23 @@ export default function App() {
     }
     setHabibiEngineBusy(true);
     setHabibiEngineError('');
+    const generation = ++speechPlaybackGenerationRef.current;
     try {
       Speech.stop();
       await EzraHabibiTts.stopAudio().catch(() => {});
+      if (speechPlaybackGenerationRef.current !== generation) return;
+      activeHabibiSpeechRef.current = { text: 'أهلاً، أنا إزرا.', messageId: 'habibi-test', generation };
       const outputDirectory = FileSystem.cacheDirectory || FileSystem.documentDirectory || '';
       const outputPath = `${outputDirectory}ezra-habibi-test-${Date.now()}.wav`;
       const generated = await EzraHabibiTts.synthesize(
         'أهلاً، أنا إزرا.',
         outputPath
       );
+      if (speechPlaybackGenerationRef.current !== generation) return;
       setSpeakingMessageId('habibi-test');
       await EzraHabibiTts.playAudio(generated.path);
     } catch (error) {
+      if (activeHabibiSpeechRef.current?.messageId === 'habibi-test') activeHabibiSpeechRef.current = null;
       const message = error instanceof Error ? error.message : 'تعذّر توليد عينة الاختبار.';
       setHabibiEngineError(message);
       setSpeakingMessageId(null);
