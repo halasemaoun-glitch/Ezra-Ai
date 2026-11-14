@@ -48,12 +48,6 @@ export async function connectEzraGeminiLive(
       socket.send(JSON.stringify({
         setup: {
           model: LIVE_MODEL,
-          generationConfig: {
-            responseModalities: ['AUDIO'],
-          },
-          realtimeInputConfig: {
-            automaticActivityDetection: { disabled: false },
-          },
         },
       }));
     };
