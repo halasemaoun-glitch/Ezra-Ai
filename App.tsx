@@ -1221,7 +1221,9 @@ export default function App() {
         Alert.alert('صيغة غير مدعومة', 'يمكنك إضافة TXT وMD وCSV وJSON وPDF وDOCX وPPTX وXLSX.');
         return;
       }
-      if (typeof file.size === 'number' && file.size > MAX_DOCUMENT_SOURCE_BYTES) {
+      const fileInfo = typeof file.size === 'number' ? null : await FileSystem.getInfoAsync(file.uri).catch(() => null);
+      const sourceSizeBytes = typeof file.size === 'number' ? file.size : (fileInfo?.exists ? fileInfo.size : undefined);
+      if (typeof sourceSizeBytes === 'number' && sourceSizeBytes > MAX_DOCUMENT_SOURCE_BYTES) {
         Alert.alert('الملف كبير', 'الحد الأقصى لحجم المستند الأصلي 50 ميغابايت.');
         return;
       }
@@ -1233,7 +1235,7 @@ export default function App() {
       const extracted = await extractDocumentTextFromUri(
         file.name,
         file.uri,
-        typeof file.size === 'number' ? file.size : undefined,
+        sourceSizeBytes,
         MAX_EXTRACTED_DOCUMENT_BYTES,
       );
       const now = new Date().toISOString();
@@ -3078,7 +3080,9 @@ export default function App() {
         Alert.alert('نوع الملف غير مدعوم', 'يمكنك إرفاق TXT وMD وCSV وJSON وPDF وDOCX وPPTX وXLSX.');
         return;
       }
-      if (typeof file.size === 'number' && file.size > MAX_DOCUMENT_SOURCE_BYTES) {
+      const fileInfo = typeof file.size === 'number' ? null : await FileSystem.getInfoAsync(file.uri).catch(() => null);
+      const sourceSizeBytes = typeof file.size === 'number' ? file.size : (fileInfo?.exists ? fileInfo.size : undefined);
+      if (typeof sourceSizeBytes === 'number' && sourceSizeBytes > MAX_DOCUMENT_SOURCE_BYTES) {
         Alert.alert('الملف كبير جدًا', 'الحد الأقصى لحجم المرفق 50 ميغابايت.');
         return;
       }
@@ -3088,7 +3092,7 @@ export default function App() {
       const extracted = await extractDocumentTextFromUri(
         file.name,
         file.uri,
-        typeof file.size === 'number' ? file.size : undefined,
+        sourceSizeBytes,
         MAX_EXTRACTED_DOCUMENT_BYTES,
       );
       setAttachment({
@@ -3097,7 +3101,7 @@ export default function App() {
         kind: 'file',
         mimeType: file.mimeType || getDocumentMimeType(extension),
         textContent: extracted.content,
-        sizeBytes: typeof file.size === 'number' ? file.size : 0,
+        sizeBytes: typeof sourceSizeBytes === 'number' ? sourceSizeBytes : 0,
       });
     } catch (error) {
       Alert.alert('تعذّر فتح الملف', error instanceof Error ? error.message : 'حاول مرة أخرى.');
