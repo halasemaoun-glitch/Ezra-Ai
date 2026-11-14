@@ -20,7 +20,7 @@
       },
       "package": "com.halasemaoun.ezra",
       "versionCode": 1,
-      "permissions": ["MODIFY_AUDIO_SETTINGS"]
+      "permissions": ["RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS"]
     },
     "plugins": [
       [
