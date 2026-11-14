@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+import { requireNativeModule } from 'expo-modules-core';
 import {
   getDocumentExtension,
   htmlToPlainText,
@@ -103,7 +105,7 @@ function installDocumentTextDecoderCompat(): void {
 }
 export const MAX_EXTRACTED_DOCUMENT_BYTES = 8 * 1024 * 1024;
 
- type EzraDocumentOcrNative = {
+type EzraDocumentOcrNative = {
   extractPdfText: (uri: string, maxPages: number, maxOutputChars: number) => Promise<{
     text: string;
     pagesProcessed: number;
@@ -139,6 +141,7 @@ export async function extractDocumentText(
   fileName: string,
   bytes: Uint8Array,
   maxExtractedBytes = MAX_EXTRACTED_DOCUMENT_BYTES,
+  sourceUri?: string,
 ): Promise<ExtractedDocument> {
   const extension = getDocumentExtension(fileName);
   if (!isSupportedDocumentExtension(extension)) {
