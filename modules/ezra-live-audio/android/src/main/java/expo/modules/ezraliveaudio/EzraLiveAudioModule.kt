@@ -15,6 +15,7 @@ import android.util.Base64
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.sqrt
 
 class EzraLiveAudioModule : Module() {
   @Volatile private var recorder: AudioRecord? = null
@@ -78,9 +79,20 @@ class EzraLiveAudioModule : Module() {
           }
           if (count > 0 && recording.get()) {
             val frame = if (count == buffer.size) buffer.copyOf() else buffer.copyOf(count)
+            var sumSquares = 0.0
+            var samples = 0
+            var index = 0
+            while (index + 1 < count) {
+              val sample = ((buffer[index].toInt() and 0xff) or (buffer[index + 1].toInt() shl 8)).toShort().toInt()
+              sumSquares += sample.toDouble() * sample.toDouble()
+              samples += 1
+              index += 2
+            }
+            val level = if (samples > 0) (sqrt(sumSquares / samples) / 12000.0).coerceIn(0.0, 1.0) else 0.0
             sendEvent("onAudioChunk", mapOf(
               "data" to Base64.encodeToString(frame, Base64.NO_WRAP),
-              "mimeType" to "audio/pcm;rate=16000"
+              "mimeType" to "audio/pcm;rate=16000",
+              "level" to level
             ))
           } else if (count < 0 && recording.get()) {
             sendEvent("onAudioError", mapOf("message" to "Microphone read failed with code $count."))
