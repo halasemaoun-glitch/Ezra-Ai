@@ -116,17 +116,19 @@ type HabibiDeviceCapacity = {
   androidApi: number;
 };
 
-const EzraHabibiTts = Platform.OS === 'android'
-  ? requireNativeModule<{
-      getDeviceCapacity: () => Promise<HabibiDeviceCapacity>;
-      initialize: (modelPath: string, referenceWavPath: string, transcript: string, dialect: string, threads: number) => Promise<{ ready: boolean; engine: 'habibi-tts'; dialect: string }>;
-      synthesize: (text: string, outputPath: string) => Promise<{ path: string; bytes: number }>;
-      playAudio: (path: string) => Promise<{ playing: true }>;
-      stopAudio: () => Promise<{ stopped: true }>;
-      shutdown: () => Promise<{ ready: false }>;
-      addListener: (eventName: 'onPlaybackFinished' | 'onPlaybackError', listener: (event: { path?: string; what?: number; extra?: number }) => void) => { remove: () => void };
-    }>('EzraHabibiTts')
-  : null;
+type EzraHabibiTtsModule = {
+  getDeviceCapacity: () => Promise<HabibiDeviceCapacity>;
+  initialize: (modelPath: string, referenceWavPath: string, transcript: string, dialect: string, threads: number) => Promise<{ ready: boolean; engine: 'habibi-tts'; dialect: string }>;
+  synthesize: (text: string, outputPath: string) => Promise<{ path: string; bytes: number }>;
+  playAudio: (path: string) => Promise<{ playing: true }>;
+  stopAudio: () => Promise<{ stopped: true }>;
+  shutdown: () => Promise<{ ready: false }>;
+  addListener: (eventName: 'onPlaybackFinished' | 'onPlaybackError', listener: (event: { path?: string; what?: number; extra?: number }) => void) => { remove: () => void };
+};
+
+// Habibi was removed from the active app path. Live Gemini audio is primary;
+// Android's installed TTS voices are the free fallback for ordinary messages.
+const EzraHabibiTts: EzraHabibiTtsModule | null = null;
 
 const formatBytes = (bytes: number) => {
   if (!Number.isFinite(bytes) || bytes < 0) return 'غير متاح';
@@ -431,6 +433,18 @@ export default function App() {
   const [ttsVoices, setTtsVoices] = useState<{ identifier: string; name: string; language: string; quality?: string }[]>([]);
   const [selectedTtsVoice, setSelectedTtsVoice] = useState<string | null>(null);
   const [selectedEnglishTtsVoice, setSelectedEnglishTtsVoice] = useState<string | null>(null);
+  const [selectedGeminiLiveVoice, setSelectedGeminiLiveVoice] = useState('Charon');
+  const [geminiLiveStatus, setGeminiLiveStatus] = useState('سيتم الاتصال عند تشغيل الميكروفون');
+
+  useEffect(() => {
+    let active = true;
+    AsyncStorage.getItem('ezra:geminiLiveVoice').then(value => {
+      if (active && ['Charon', 'Fenrir', 'Orus', 'Zephyr', 'Kore', 'Puck', 'Aoede'].includes(value || '')) {
+        setSelectedGeminiLiveVoice(value as string);
+      }
+    }).catch(() => {});
+    return () => { active = false; };
+  }, []);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [chatLoading, setChatLoading] = useState(false);
@@ -532,25 +546,21 @@ export default function App() {
   };
 
   useEffect(() => {
-    AsyncStorage.multiGet([
+    setHabibiEngineReady(false);
+    setHabibiModelPath('');
+    setHabibiReferencePath('');
+    setHabibiReferenceTranscript('');
+    AsyncStorage.multiRemove([
       'ezra:habibiModelPath',
       'ezra:habibiReferencePath',
       'ezra:habibiReferenceTranscript',
       'ezra:habibiDialect',
-    ]).then(values => {
-      const savedModelPath = values[0]?.[1] ?? '';
-      if (savedModelPath.includes('/habibi-unified/') && savedModelPath.endsWith('/habibi-unified-orig.gguf')) {
-        setHabibiModelPath(savedModelPath);
-      } else {
-        setHabibiModelPath('');
-        if (savedModelPath) AsyncStorage.multiRemove(['ezra:habibiModelPath', 'ezra:habibiEnabled']).catch(() => {});
-      }
-      if (values[1]?.[1]) setHabibiReferencePath(values[1][1]);
-      if (values[2]?.[1]) setHabibiReferenceTranscript(values[2][1]);
-      const savedDialect = values[3]?.[1] === 'LEV' ? 'LEV' : 'ALG';
-      setHabibiDialect(savedDialect);
-      AsyncStorage.setItem('ezra:habibiDialect', savedDialect).catch(() => {});
-    }).catch(error => console.warn('Could not restore Habibi setup:', error));
+      'ezra:habibiEnabled',
+    ]).catch(() => {});
+    if (FileSystem.documentDirectory) {
+      FileSystem.deleteAsync(`${FileSystem.documentDirectory}habibi-unified/`, { idempotent: true }).catch(() => {});
+      FileSystem.deleteAsync(`${FileSystem.documentDirectory}habibi-reference.wav`, { idempotent: true }).catch(() => {});
+    }
   }, []);
 
   const downloadHabibiModel = async () => {
@@ -2765,12 +2775,15 @@ export default function App() {
             setSpeechPitch(DEFAULT_EZRA_VOICE.pitch);
             setSelectedTtsVoice(null);
             setSelectedEnglishTtsVoice(null);
+            setSelectedGeminiLiveVoice('Charon');
+            setGeminiLiveStatus('سيتم الاتصال عند تشغيل الميكروفون');
             setSpeakingMessageId(null);
             try {
               await AsyncStorage.multiSet([
                 ['ezra:responseLanguage', 'ar'],
                 ['ezra:speechRate', String(DEFAULT_EZRA_VOICE.rate)],
                 ['ezra:speechPitch', String(DEFAULT_EZRA_VOICE.pitch)],
+                ['ezra:geminiLiveVoice', 'Charon'],
               ]);
               await AsyncStorage.multiRemove(['ezra:ttsVoice', 'ezra:ttsEnglishVoice']);
               Alert.alert('تمت إعادة الضبط', 'عادت إعدادات اللغة وسرعة وعمق الصوت إلى القيم الافتراضية.');
@@ -3005,6 +3018,7 @@ export default function App() {
     liveVoiceSessionRef.current = null;
     liveVoiceConnectingRef.current = false;
     liveVoiceUnavailableRef.current = true;
+    setGeminiLiveStatus(`تعذّر Gemini Live: ${reason.slice(0, 150)}`);
     const pendingUserText = liveVoiceInputTranscriptRef.current.trim();
     liveVoiceInputTranscriptRef.current = '';
     liveVoiceOutputTranscriptRef.current = '';
@@ -3051,7 +3065,14 @@ export default function App() {
           liveVoiceOutputTranscriptRef.current = '';
           liveVoiceAssistantMessageIdRef.current = null;
           liveVoiceLocalCommandHandledRef.current = false;
+          setGeminiLiveStatus('الميكروفون يعمل الآن؛ جارٍ الاتصال بـ Gemini Live…');
           const liveSession = await startEzraLiveVoiceSession(responseLanguage, {
+            onReady: () => {
+              setAssistantConnection('online');
+              setGeminiLiveStatus(`متصل — صوت Gemini Live: ${selectedGeminiLiveVoice}`);
+              setVoiceRetrying(false);
+              setVoiceRetryMessage('');
+            },
             onMicLevel: level => setVoiceLevel(previous => previous * 0.58 + level * 0.42),
             onInputTranscript: (text, finished) => {
               if (finished) {
@@ -3133,7 +3154,7 @@ export default function App() {
             onClosed: (code, reason) => {
               if (liveVoiceSessionRef.current) fallbackFromGeminiLive(reason || `WebSocket closed (${code})`);
             },
-          });
+          }, selectedGeminiLiveVoice);
           if (!appIsActiveRef.current || !autoListenRef.current || !voiceHome || liveVoiceUnavailableRef.current) {
             await liveSession.stop();
             liveVoiceConnectingRef.current = false;
@@ -3146,13 +3167,13 @@ export default function App() {
           voiceRecognitionActiveRef.current = false;
           setVoiceRetrying(false);
           setVoiceRetryMessage('');
-          setAssistantConnection('online');
           setVoiceLevel(0);
           setIsListening(true);
           return;
         } catch (liveError) {
           liveVoiceConnectingRef.current = false;
           liveVoiceUnavailableRef.current = true;
+          setGeminiLiveStatus(`فشل بدء Gemini Live: ${liveError instanceof Error ? liveError.message.slice(0, 150) : 'خطأ غير معروف'}`);
           console.warn('Gemini Live startup failed; using existing voice recognition:', liveError);
         }
       }
@@ -4240,217 +4261,46 @@ export default function App() {
                     ><Text style={styles.rateButtonText}>English</Text></TouchableOpacity>
                   </View>
                 </View>
-                <View style={{ padding: 15, borderRadius: 15, backgroundColor: '#241625', borderWidth: 1, borderColor: '#80516F', gap: 7 }}>
-                  <Text style={{ color: '#F5DDED', fontSize: 14, fontWeight: '800', textAlign: 'right' }}>Gemini Live — المحرك الأساسي للمحادثة الصوتية</Text>
-                  <Text style={{ color: '#D8C2D2', fontSize: 11, lineHeight: 19, textAlign: 'right' }}>يبدأ تلقائيًا عند تشغيل الاستماع على Android: يستمع ويتحدث مباشرة عبر جلسة صوتية واحدة. إذا تعذّر اتصال Gemini أو انتهت الحصة، ينتقل EZRA إلى Groq للرد ثم Habibi للصوت العربي عند جاهزيته، وصوت Android كاحتياط أخير.</Text>
-                  <Text style={{ color: '#A9D7B9', fontSize: 10, textAlign: 'right' }}>لا يحتاج إلى تنزيل نموذج صوت منفصل حتى يبدأ Gemini Live.</Text>
-                </View>
-                <View style={styles.settingRow}>
-                  <View style={styles.settingCopy}>
-                    <Text style={styles.settingTitle}>ملف صوت EZRA المعتمد</Text>
-                    <Text style={styles.settingHint}>صوت رجالي دافئ وعميق · تُكتشف لغة القراءة من نص الرد</Text>
-                    <Text style={styles.settingHint}>Habibi-TTS هو المحرك العربي الأساسي بعد تنزيل النموذج واعتماد عينة صوت؛ صوت الهاتف احتياطي عند عدم جاهزيته.</Text>
-                    <Text style={styles.settingHint}>تنبيه الذاكرة: تهيئة Habibi تتطلب 2.2 GB RAM متاحة على الأقل قبل تحميل النموذج إلى الذاكرة؛ هذا شرط أمان وليس ضمانًا للتشغيل على كل هاتف.</Text>
-                    <Text style={styles.settingHint}>الصوت العربي: الجزائرية أو الشامية عبر Habibi · الإنجليزية: محرك النظام</Text>
-                    <Text style={styles.settingHint}>الصوت الاحتياطي يعتمد على الأصوات المثبّتة في Android؛ خفض طبقة الصوت وحده لا يضمن صوتًا رجاليًا.</Text>
-                  </View>
+                <View style={{ padding: 15, borderRadius: 15, backgroundColor: '#241625', borderWidth: 1, borderColor: '#80516F', gap: 8 }}>
+                  <Text style={{ color: '#F5DDED', fontSize: 14, fontWeight: '800', textAlign: 'right' }}>Gemini Live — الصوت المباشر الأساسي</Text>
+                  <Text style={{ color: '#D8C2D2', fontSize: 11, lineHeight: 19, textAlign: 'right' }}>هذا المحرك يستمع ويرد بصوت مولّد من Gemini نفسه. لا يستخدم قارئ Android أثناء جلسة Live. إذا تعذّر الاتصال، ينتقل EZRA إلى Groq للرد ثم إلى صوت Android المثبّت على الهاتف كخيار احتياطي مجاني.</Text>
+                  <Text style={{ color: '#A9D7B9', fontSize: 10, lineHeight: 17, textAlign: 'right' }}>حالة Gemini Live: {geminiLiveStatus}</Text>
                 </View>
                 <View style={[styles.settingRow, { flexDirection: 'column', alignItems: 'stretch', gap: 10 }]}>
                   <View style={styles.settingCopy}>
-                    <Text style={styles.settingTitle}>محرك الصوت المحلي Habibi-TTS</Text>
-                    <Text style={styles.settingHint}>{habibiEngineReady ? 'جاهز · العربية عبر Habibi متعدد اللهجات' : habibiModelPath ? 'نموذج Habibi الموحد محفوظ · يحتاج عينة صوت وتفعيل' : 'نزّلي نموذج Habibi الموحد متعدد اللهجات ليعمل محليًا دون API صوت مدفوع.'}</Text>
+                    <Text style={styles.settingTitle}>صوت Gemini Live</Text>
+                    <Text style={styles.settingHint}>الصوت المختار: {selectedGeminiLiveVoice}. يُطبّق عند بدء جلسة صوتية جديدة.</Text>
                   </View>
                   <TouchableOpacity
-                    style={[styles.memorySaveButton, { marginTop: 0, opacity: habibiModelDownloading ? 0.6 : 1 }]}
-                    onPress={downloadHabibiModel}
-                    disabled={habibiModelDownloading || Platform.OS !== 'android'}
+                    style={styles.memorySaveButton}
+                    onPress={() => Alert.alert('اختيار صوت Gemini Live', 'اختاري الصوت الذي سيولّد الردود الصوتية مباشرة من Gemini:', [
+                      ...[
+                        ['Charon', 'هادئ وواضح'],
+                        ['Fenrir', 'حيوي وقوي'],
+                        ['Orus', 'ثابت وواثق'],
+                        ['Zephyr', 'ناعم ومشرق'],
+                        ['Kore', 'لطيف ومتوازن'],
+                        ['Puck', 'مرح وحيوي'],
+                        ['Aoede', 'هادئ وانسيابي'],
+                      ].map(([voice, description]) => ({
+                        text: `${voice} — ${description}${selectedGeminiLiveVoice === voice ? ' ✓' : ''}`,
+                        onPress: () => {
+                          setSelectedGeminiLiveVoice(voice);
+                          AsyncStorage.setItem('ezra:geminiLiveVoice', voice).catch(() => {});
+                          setGeminiLiveStatus('سيُستخدم الصوت الجديد عند بدء الجلسة التالية');
+                        },
+                      })),
+                      { text: 'إلغاء', style: 'cancel' as const },
+                    ])}
                   >
-                    <Text style={styles.memorySaveText}>{habibiModelDownloading ? `تنزيل Habibi… ${Math.round(habibiDownloadProgress * 100)}%` : habibiModelPath ? 'التحقق من النموذج / تنزيله' : 'تنزيل نموذج Habibi'}</Text>
-                  </TouchableOpacity>
-                  <View style={{ height: 5, borderRadius: 5, backgroundColor: '#302631', overflow: 'hidden' }}>
-                    <View style={{ height: 5, width: `${Math.round(habibiDownloadProgress * 100)}%`, backgroundColor: '#C47AA8' }} />
-                  </View>
-                  <TouchableOpacity style={[styles.memorySaveButton, { marginTop: 0 }]} onPress={pickHabibiReference} disabled={Platform.OS !== 'android'}>
-                    <Text style={styles.memorySaveText}>{habibiReferencePath ? 'تغيير عينة الصوت الرجالي' : 'اختيار عينة صوت رجالي WAV'}</Text>
-                  </TouchableOpacity>
-                  <TextInput
-                    style={[styles.authInput, { minHeight: 48, textAlign: 'right', writingDirection: 'rtl' }]}
-                    value={habibiReferenceTranscript}
-                    onChangeText={value => { setHabibiReferenceTranscript(value); setHabibiEngineReady(false); EzraHabibiTts?.shutdown().catch(() => {}); AsyncStorage.removeItem('ezra:habibiEnabled').catch(() => {}); }}
-                    onBlur={() => AsyncStorage.setItem('ezra:habibiReferenceTranscript', habibiReferenceTranscript.trim()).catch(() => {})}
-                    placeholder="اكتب حرفيًا ما يقوله التسجيل الصوتي"
-                    placeholderTextColor="#777680"
-                    multiline
-                  />
-                  <Text style={styles.settingHint}>العينة يجب أن تكون صوت رجل واضحًا، WAV PCM 16-bit، من نصف ثانية إلى 1.2 ثانية، مع نص مطابق تمامًا. تسجيلك السابق يبقى احتياطيًا ولن نستخدمه هنا.</Text>
-                  <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' }}>
-                    <TouchableOpacity style={[styles.rateButton, habibiDialect === 'ALG' && styles.languageButtonActive, { paddingHorizontal: 16 }]} onPress={() => { setHabibiDialect('ALG'); setHabibiEngineReady(false); void EzraHabibiTts?.shutdown().catch(() => {}); void AsyncStorage.setItem('ezra:habibiDialect', 'ALG'); void AsyncStorage.removeItem('ezra:habibiEnabled'); }} disabled={habibiEngineBusy}>
-                      <Text style={styles.rateButtonText}>الجزائرية · ALG</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.rateButton, habibiDialect === 'LEV' && styles.languageButtonActive, { paddingHorizontal: 16 }]} onPress={() => { setHabibiDialect('LEV'); setHabibiEngineReady(false); void EzraHabibiTts?.shutdown().catch(() => {}); void AsyncStorage.setItem('ezra:habibiDialect', 'LEV'); void AsyncStorage.removeItem('ezra:habibiEnabled'); }} disabled={habibiEngineBusy}>
-                      <Text style={styles.rateButtonText}>الشامية · LEV</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <Text style={styles.settingHint}>النموذج الموحد يدعم الجزائرية والشامية بطابع سوري وفلسطيني وأردني. اختاري اللهجة ثم أعيدي تفعيل Habibi لتطبيقها على الصوت العربي.</Text>
-                  <TouchableOpacity
-                    style={[styles.memorySaveButton, { marginTop: 0, opacity: habibiEngineBusy ? 0.6 : 1 }]}
-                    onPress={() => { void initializeHabibiEngine(); }}
-                    disabled={habibiEngineBusy || Platform.OS !== 'android'}
-                  >
-                    <Text style={styles.memorySaveText}>{habibiEngineBusy ? 'جارٍ تحميل المحرك…' : habibiEngineReady ? 'إعادة تهيئة Habibi' : 'تفعيل Habibi كمحرك الصوت العربي'}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.memorySaveButton, { marginTop: 0, opacity: habibiEngineBusy || !habibiEngineReady ? 0.55 : 1 }]}
-                    onPress={testHabibiVoice}
-                    disabled={habibiEngineBusy || !habibiEngineReady || Platform.OS !== 'android'}
-                  >
-                    <Text style={styles.memorySaveText}>{habibiEngineBusy ? 'جارٍ تجهيز الصوت…' : 'تجربة صوت EZRA'}</Text>
-                  </TouchableOpacity>
-                  {habibiEngineError ? <Text style={styles.authError}>{habibiEngineError}</Text> : null}
-                </View>
-                <View style={styles.settingRow}>
-                  <View style={styles.settingCopy}><Text style={styles.settingTitle}>كلمة التنبيه «يا EZRA»</Text><Text style={styles.settingHint}>استماع بالخلفية بإشعار دائم · قد يقيّد النظام الخدمة عند قفل الشاشة أو توفير البطارية</Text></View>
-                  <Switch value={backgroundWakeEnabled} onValueChange={toggleBackgroundWake} trackColor={{ false: '#39323D', true: '#875477' }} thumbColor={backgroundWakeEnabled ? '#F2C8E5' : '#AAA'} />
-                </View>
-                <View style={styles.settingRow}>
-                  <View style={styles.settingCopy}><Text style={styles.settingTitle}>الاستماع التلقائي</Text><Text style={styles.settingHint}>يستمع بعد فتح الشاشة وبعد كل رد</Text></View>
-                  <Switch value={autoListen} onValueChange={value => {
-                    autoListenRef.current = value;
-                    setAutoListen(value);
-                    if (!value) {
-                      setVoiceRetrying(false);
-                      setVoiceRetryMessage('');
-                      voiceTranscriptRef.current = '';
-                      if (isListening || voiceStartInFlightRef.current || voiceRecognitionActiveRef.current) {
-                        voiceStartInFlightRef.current = false;
-                        ExpoSpeechRecognitionModule.abort();
-                        setIsListening(false);
-                      }
-                    }
-                    AsyncStorage.setItem('ezra:autoListen', String(value)).catch(() => {});
-                  }} trackColor={{ false: '#39323D', true: '#875477' }} thumbColor={autoListen ? '#F2C8E5' : '#AAA'} />
-                </View>
-                <View style={[styles.settingRow, { flexDirection: 'column', alignItems: 'stretch', gap: 10 }]}>
-                  <View style={styles.settingCopy}>
-                    <Text style={styles.settingTitle}>حساسية الميكروفون</Text>
-                    <Text style={styles.settingHint}>{micSensitivity <= 25 ? 'منخفضة' : micSensitivity >= 75 ? 'مرتفعة' : 'متوازنة'} · {micSensitivity}%</Text>
-                    <Text style={styles.settingHint}>ارفعي الحساسية لالتقاط المقاطع الأقصر وإنهاء الكلام بعد فواصل أقصر، وخفّضيها لتجاهل الأصوات القصيرة وانتظار توقف أطول. يؤثر الضبط في عتبة المقاطعة ومدد الكلام والصمت التي يرسلها EZRA إلى Android؛ بعض مزودي التعرف قد يتجاهلون هذه التلميحات، وتُطبّق مدد الكلام والصمت عند جلسة الاستماع التالية. لا يغيّر هذا كسب الميكروفون المادي.</Text>
-                  </View>
-                  <View style={{ height: 7, borderRadius: 8, backgroundColor: '#342A36', overflow: 'hidden' }}>
-                    <View style={{ height: 7, width: `${micSensitivity}%`, backgroundColor: '#C47AA8' }} />
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                    <TouchableOpacity accessibilityRole="button" accessibilityLabel="خفض حساسية الميكروفون" disabled={micSensitivity <= 0} onPress={() => { const next = normalizeMicSensitivity(micSensitivity - 5); micSensitivityRef.current = next; setMicSensitivity(next); AsyncStorage.setItem('ezra:micSensitivity', String(next)).catch(() => {}); }} style={[styles.rateButton, { opacity: micSensitivity <= 0 ? 0.4 : 1 }]}><Text style={styles.rateButtonText}>−</Text></TouchableOpacity>
-                    <Text style={{ color: '#E8C7DC', fontSize: 12, fontWeight: '700' }}>أقل حساسية ←  → أعلى حساسية</Text>
-                    <TouchableOpacity accessibilityRole="button" accessibilityLabel="رفع حساسية الميكروفون" disabled={micSensitivity >= 100} onPress={() => { const next = normalizeMicSensitivity(micSensitivity + 5); micSensitivityRef.current = next; setMicSensitivity(next); AsyncStorage.setItem('ezra:micSensitivity', String(next)).catch(() => {}); }} style={[styles.rateButton, { opacity: micSensitivity >= 100 ? 0.4 : 1 }]}><Text style={styles.rateButtonText}>＋</Text></TouchableOpacity>
-                  </View>
-                  <TouchableOpacity accessibilityRole="button" onPress={() => { micSensitivityRef.current = DEFAULT_MIC_SENSITIVITY; setMicSensitivity(DEFAULT_MIC_SENSITIVITY); AsyncStorage.setItem('ezra:micSensitivity', String(DEFAULT_MIC_SENSITIVITY)).catch(() => {}); }} style={{ alignSelf: 'flex-end', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, borderWidth: 1, borderColor: '#69465F' }}><Text style={{ color: '#E8B8D7', fontSize: 10, fontWeight: '700' }}>استعادة الحساسية الافتراضية</Text></TouchableOpacity>
-                </View>
-                <View style={styles.settingRow}>
-                  <View style={styles.settingCopy}><Text style={styles.settingTitle}>قراءة ردود EZRA تلقائيًا</Text><Text style={styles.settingHint}>ينطق الرد بعد وصوله</Text></View>
-                  <Switch value={autoSpeak} onValueChange={value => { setAutoSpeak(value); AsyncStorage.setItem('ezra:autoSpeak', String(value)).catch(() => {}); }} trackColor={{ false: '#39323D', true: '#875477' }} thumbColor={autoSpeak ? '#F2C8E5' : '#AAA'} />
-                </View>
-                <View style={styles.settingRow}>
-                  <View style={styles.settingCopy}><Text style={styles.settingTitle}>سرعة الصوت</Text><Text style={styles.settingHint}>{speechRate.toFixed(2)}×</Text></View>
-                  <View style={styles.rateControls}>
-                    <TouchableOpacity style={styles.rateButton} onPress={() => { const v = Math.max(0.75, Number((speechRate - 0.05).toFixed(2))); setSpeechRate(v); AsyncStorage.setItem('ezra:speechRate', String(v)).catch(() => {}); }}><Text style={styles.rateButtonText}>−</Text></TouchableOpacity>
-                    <TouchableOpacity style={styles.rateButton} onPress={() => { const v = Math.min(1.15, Number((speechRate + 0.05).toFixed(2))); setSpeechRate(v); AsyncStorage.setItem('ezra:speechRate', String(v)).catch(() => {}); }}><Text style={styles.rateButtonText}>＋</Text></TouchableOpacity>
-                  </View>
-                </View>
-                <View style={styles.settingRow}>
-                  <View style={styles.settingCopy}><Text style={styles.settingTitle}>عمق الصوت</Text><Text style={styles.settingHint}>{speechPitch.toFixed(2)} · نبرة أعمق</Text></View>
-                  <View style={styles.rateControls}>
-                    <TouchableOpacity style={styles.rateButton} onPress={() => { const value = Math.max(0.75, Number((speechPitch - 0.05).toFixed(2))); setSpeechPitch(value); AsyncStorage.setItem('ezra:speechPitch', String(value)).catch(() => {}); }}><Text style={styles.rateButtonText}>−</Text></TouchableOpacity>
-                    <TouchableOpacity style={styles.rateButton} onPress={() => { const value = Math.min(1.1, Number((speechPitch + 0.05).toFixed(2))); setSpeechPitch(value); AsyncStorage.setItem('ezra:speechPitch', String(value)).catch(() => {}); }}><Text style={styles.rateButtonText}>＋</Text></TouchableOpacity>
-                  </View>
-                </View>
-                <View style={styles.settingRow}>
-                  <View style={styles.settingCopy}>
-                    <Text style={styles.settingTitle}>الصوت العربي</Text>
-                    <Text style={styles.settingHint}>{ttsVoices.find(voice => voice.identifier === selectedTtsVoice)?.name || 'تلقائي · أفضل صوت محسّن متاح'}</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.voiceTopButton}
-                    onPress={() => {
-                      const arabicVoices = ttsVoices
-                        .filter(voice => voice.language.toLowerCase().startsWith('ar'))
-                        .sort((a, b) => Number(b.quality === 'Enhanced') - Number(a.quality === 'Enhanced'));
-                      Alert.alert('اختيار الصوت العربي', 'اختر صوتًا متاحًا على هاتفك. يمكنك تجربة الأصوات لاختيار الأنسب لك.', [
-                        { text: 'تلقائي · الأفضل', onPress: () => { setSelectedTtsVoice(null); AsyncStorage.removeItem('ezra:ttsVoice').catch(() => {}); } },
-                        ...arabicVoices.slice(0, 8).map(voice => ({
-                          text: `${voice.name}${voice.quality === 'Enhanced' ? ' · محسّن' : ''} · تجربة`,
-                          onPress: () => {
-                            setSelectedTtsVoice(voice.identifier);
-                            AsyncStorage.setItem('ezra:ttsVoice', voice.identifier).catch(() => {});
-                            Speech.stop();
-                            Speech.speak('مرحباً، أنا إزرا. سعيد بالحديث معك، كيف أستطيع مساعدتك؟', {
-                              language: 'ar', voice: voice.identifier, rate: speechRate, pitch: speechPitch, volume: 1,
-                            });
-                          },
-                        })),
-                        { text: 'إغلاق', style: 'cancel' as const },
-                      ]);
-                    }}
-                  >
-                    <Text style={styles.voiceTopButtonText}>اختيار</Text>
+                    <Text style={styles.memorySaveText}>اختيار صوت Gemini</Text>
                   </TouchableOpacity>
                 </View>
                 <View style={styles.settingRow}>
                   <View style={styles.settingCopy}>
-                    <Text style={styles.settingTitle}>الصوت الإنجليزي</Text>
-                    <Text style={styles.settingHint}>{ttsVoices.find(voice => voice.identifier === selectedEnglishTtsVoice)?.name || 'تلقائي · أفضل صوت إنجليزي متاح'}</Text>
+                    <Text style={styles.settingTitle}>الصوت الاحتياطي</Text>
+                    <Text style={styles.settingHint}>عند تعذّر Gemini Live، يستخدم EZRA أصوات Android المجانية المثبّتة على هاتفك. يمكنك اختيار صوت عربي وإنجليزي من الخيارات أدناه.</Text>
                   </View>
-                  <TouchableOpacity
-                    style={styles.voiceTopButton}
-                    onPress={() => {
-                      const englishVoices = ttsVoices
-                        .filter(voice => voice.language.toLowerCase().startsWith('en'))
-                        .sort((a, b) => Number(b.quality === 'Enhanced') - Number(a.quality === 'Enhanced'));
-                      Alert.alert('اختيار الصوت الإنجليزي', englishVoices.length
-                        ? 'اختر صوتًا من الأصوات المثبتة على هاتفك واستمع إلى العينة. نوع الصوت (رجالي أو نسائي) يعتمد على المحرك المثبت.'
-                        : 'لا يوجد صوت إنجليزي مثبت حاليًا. أضف صوتًا إنجليزيًا من إعدادات تحويل النص إلى كلام في Android ثم أعد فتح EZRA.', [
-                        { text: 'تلقائي · الأفضل', onPress: () => { setSelectedEnglishTtsVoice(null); AsyncStorage.removeItem('ezra:ttsEnglishVoice').catch(() => {}); } },
-                        ...englishVoices.slice(0, 8).map(voice => ({
-                          text: `${voice.name}${voice.quality === 'Enhanced' ? ' · محسّن' : ''} · تجربة`,
-                          onPress: () => {
-                            setSelectedEnglishTtsVoice(voice.identifier);
-                            AsyncStorage.setItem('ezra:ttsEnglishVoice', voice.identifier).catch(() => {});
-                            Speech.stop();
-                            Speech.speak('Hello, I am EZRA. It is a pleasure to talk with you. How can I help you today?', {
-                              language: 'en', voice: voice.identifier, rate: speechRate, pitch: speechPitch, volume: 1,
-                            });
-                          },
-                        })),
-                        { text: 'إغلاق', style: 'cancel' as const },
-                      ]);
-                    }}
-                  >
-                    <Text style={styles.voiceTopButtonText}>اختيار</Text>
-                  </TouchableOpacity>
-                </View>
-                                <View style={[styles.settingRow, { flexDirection: 'column', alignItems: 'stretch', gap: 10 }]}>
-                  <View style={styles.settingCopy}>
-                    <Text style={styles.settingTitle}>فحص جاهزية Habibi على هذا الهاتف</Text>
-                    <Text style={styles.settingHint}>يقيس الذاكرة والمساحة المتاحة فقط، ولا يحمّل أي نموذج.</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={[styles.memorySaveButton, { marginTop: 0, opacity: habibiCapacityLoading ? 0.6 : 1 }]}
-                    onPress={checkHabibiDeviceCapacity}
-                    disabled={habibiCapacityLoading || Platform.OS !== 'android'}
-                  >
-                    <Text style={styles.memorySaveText}>{habibiCapacityLoading ? 'جارٍ الفحص…' : 'فحص موارد الهاتف'}</Text>
-                  </TouchableOpacity>
-                  {habibiCapacityError ? <Text style={styles.authError}>{habibiCapacityError}</Text> : null}
-                  {habibiCapacity ? (
-                    <View style={{ gap: 6 }}>
-                      <Text style={styles.settingHint}>RAM الكلية: {formatBytes(habibiCapacity.totalRamBytes)}</Text>
-                      <Text style={styles.settingHint}>RAM المتاحة الآن: {formatBytes(habibiCapacity.availableRamBytes)}</Text>
-                      <Text style={styles.settingHint}>ذاكرة التطبيق المتاحة: {formatBytes(habibiCapacity.runtimeFreeHeapBytes)} من {formatBytes(habibiCapacity.runtimeMaxHeapBytes)}</Text>
-                      <Text style={styles.settingHint}>التخزين المتاح للتطبيق: {formatBytes(habibiCapacity.availableAppStorageBytes)}</Text>
-                      <Text style={styles.settingHint}>حالة ضغط الذاكرة: {habibiCapacity.lowMemory ? 'نعم، الجهاز تحت ضغط ذاكرة' : 'لا'}</Text>
-                      <Text style={styles.settingHint}>Android API: {habibiCapacity.androidApi}</Text>
-                    </View>
-                  ) : null}
                 </View>
                 <TouchableOpacity
                   onPress={resetVoiceSoundSettings}
@@ -4460,7 +4310,7 @@ export default function App() {
                 >
                   <Text style={{ color: '#E9B8D8', fontSize: 12, fontWeight: '800' }}>إعادة ضبط اللغة والصوت</Text>
                 </TouchableOpacity>
-                <Text style={styles.settingsFootnote}>بعد تفعيل Habibi تُولّد الردود العربية محليًا بصوت العينة المعتمدة؛ الإنجليزية تستخدم صوت النظام، ويظل صوت النظام احتياطيًا إذا تعذّر تشغيل Habibi. عند تفعيل «يا EZRA» تعمل خدمة استماع أمامية بإشعار دائم ويمكنها إيقاظ التطبيق عند التقاط كلمة التنبيه. قد يقيّد النظام الخدمة أو يوقفها بسبب توفير البطارية؛ أوقف الميزة من هنا متى شئت.</Text>
+                <Text style={styles.settingsFootnote}>تستخدم المحادثة المباشرة صوت Gemini Live نفسه. عند تعذّر الاتصال، يستخدم EZRA محرك تحويل النص إلى كلام المثبّت في Android دون اشتراك أو رسوم إضافية. عند تفعيل «يا EZRA» تعمل خدمة استماع أمامية بإشعار دائم ويمكنها إيقاظ التطبيق عند التقاط كلمة التنبيه. قد يقيّد النظام الخدمة أو يوقفها بسبب توفير البطارية؛ أوقف الميزة من هنا متى شئت.</Text>
                   </>
                 )}
                 </ScrollView>
