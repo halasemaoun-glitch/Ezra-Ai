@@ -3589,7 +3589,7 @@ export default function App() {
                     <View style={{ padding: 14, borderRadius: 15, backgroundColor: '#1B151E', borderWidth: 1, borderColor: '#493747', gap: 7 }}>
                       <Text style={{ color: '#F2D9E9', fontSize: 14, fontWeight: '800', textAlign: 'right' }}>الصيغ المدعومة</Text>
                       <Text style={{ color: '#B9AAB7', fontSize: 12, textAlign: 'right' }}>TXT · MD · CSV · JSON · PDF · DOCX · PPTX · XLSX</Text>
-                      <Text style={{ color: '#8F8290', fontSize: 10, lineHeight: 17, textAlign: 'right' }}>حتى 100 مادة، وبحد أقصى 50 ميغابايت للملف الأصلي و8 ميغابايت للنص المستخرج. تُقرأ ملفات PDF المصوّرة باستخدام OCR على الجهاز.</Text>
+                      <Text style={{ color: '#8F8290', fontSize: 10, lineHeight: 17, textAlign: 'right' }}>حتى 100 مادة، وبحد أقصى 50 ميغابايت للملف الأصلي والنص المستخرج. تُقرأ ملفات PDF المصوّرة باستخدام OCR على الجهاز.</Text>
                     </View>
                     <TouchableOpacity onPress={addKnowledgeDocument} disabled={!knowledgeLoaded || knowledgeLoading || !!knowledgeError || knowledgeDocuments.filter(item => !item.deletedAt).length >= 100} style={{ borderRadius: 15, paddingVertical: 14, alignItems: 'center', backgroundColor: '#754765', borderWidth: 1, borderColor: '#C58DBB', opacity: !knowledgeLoaded || knowledgeLoading || !!knowledgeError || knowledgeDocuments.filter(item => !item.deletedAt).length >= 100 ? 0.55 : 1 }}>
                       <Text style={{ color: '#FFF0F8', fontSize: 14, fontWeight: '800' }}>{knowledgeLoading ? 'جارٍ تحميل المكتبة…' : '＋ إضافة ملف إلى مكتبة المعرفة'}</Text>
