@@ -1,6 +1,8 @@
 package expo.modules.ezraliveaudio
 
+import android.content.Context
 import android.media.AudioAttributes
+import android.media.AudioManager
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.AudioTrack
@@ -23,6 +25,9 @@ class EzraLiveAudioModule : Module() {
   @Volatile private var automaticGainControl: AutomaticGainControl? = null
   private val recording = AtomicBoolean(false)
   private val playing = AtomicBoolean(false)
+  @Volatile private var audioManager: AudioManager? = null
+  @Volatile private var previousAudioMode: Int? = null
+  @Volatile private var previousSpeakerphoneOn: Boolean? = null
 
   override fun definition() = ModuleDefinition {
     Name("EzraLiveAudio")
@@ -133,6 +138,16 @@ class EzraLiveAudioModule : Module() {
         track.release()
         "Android could not start the audio output stream."
       }
+      val manager = appContext.reactContext?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+      if (manager != null) {
+        if (previousAudioMode == null) previousAudioMode = manager.mode
+        if (previousSpeakerphoneOn == null) previousSpeakerphoneOn = manager.isSpeakerphoneOn
+        audioManager = manager
+        try {
+          manager.mode = AudioManager.MODE_IN_COMMUNICATION
+          manager.isSpeakerphoneOn = true
+        } catch (_: Exception) {}
+      }
       track.play()
       player = track
       playing.set(true)
@@ -146,6 +161,7 @@ class EzraLiveAudioModule : Module() {
       while (offset < bytes.size && playing.get()) {
         val written = track.write(bytes, offset, bytes.size - offset, AudioTrack.WRITE_BLOCKING)
         if (written < 0) throw IllegalStateException("Android audio output failed with code $written.")
+        if (written == 0) break
         offset += written
       }
       mapOf("writtenBytes" to offset)
@@ -172,6 +188,16 @@ class EzraLiveAudioModule : Module() {
       try { player?.stop() } catch (_: Exception) {}
       player?.release()
       player = null
+      val manager = audioManager
+      if (manager != null) {
+        try {
+          previousSpeakerphoneOn?.let { manager.isSpeakerphoneOn = it }
+          previousAudioMode?.let { manager.mode = it }
+        } catch (_: Exception) {}
+      }
+      audioManager = null
+      previousAudioMode = null
+      previousSpeakerphoneOn = null
       mapOf("stopped" to true)
     }
   }
