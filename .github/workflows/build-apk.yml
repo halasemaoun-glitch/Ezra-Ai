@@ -5,6 +5,7 @@ on:
     branches:
       - ezra/habibi-android-spike
       - ezra/stability-voice-memory-files
+      - ezra/live-voice-and-file-fix
     paths:
       - '.github/workflows/build-apk.yml'
       - 'App.tsx'
