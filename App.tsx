@@ -3560,33 +3560,40 @@ export default function App() {
   }
 
   if (voiceHome) {
-    const voiceStatus = isListening
-      ? 'إزرا يستمع'
-      : voiceRetrying
-        ? (voiceRetryMessage || 'أعيد الاتصال بالصوت…')
-        : speakingMessageId
-          ? 'إزرا يتحدث'
-          : (sending || chatLoading)
-            ? 'لحظة، أفكر…'
-            : 'أنا هنا';
-    const voiceStatusEnglish = isListening
-      ? 'Ezra is Listening'
-      : voiceRetrying
-        ? 'Reconnecting…'
-        : speakingMessageId
-          ? 'Ezra is Speaking'
-          : (sending || chatLoading)
-            ? 'One moment, I’m thinking…'
-            : 'Ready when you are';
-    const voiceStatusArabic = isListening
-      ? 'إزرا يستمع'
-      : voiceRetrying
-        ? 'أعيد الاتصال بالصوت…'
-        : speakingMessageId
-          ? 'إزرا يتحدث'
-          : (sending || chatLoading)
-            ? 'لحظة واحدة، أنا أفكر…'
-            : 'إزرا جاهز';
+    const liveAssistantSpeaking = !!liveVoiceSessionRef.current && !!speakingMessageId;
+    const voiceStatus = liveAssistantSpeaking
+      ? 'إزرا يتحدث'
+      : isListening
+        ? 'إزرا يستمع'
+        : voiceRetrying
+          ? (voiceRetryMessage || 'أعيد الاتصال بالصوت…')
+          : speakingMessageId
+            ? 'إزرا يتحدث'
+            : (sending || chatLoading)
+              ? 'لحظة، أفكر…'
+              : 'أنا هنا';
+    const voiceStatusEnglish = liveAssistantSpeaking
+      ? 'Ezra is Speaking'
+      : isListening
+        ? 'Ezra is Listening'
+        : voiceRetrying
+          ? 'Reconnecting…'
+          : speakingMessageId
+            ? 'Ezra is Speaking'
+            : (sending || chatLoading)
+              ? 'One moment, I’m thinking…'
+              : 'Ready when you are';
+    const voiceStatusArabic = liveAssistantSpeaking
+      ? 'إزرا يتحدث'
+      : isListening
+        ? 'إزرا يستمع'
+        : voiceRetrying
+          ? 'أعيد الاتصال بالصوت…'
+          : speakingMessageId
+            ? 'إزرا يتحدث'
+            : (sending || chatLoading)
+              ? 'لحظة واحدة، أنا أفكر…'
+              : 'إزرا جاهز';
     return (
       <SafeAreaView style={styles.voiceSafe}>
         <StatusBar style="light" />
