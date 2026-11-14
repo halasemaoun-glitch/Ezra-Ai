@@ -451,6 +451,7 @@ export default function App() {
   const [selectedEnglishTtsVoice, setSelectedEnglishTtsVoice] = useState<string | null>(null);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const speechPlaybackGenerationRef = useRef(0);
+  const speechPlaybackGenerationRef = useRef(0);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [chatLoading, setChatLoading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -3022,6 +3023,7 @@ export default function App() {
       wakeServiceStartedRef.current = false;
     }
     if (speakingMessageId) {
+      speechPlaybackGenerationRef.current += 1;
       Speech.stop();
       activeSpokenTextRef.current = '';
       EzraHabibiTts?.stopAudio().catch(() => {});
@@ -3169,21 +3171,18 @@ export default function App() {
     }
   };
 
-  const playHabibiMessage = async (text: string, messageId: string) => {
+  const playHabibiMessage = async (text: string, messageId: string, generation: number) => {
     if (!EzraHabibiTts) return;
-    const active = { text, messageId };
+    const active = { text, messageId, generation };
     activeHabibiSpeechRef.current = active;
     try {
       const outputDirectory = FileSystem.cacheDirectory || FileSystem.documentDirectory || '';
       const outputPath = `${outputDirectory}ezra-habibi-${Date.now()}.wav`;
-      // Send the complete response in one native request. F5-TTS performs its own
-      // duration-aware internal chunking for the 256-frame Android memory budget
-      // and returns one continuous WAV, avoiding JS-level playback gaps.
       const generated = await EzraHabibiTts.synthesize(text, outputPath);
-      if (activeHabibiSpeechRef.current !== active) return;
+      if (activeHabibiSpeechRef.current !== active || speechPlaybackGenerationRef.current !== generation) return;
       await EzraHabibiTts.playAudio(generated.path);
     } catch (error) {
-      if (activeHabibiSpeechRef.current !== active) return;
+      if (activeHabibiSpeechRef.current !== active || speechPlaybackGenerationRef.current !== generation) return;
       activeHabibiSpeechRef.current = null;
       setHabibiEngineError(error instanceof Error ? error.message : 'تعذّر توليد الصوت عبر Habibi.');
       console.warn('Habibi synthesis failed; using Android TTS fallback:', error);
@@ -3191,28 +3190,32 @@ export default function App() {
       AsyncStorage.removeItem('ezra:habibiEnabled').catch(() => {});
       EzraHabibiTts?.shutdown().catch(() => {});
       const fallbackArabicVoice = ttsVoices.find(voice => voice.identifier === selectedTtsVoice && voice.language.toLowerCase().startsWith('ar'));
-      Speech.speak(text, {
-        language: 'ar',
-        ...(fallbackArabicVoice ? { voice: fallbackArabicVoice.identifier } : {}),
-        rate: speechRate,
-        pitch: speechPitch,
-        volume: 1,
-        onDone: () => {
-          finishVoiceCaptureAfterPlayback();
-          setSpeakingMessageId(current => current === messageId ? null : current);
-          resumeBackgroundWake();
-        },
-        onStopped: () => {
-          finishVoiceCaptureAfterPlayback();
-          setSpeakingMessageId(current => current === messageId ? null : current);
-          resumeBackgroundWake();
-        },
-        onError: () => {
-          finishVoiceCaptureAfterPlayback();
-          setSpeakingMessageId(current => current === messageId ? null : current);
-          resumeBackgroundWake();
-        },
-      });
+      const chunks = splitEzraSpeechText(text);
+      const finishFallback = () => {
+        if (speechPlaybackGenerationRef.current !== generation) return;
+        finishVoiceCaptureAfterPlayback();
+        setSpeakingMessageId(current => current === messageId ? null : current);
+        resumeBackgroundWake();
+      };
+      const playFallbackChunk = (index: number) => {
+        if (speechPlaybackGenerationRef.current !== generation) return;
+        if (!chunks[index]) { finishFallback(); return; }
+        Speech.speak(chunks[index], {
+          language: 'ar',
+          ...(fallbackArabicVoice ? { voice: fallbackArabicVoice.identifier } : {}),
+          rate: speechRate,
+          pitch: speechPitch,
+          volume: 1,
+          onDone: () => {
+            if (speechPlaybackGenerationRef.current !== generation) return;
+            if (index + 1 < chunks.length) playFallbackChunk(index + 1);
+            else finishFallback();
+          },
+          onStopped: finishFallback,
+          onError: finishFallback,
+        });
+      };
+      playFallbackChunk(0);
     }
   };
 
@@ -3230,6 +3233,7 @@ export default function App() {
 
   const speak = async (text: string, messageId: string) => {
     if (speakingMessageId === messageId) {
+      speechPlaybackGenerationRef.current += 1;
       Speech.stop();
       activeSpokenTextRef.current = '';
       finishVoiceCaptureAfterPlayback();
@@ -3238,6 +3242,8 @@ export default function App() {
       setSpeakingMessageId(null);
       return;
     }
+
+    const generation = ++speechPlaybackGenerationRef.current;
     Speech.stop();
     await EzraHabibiTts?.stopAudio().catch(() => {});
     activeHabibiSpeechRef.current = null;
@@ -3248,7 +3254,7 @@ export default function App() {
       : responseLanguage;
 
     if (speechLanguage === 'ar' && habibiEngineReady && EzraHabibiTts && Platform.OS === 'android') {
-      await playHabibiMessage(text, messageId);
+      await playHabibiMessage(text, messageId, generation);
       return;
     }
 
@@ -3257,83 +3263,86 @@ export default function App() {
       .sort((a, b) => Number(b.quality === 'Enhanced') - Number(a.quality === 'Enhanced'))[0];
     const selectedVoiceForLanguage = speechLanguage === 'en' ? selectedEnglishTtsVoice : selectedTtsVoice;
     const preferredVoice = ttsVoices.find(voice => voice.identifier === selectedVoiceForLanguage && voice.language.toLowerCase().startsWith(speechLanguage)) || matchingVoice;
-    Speech.speak(text, {
-      language: speechLanguage,
-      ...(preferredVoice ? { voice: preferredVoice.identifier } : {}),
-      rate: speechRate,
-      pitch: speechPitch,
-      volume: 1.0,
-      onDone: () => {
-        finishVoiceCaptureAfterPlayback();
-        setSpeakingMessageId(current => current === messageId ? null : current);
-        resumeBackgroundWake();
-      },
-      onStopped: () => {
-        finishVoiceCaptureAfterPlayback();
-        setSpeakingMessageId(current => current === messageId ? null : current);
-        resumeBackgroundWake();
-      },
-      onError: () => {
-        finishVoiceCaptureAfterPlayback();
-        setSpeakingMessageId(current => current === messageId ? null : current);
-        resumeBackgroundWake();
-      },
-    });
+    const chunks = splitEzraSpeechText(text);
+    const finishCurrentPlayback = () => {
+      if (speechPlaybackGenerationRef.current !== generation) return;
+      finishVoiceCaptureAfterPlayback();
+      setSpeakingMessageId(current => current === messageId ? null : current);
+      resumeBackgroundWake();
+    };
+    const playChunk = (index: number) => {
+      if (speechPlaybackGenerationRef.current !== generation) return;
+      if (!chunks[index]) { finishCurrentPlayback(); return; }
+      Speech.speak(chunks[index], {
+        language: speechLanguage,
+        ...(preferredVoice ? { voice: preferredVoice.identifier } : {}),
+        rate: speechRate,
+        pitch: speechPitch,
+        volume: 1.0,
+        onDone: () => {
+          if (speechPlaybackGenerationRef.current !== generation) return;
+          if (index + 1 < chunks.length) playChunk(index + 1);
+          else finishCurrentPlayback();
+        },
+        onStopped: finishCurrentPlayback,
+        onError: finishCurrentPlayback,
+      });
+    };
+    playChunk(0);
   };
 
   useEffect(() => {
     if (!EzraHabibiTts) return;
     const finished = EzraHabibiTts.addListener('onPlaybackFinished', () => {
       const finishedSpeech = activeHabibiSpeechRef.current;
+      if (!finishedSpeech || finishedSpeech.generation !== speechPlaybackGenerationRef.current) return;
       activeHabibiSpeechRef.current = null;
       finishVoiceCaptureAfterPlayback();
-      if (finishedSpeech) {
-        setSpeakingMessageId(current => current === finishedSpeech.messageId ? null : current);
-      } else {
-        setSpeakingMessageId(null);
-      }
+      setSpeakingMessageId(current => current === finishedSpeech.messageId ? null : current);
       resumeBackgroundWake();
     });
     const failed = EzraHabibiTts.addListener('onPlaybackError', () => {
       const pending = activeHabibiSpeechRef.current;
+      if (!pending || pending.generation !== speechPlaybackGenerationRef.current) return;
       activeHabibiSpeechRef.current = null;
       setHabibiEngineReady(false);
       AsyncStorage.removeItem('ezra:habibiEnabled').catch(() => {});
       EzraHabibiTts?.shutdown().catch(() => {});
-      if (pending) {
-        const fallbackArabicVoice = ttsVoices.find(voice => voice.identifier === selectedTtsVoice && voice.language.toLowerCase().startsWith('ar'));
-        Speech.speak(pending.text, {
+      const fallbackArabicVoice = ttsVoices.find(voice => voice.identifier === selectedTtsVoice && voice.language.toLowerCase().startsWith('ar'));
+      const chunks = splitEzraSpeechText(pending.text);
+      const generation = pending.generation;
+      const finishFallback = () => {
+        if (speechPlaybackGenerationRef.current !== generation) return;
+        finishVoiceCaptureAfterPlayback();
+        setSpeakingMessageId(current => current === pending.messageId ? null : current);
+        resumeBackgroundWake();
+      };
+      const playFallbackChunk = (index: number) => {
+        if (speechPlaybackGenerationRef.current !== generation) return;
+        if (!chunks[index]) { finishFallback(); return; }
+        Speech.speak(chunks[index], {
           language: 'ar',
           ...(fallbackArabicVoice ? { voice: fallbackArabicVoice.identifier } : {}),
           rate: speechRate,
           pitch: speechPitch,
           volume: 1,
           onDone: () => {
-            finishVoiceCaptureAfterPlayback();
-            setSpeakingMessageId(current => current === pending.messageId ? null : current);
-            resumeBackgroundWake();
+            if (speechPlaybackGenerationRef.current !== generation) return;
+            if (index + 1 < chunks.length) playFallbackChunk(index + 1);
+            else finishFallback();
           },
-          onStopped: () => {
-            finishVoiceCaptureAfterPlayback();
-            setSpeakingMessageId(current => current === pending.messageId ? null : current);
-            resumeBackgroundWake();
-          },
-          onError: () => {
-            finishVoiceCaptureAfterPlayback();
-            setSpeakingMessageId(current => current === pending.messageId ? null : current);
-            resumeBackgroundWake();
-          },
+          onStopped: finishFallback,
+          onError: finishFallback,
         });
-      } else {
-        setSpeakingMessageId(null);
-        resumeBackgroundWake();
-      }
+      };
+      playFallbackChunk(0);
     });
     return () => {
       finished.remove();
       failed.remove();
     };
-  }, [speechRate, speechPitch]);
+  }, [speechRate, speechPitch, selectedTtsVoice, ttsVoices]);
+
 
 
 
