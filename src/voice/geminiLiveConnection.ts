@@ -36,7 +36,7 @@ export async function connectEzraGeminiLive(
   const expiresAt = typeof data.expiresAt === 'string'
     ? new Date(data.expiresAt).getTime()
     : Date.now() + 30 * 60 * 1000;
-  let socket: WebSocket;
+  let socket!: WebSocket;
   let intentionallyClosed = false;
 
   const openSocket = (resumptionHandle?: string) => new Promise<void>((resolve, reject) => {
