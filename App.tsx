@@ -139,6 +139,7 @@ type Attachment = {
   mimeType?: string;
   base64?: string;
   textContent?: string;
+  textExtractionError?: string;
   sizeBytes?: number;
   storagePath?: string;
 };
@@ -417,6 +418,7 @@ export default function App() {
   const [attachment, setAttachment] = useState<Attachment | null>(null);
   const [attachmentImporting, setAttachmentImporting] = useState(false);
   const [attachmentImportName, setAttachmentImportName] = useState('');
+  const [attachmentImportProgress, setAttachmentImportProgress] = useState('');
   const [knowledgeImporting, setKnowledgeImporting] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [voiceLevel, setVoiceLevel] = useState(0);
@@ -2417,6 +2419,13 @@ export default function App() {
   const sendMessage = async (voiceReply = false, voiceText?: string) => {
     const text = (voiceText ?? message).trim();
     if ((!text && !attachment) || !session || !conversationId || sending) return;
+    if (attachment?.kind === 'file' && !attachment.textContent?.trim()) {
+      Alert.alert(
+        'الملف لم يصبح جاهزًا للقراءة',
+        attachment.textExtractionError || 'انتظر انتهاء معالجة الملف، أو أعد محاولة قراءته، ثم أرسله إلى EZRA.',
+      );
+      return;
+    }
     chatShouldAutoScrollRef.current = true;
     if (voiceText !== undefined) voiceRequestStartedRef.current = true;
     if (await handleMemorySaveCommand(text, voiceReply)) return;
@@ -3104,9 +3113,51 @@ export default function App() {
     }
   };
 
+  const prepareDocumentAttachment = async (file: Attachment) => {
+    setAttachment(file);
+    setAttachmentImportName(file.name);
+    setAttachmentImportProgress('جارٍ تجهيز الملف…');
+    setAttachmentImporting(true);
+    // Let React paint the selected file and progress state before parsing starts.
+    await new Promise<void>(resolve => setTimeout(resolve, 50));
+    try {
+      const extracted = await extractDocumentTextFromUri(
+        file.name,
+        file.uri,
+        file.sizeBytes,
+        MAX_EXTRACTED_DOCUMENT_BYTES,
+        (pagesProcessed, totalPages) => {
+          setAttachmentImportProgress(`جارٍ قراءة صفحات PDF: ${pagesProcessed} من ${totalPages}`);
+        },
+      );
+      setAttachment(current => current?.uri === file.uri
+        ? { ...current, textContent: extracted.content, textExtractionError: undefined }
+        : current);
+      setAttachmentImportProgress('اكتملت قراءة الملف.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'تعذّر استخراج نص الملف.';
+      // Keep the selected file visible. The previous flow removed it on every
+      // parser/OCR error, which made a long PDF look as if it had never attached.
+      setAttachment(current => current?.uri === file.uri
+        ? { ...current, textExtractionError: message }
+        : current);
+      Alert.alert('الملف مرفق، لكن تعذّرت قراءته', message);
+    } finally {
+      setAttachmentImporting(false);
+      setAttachmentImportName('');
+    }
+  };
+
+  const retryAttachmentExtraction = async () => {
+    if (!attachment || attachment.kind !== 'file' || attachmentImporting) return;
+    await prepareDocumentAttachment({
+      ...attachment,
+      textContent: '',
+      textExtractionError: undefined,
+    });
+  };
+
   const pickملف = async () => {
-    let importStarted = false;
-    let importedFileUri: string | null = null;
     try {
       const result = await DocumentPicker.getDocumentAsync({
         copyToCacheDirectory: true,
@@ -3114,7 +3165,6 @@ export default function App() {
       });
       if (result.canceled || !result.assets[0]) return;
       const file = result.assets[0];
-      importedFileUri = file.uri;
       const extension = getDocumentExtension(file.name);
       if (!isSupportedDocumentExtension(extension)) {
         Alert.alert('نوع الملف غير مدعوم', 'يمكنك إرفاق TXT وMD وCSV وJSON وPDF وDOCX وPPTX وXLSX.');
@@ -3126,10 +3176,7 @@ export default function App() {
         Alert.alert('الملف كبير جدًا', 'الحد الأقصى لحجم المرفق 50 ميغابايت.');
         return;
       }
-      setAttachmentImportName(file.name);
-      setAttachmentImporting(true);
-      importStarted = true;
-      setAttachment({
+      await prepareDocumentAttachment({
         uri: file.uri,
         name: file.name,
         kind: 'file',
@@ -3137,23 +3184,8 @@ export default function App() {
         textContent: '',
         sizeBytes: typeof sourceSizeBytes === 'number' ? sourceSizeBytes : 0,
       });
-      const extracted = await extractDocumentTextFromUri(
-        file.name,
-        file.uri,
-        sourceSizeBytes,
-        MAX_EXTRACTED_DOCUMENT_BYTES,
-      );
-      setAttachment(current => current?.uri === file.uri
-        ? { ...current, textContent: extracted.content }
-        : current);
     } catch (error) {
-      if (importedFileUri) setAttachment(current => current?.uri === importedFileUri ? null : current);
-      Alert.alert('تعذّر فتح الملف', error instanceof Error ? error.message : 'حاول مرة أخرى.');
-    } finally {
-      if (importStarted) {
-        setAttachmentImporting(false);
-        setAttachmentImportName('');
-      }
+      Alert.alert('تعذّر اختيار الملف', error instanceof Error ? error.message : 'حاول مرة أخرى.');
     }
   };
 
@@ -4707,9 +4739,9 @@ export default function App() {
         {attachmentImporting && (
           <View style={styles.pendingAttachment} accessibilityLiveRegion="polite">
             <View style={styles.pendingAttachmentDetails}>
-              <Text style={styles.pendingText}>جارٍ تجهيز الملف للقراءة…</Text>
+              <Text style={styles.pendingText}>{attachmentImportProgress || 'جارٍ تجهيز الملف للقراءة…'}</Text>
               <Text style={styles.pendingFileName} numberOfLines={1}>{attachmentImportName}</Text>
-              <Text style={styles.attachmentSize}>قد تستغرق معالجة PDF المصوّر وقتًا. اتركي EZRA مفتوحًا.</Text>
+              <Text style={styles.attachmentSize}>تتم القراءة على دفعات حتى لا يتوقف التطبيق أثناء معالجة PDF كبير.</Text>
             </View>
           </View>
         )}
@@ -4725,10 +4757,21 @@ export default function App() {
             )}
             <View style={styles.pendingAttachmentDetails}>
               <Text style={styles.pendingText} numberOfLines={1}>
-                {attachment.kind === 'image' ? 'صورة جاهزة للتحليل' : 'ملف جاهز للقراءة'}
+                {attachment.kind === 'image'
+                  ? 'صورة جاهزة للتحليل'
+                  : attachment.textExtractionError
+                    ? 'الملف مرفق — تعذّرت قراءة النص'
+                    : attachment.textContent
+                      ? 'ملف جاهز للتحليل'
+                      : 'الملف مرفق — جارٍ تجهيزه'}
               </Text>
               <Text style={styles.pendingFileName} numberOfLines={1}>{attachment.name}</Text>
               {!!attachment.sizeBytes && <Text style={styles.attachmentSize}>{formatBytes(attachment.sizeBytes)}</Text>}
+              {!!attachment.textExtractionError && (
+                <TouchableOpacity onPress={retryAttachmentExtraction} disabled={attachmentImporting} accessibilityRole="button">
+                  <Text style={styles.copyButtonText}>إعادة محاولة القراءة</Text>
+                </TouchableOpacity>
+              )}
             </View>
             <TouchableOpacity style={styles.removeAttachmentButton} onPress={() => setAttachment(null)} accessibilityRole="button" accessibilityLabel="إزالة المرفق" hitSlop={8}>
               <Text style={styles.removeAttachment}>×</Text>
