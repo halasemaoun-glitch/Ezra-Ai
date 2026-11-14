@@ -1,7 +1,7 @@
 // EZRA AI — isolated Gemini Live session-token endpoint.
 // This function does not change the existing smart-service (Groq/Gemini text chat).
-import { verifySupabaseUser } from "../smart-service/auth.ts";
-import { buildEzraSystemPrompt } from "../smart-service/persona.ts";
+import { verifySupabaseUser } from "./auth.ts";
+import { buildEzraSystemPrompt } from "./persona.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
