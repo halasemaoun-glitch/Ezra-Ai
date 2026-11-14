@@ -98,13 +98,13 @@ jobs:
         run: npx expo prebuild --platform android --no-install
       - name: Compile Android Kotlin sources
         run: cd android && ./gradlew :app:compileDebugKotlin
-      - name: Build installable Android debug APK
-        run: cd android && ./gradlew :app:assembleDebug
-      - name: Upload Android APK artifact
+      - name: Build standalone Android APK with embedded JavaScript bundle
+        run: cd android && ./gradlew :app:assembleRelease
+      - name: Upload standalone Android APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ezra-android-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: ezra-android-standalone-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 7
       - name: Check TypeScript
