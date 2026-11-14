@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { File } from 'expo-file-system';
 import { requireNativeModule } from 'expo-modules-core';
 import {
   getDocumentExtension,
@@ -243,8 +244,19 @@ export async function extractDocumentTextFromUri(
     return { content, extension, extractedBytes };
   }
 
-  const response = await fetch(sourceUri);
-  if (!response.ok) throw new Error('تعذّرت قراءة الملف المحدد من مساحة التخزين.');
-  const sourceBytes = new Uint8Array(await response.arrayBuffer());
+  // DocumentPicker copies selected files to the app cache. Read local URIs
+  // with Expo's native File API; fetch(file://...) is unreliable in React Native
+  // and previously caused selected files to fail or stall during import.
+  const sourceFile = new File(sourceUri);
+  const actualSizeBytes = sourceFile.size || sourceSizeBytes || 0;
+  if (actualSizeBytes > MAX_DOCUMENT_SOURCE_BYTES) {
+    throw new Error('حجم الملف يتجاوز الحد الأقصى البالغ 50 ميغابايت.');
+  }
+
+  const sourceBytes = await sourceFile.bytes();
+  if (!sourceBytes.byteLength) throw new Error('تعذّرت قراءة الملف المحدد من مساحة التخزين أو أن الملف فارغ.');
+  if (sourceBytes.byteLength > MAX_DOCUMENT_SOURCE_BYTES) {
+    throw new Error('حجم الملف يتجاوز الحد الأقصى البالغ 50 ميغابايت.');
+  }
   return extractDocumentText(fileName, sourceBytes, maxExtractedBytes, sourceUri);
 }
