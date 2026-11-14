@@ -7,6 +7,12 @@ import android.graphics.Matrix
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.ParcelFileDescriptor
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
+import com.tom_roush.pdfbox.io.MemoryUsageSetting
+import com.tom_roush.pdfbox.pdmodel.PDDocument
+import com.tom_roush.pdfbox.pdmodel.encryption.InvalidPasswordException
+import com.tom_roush.pdfbox.text.PDFTextStripper
+import java.io.FileInputStream
 import dev.ffmpegkit.tesseract.TesseractConfig
 import dev.ffmpegkit.tesseract.TesseractOCR
 import expo.modules.kotlin.functions.Queues
@@ -28,6 +34,65 @@ class EzraDocumentOcrModule : Module() {
     private const val MAX_TESSDATA_BYTES = 20_000_000L
   }
 
+  private fun extractEmbeddedPdfText(
+    context: Context,
+    uriString: String,
+    maxPages: Int,
+    maxOutputChars: Int
+  ): Map<String, Any>? {
+    return try {
+      PDFBoxResourceLoader.init(context)
+      val uri = Uri.parse(uriString)
+      val memory = MemoryUsageSetting.setupTempFileOnly()
+      val document = when (uri.scheme) {
+        "content" -> {
+          val input = context.contentResolver.openInputStream(uri)
+            ?: throw IllegalArgumentException("Android could not open the selected PDF.")
+          input.use { PDDocument.load(it, memory) }
+        }
+        "file" -> PDDocument.load(
+          File(uri.path ?: throw IllegalArgumentException("PDF path is empty.")),
+          memory
+        )
+        else -> PDDocument.load(File(uriString), memory)
+      }
+      document.use { pdf ->
+        val totalPages = pdf.numberOfPages
+        if (totalPages <= 0) throw IllegalArgumentException("PDF contains no pages.")
+        val pagesProcessed = min(totalPages, maxPages)
+        val stripper = PDFTextStripper().apply {
+          setStartPage(1)
+          setEndPage(pagesProcessed)
+          setSortByPosition(true)
+        }
+        val extracted = stripper.getText(pdf).trim()
+        val usefulCharacters = extracted.count { it.isLetterOrDigit() }
+        // A scanned PDF often has an empty text layer or only a few stray glyphs.
+        // Fall back to OCR only in that case; normal digital PDFs avoid OCR entirely.
+        val minimumUsefulCharacters = max(100, min(2500, pagesProcessed * 12))
+        if (usefulCharacters < minimumUsefulCharacters) {
+          null
+        } else {
+          val output = extracted.take(maxOutputChars)
+          mapOf(
+            "text" to output,
+            "pagesProcessed" to pagesProcessed,
+            "totalPages" to totalPages,
+            "truncated" to (pagesProcessed < totalPages || extracted.length > maxOutputChars)
+          )
+        }
+      }
+    } catch (error: InvalidPasswordException) {
+      throw IllegalArgumentException("هذا الملف محمي بكلمة مرور. أزل الحماية ثم أعد اختياره.", error)
+    } catch (error: IllegalArgumentException) {
+      throw error
+    } catch (_: Exception) {
+      // Broken/unsupported text layer: the existing PdfRenderer + Tesseract path
+      // below can still recover image-only pages when the PDF itself is renderable.
+      null
+    }
+  }
+
   override fun definition() = ModuleDefinition {
     Name("EzraDocumentOcr")
 
@@ -38,6 +103,8 @@ class EzraDocumentOcrModule : Module() {
       val maxOutputChars = requestedMaxOutputChars.coerceIn(10_000, 16 * 1024 * 1024)
 
       runBlocking(Dispatchers.IO) {
+        extractEmbeddedPdfText(context, uriString, maxPages, maxOutputChars)?.let { return@runBlocking it }
+
         val tessdataDir = File(context.filesDir, "tesseract/tessdata")
         if (!tessdataDir.exists() && !tessdataDir.mkdirs()) {
           throw IllegalStateException("Could not create the private OCR model directory.")
