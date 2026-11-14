@@ -23,6 +23,7 @@ const LIVE_SOCKET_URL =
 
 export async function connectEzraGeminiLive(
   responseLanguage: 'ar' | 'en',
+  voiceName = 'Charon',
   callbacks: GeminiLiveCallbacks = {},
 ): Promise<GeminiLiveConnection> {
   const { data, error } = await supabase.functions.invoke('gemini-live-token', {
@@ -69,9 +70,16 @@ export async function connectEzraGeminiLive(
         nextSocket.send(JSON.stringify({
           setup: {
             model: LIVE_MODEL,
-            generationConfig: { responseModalities: ["AUDIO"] },
+            generationConfig: {
+              responseModalities: ["AUDIO"],
+              speechConfig: {
+                voiceConfig: {
+                  prebuiltVoiceConfig: { voiceName },
+                },
+              },
+            },
             systemInstruction: { parts: [{ text: systemInstruction }] },
-            sessionResumption: resumptionHandle ? { handle: resumptionHandle } : {},
+            ...(resumptionHandle ? { sessionResumption: { handle: resumptionHandle } } : {}),
             contextWindowCompression: { slidingWindow: {} },
             inputAudioTranscription: {},
             outputAudioTranscription: {},
