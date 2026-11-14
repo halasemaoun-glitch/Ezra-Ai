@@ -267,6 +267,39 @@ function EzraOrb({ status, voiceLevel = 0 }: { status: string; voiceLevel?: numb
   );
 }
 
+function inspectHabibiReferenceWav(bytes: Uint8Array): { durationSeconds: number; sampleRate: number; channels: number; bitsPerSample: number; format: number } | null {
+  if (bytes.length < 44) return null;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const ascii = (offset: number, length: number) => String.fromCharCode(...bytes.subarray(offset, offset + length));
+  if (ascii(0, 4) !== 'RIFF' || ascii(8, 4) !== 'WAVE') return null;
+  let format = 0;
+  let channels = 0;
+  let sampleRate = 0;
+  let bitsPerSample = 0;
+  let dataBytes = 0;
+  for (let offset = 12; offset + 8 <= bytes.length;) {
+    const chunkSize = view.getUint32(offset + 4, true);
+    const chunkStart = offset + 8;
+    if (chunkStart + chunkSize > bytes.length) return null;
+    const chunk = ascii(offset, 4);
+    if (chunk === 'fmt ' && chunkSize >= 16) {
+      format = view.getUint16(chunkStart, true);
+      channels = view.getUint16(chunkStart + 2, true);
+      sampleRate = view.getUint32(chunkStart + 4, true);
+      bitsPerSample = view.getUint16(chunkStart + 14, true);
+    } else if (chunk === 'data') {
+      dataBytes = chunkSize;
+    }
+    offset = chunkStart + chunkSize + (chunkSize & 1);
+  }
+  const supportedEncoding = (format === 1 && (bitsPerSample === 8 || bitsPerSample === 16)) ||
+    (format === 3 && bitsPerSample === 32);
+  if (!supportedEncoding || channels < 1 || channels > 2 || !sampleRate || !dataBytes) return null;
+  const bytesPerFrame = channels * (bitsPerSample / 8);
+  if (!bytesPerFrame) return null;
+  return { durationSeconds: dataBytes / (sampleRate * bytesPerFrame), sampleRate, channels, bitsPerSample, format };
+}
+
 export default function App() {
   const [message, setMessage] = useState('');
   const [composerInputHeight, setComposerInputHeight] = useState(44);
@@ -592,6 +625,20 @@ export default function App() {
       if (!referenceInfo.exists || !referenceInfo.size || referenceInfo.size <= 44) {
         throw new Error('ملف العينة الصوتية غير موجود أو فارغ. اختر تسجيل WAV صالحًا من جديد.');
       }
+      // Inspect the WAV in JavaScript before entering native code so malformed or
+      // unsupported references produce a useful Arabic error instead of a native crash.
+      const referenceResponse = await fetch(habibiReferencePath);
+      if (!referenceResponse.ok) throw new Error('تعذّرت قراءة عينة Habibi من مساحة تخزين التطبيق.');
+      const referenceBytes = new Uint8Array(await referenceResponse.arrayBuffer());
+      const referenceWav = inspectHabibiReferenceWav(referenceBytes);
+      if (!referenceWav) {
+        throw new Error('عينة Habibi يجب أن تكون WAV بصيغة PCM ‏8/16-bit أو float32، بقناة واحدة أو قناتين.');
+      }
+      if (referenceWav.durationSeconds < 0.5) {
+        throw new Error('عينة Habibi قصيرة جدًا. يجب أن تكون مدتها نصف ثانية على الأقل.');
+      }
+      // Longer references are deliberately allowed: the native engine trims them
+      // to its safe 1.2-second frame budget before model initialization.
       const capacity = await EzraHabibiTts.getDeviceCapacity();
       // Android uses sequential single-batch CFG, Q8_0 DiT linear weights,
       // a 128-frame synthesis budget, and a 768 MiB minimum CPU graph arena.
