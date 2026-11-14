@@ -2648,21 +2648,30 @@ export default function App() {
         }
 
         let { data: aiData, error: aiError } = aiRequest.result;
-        // Gemini's free endpoint can temporarily return 503 under high demand.
-        // Retry once through the already-configured Groq service instead of leaving the user without a reply.
-        if (requestProvider === 'gemini' && aiError) {
-          // Fall back for every Gemini transport/provider failure, including invalid keys
-          // and gateway errors. The user should still receive a Groq reply when available.
+        // A Gemini response with missing/incorrect provider metadata is not proof
+        // that the API key is absent. Treat it as an unusable Gemini response and
+        // try the configured Groq fallback before showing an error to the user.
+        const geminiResponseMismatch = requestProvider === 'gemini' && !aiError && (
+          aiData?.provider !== 'gemini' ||
+          aiData?.model !== requestModel ||
+          typeof aiData?.reply !== 'string' ||
+          !aiData.reply.trim()
+        );
+        if (requestProvider === 'gemini' && (aiError || geminiResponseMismatch)) {
+          const geminiFailure = aiError ?? new Error(
+            'Gemini returned an incomplete or unexpected response; attempting Groq fallback.',
+          );
           const fallbackResult = await supabase.functions.invoke('smart-service', {
             body: { ...requestBody, provider: 'groq', model: DEFAULT_AI_MODELS.groq },
           });
           if (!fallbackResult.error && typeof fallbackResult.data?.reply === 'string' && fallbackResult.data.reply.trim()) {
             aiData = { ...fallbackResult.data, fallbackFrom: 'gemini' };
             aiError = null;
-            console.warn('Gemini was unavailable; EZRA completed this turn through Groq fallback.');
+            console.warn('Gemini response was unusable; EZRA completed this turn through Groq fallback.');
           } else {
+            aiError = fallbackResult.error ?? geminiFailure;
             console.error('Gemini and Groq fallback both failed:', {
-              geminiError: aiError,
+              geminiError: geminiFailure,
               groqError: fallbackResult.error,
               groqData: fallbackResult.data,
             });
