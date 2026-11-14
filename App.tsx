@@ -214,8 +214,8 @@ const appendVoiceTranscriptSegment = (current: string, incoming: string) => {
   if (previousNormalized === nextNormalized || previousNormalized.endsWith(nextNormalized)) return previous;
   if (nextNormalized.startsWith(previousNormalized)) return next;
 
-  const previousWords = previous.split(/\\s+/);
-  const nextWords = next.split(/\\s+/);
+  const previousWords = previous.split(/\s+/);
+  const nextWords = next.split(/\s+/);
   const previousComparable = previousWords.map(normalizeVoiceEchoText);
   const nextComparable = nextWords.map(normalizeVoiceEchoText);
   let overlap = Math.min(previousWords.length, nextWords.length);
