@@ -103,7 +103,7 @@ function installDocumentTextDecoderCompat(): void {
   (CompatibleTextDecoder as any).__ezraDocumentCompat = true;
   (globalThis as any).TextDecoder = CompatibleTextDecoder;
 }
-export const MAX_EXTRACTED_DOCUMENT_BYTES = 8 * 1024 * 1024;
+export const MAX_EXTRACTED_DOCUMENT_BYTES = 50 * 1024 * 1024;
 
 type EzraDocumentOcrNative = {
   extractPdfText: (uri: string, maxPages: number, maxOutputChars: number) => Promise<{
@@ -122,7 +122,7 @@ async function extractScannedPdfText(uri?: string): Promise<string> {
   if (Platform.OS !== 'android' || !EzraDocumentOcr || !uri) {
     throw new Error('هذا PDF لا يحتوي على نص رقمي. قراءة الصفحات المصوّرة تحتاج OCR على Android.');
   }
-  const result = await EzraDocumentOcr.extractPdfText(uri, 250, 2_500_000);
+  const result = await EzraDocumentOcr.extractPdfText(uri, 250, 16_000_000);
   const text = result.text.trim();
   if (!text) throw new Error('لم يتمكن OCR من العثور على نص واضح في صفحات PDF.');
   const pageNotice = result.truncated
@@ -197,7 +197,7 @@ export async function extractDocumentText(
   }
   const extractedBytes = new TextEncoder().encode(content).byteLength;
   if (extractedBytes > maxExtractedBytes) {
-    throw new Error('النص المستخرج أكبر من الحد المسموح (8 ميغابايت). قسّم المستند إلى ملفات أصغر.');
+    throw new Error('النص المستخرج أكبر من الحد المسموح (50 ميغابايت). قسّم المستند إلى ملفات أصغر.');
   }
   return { content, extension, extractedBytes };
 }
