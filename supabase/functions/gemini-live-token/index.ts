@@ -80,6 +80,9 @@ Deno.serve(async (req: Request) => {
         config: {
           responseModalities: ["AUDIO"],
           sessionResumption: {},
+          contextWindowCompression: {
+            slidingWindow: {},
+          },
           systemInstruction: {
             parts: [{ text: systemInstruction }],
           },
