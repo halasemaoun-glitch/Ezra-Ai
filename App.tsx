@@ -367,6 +367,10 @@ export default function App() {
   const interruptVoiceFramesRef = useRef(0);
   const voiceRecognitionActiveRef = useRef(false);
   const voiceStartInFlightRef = useRef(false);
+  // SpeechRecognition can emit both `end` and `error` for one Android session.
+  // Track attempts so a duplicate error cannot schedule a second restart.
+  const voiceRecognitionSessionIdRef = useRef(0);
+  const voiceErrorHandledSessionRef = useRef(-1);
   const voiceCaptureDuringSpeechRef = useRef(false);
   const voiceInterruptionConfirmedRef = useRef(false);
   const ignoreNextVoiceEndRef = useRef(false);
@@ -1672,6 +1676,12 @@ export default function App() {
     }
   });
   useSpeechRecognitionEvent('error', event => {
+    const failedSessionId = voiceRecognitionSessionIdRef.current;
+    if (voiceErrorHandledSessionRef.current === failedSessionId) {
+      console.warn('Ignoring duplicate EZRA speech recognition error:', event.error);
+      return;
+    }
+    voiceErrorHandledSessionRef.current = failedSessionId;
     console.warn('EZRA speech recognition error:', event.error);
     voiceStartInFlightRef.current = false;
     voiceRecognitionActiveRef.current = false;
@@ -1755,7 +1765,9 @@ export default function App() {
     // Wait until persisted voice preferences are restored before opening the microphone.
     // This prevents the default-on state from briefly overriding a user's saved opt-out.
     if (!voicePrefsLoaded || !appIsActive || !session || !voiceHome || !autoListen || backgroundWakeEnabled || isListening || sending || speakingMessageId || chatLoading) return;
-    const timer = setTimeout(() => beginListening(), voiceRetrying ? 900 : 500);
+    // Android speech services need a short release interval after `no-speech`/`end`.
+    // Avoid immediately reopening a recognizer that is still tearing down its prior session.
+    const timer = setTimeout(() => beginListening(), voiceRetrying ? 1500 : 750);
     return () => clearTimeout(timer);
   }, [voicePrefsLoaded, appIsActive, session?.user.id, voiceHome, autoListen, backgroundWakeEnabled, responseLanguage, isListening, sending, speakingMessageId, chatLoading, voiceRetrying, arabicRecognitionFallback]);
 
@@ -2831,6 +2843,7 @@ export default function App() {
   const beginListening = async (interruptSpeech = false, interruptionAlreadyConfirmed = false) => {
     if (!appIsActiveRef.current || !appIsActive || !autoListenRef.current || isListening || voiceRecognitionActiveRef.current || voiceStartInFlightRef.current || sending || (speakingMessageId && !interruptSpeech)) return;
     voiceStartInFlightRef.current = true;
+    voiceRecognitionSessionIdRef.current += 1;
     try {
       const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
       if (!appIsActiveRef.current || !autoListenRef.current) {
