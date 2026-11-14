@@ -36,6 +36,7 @@ class EzraDocumentOcrModule : Module() {
   private fun extractEmbeddedPdfText(
     context: Context,
     uriString: String,
+    startPage: Int,
     maxPages: Int,
     maxOutputChars: Int
   ): Map<String, Any>? {
@@ -58,10 +59,21 @@ class EzraDocumentOcrModule : Module() {
       document.use { pdf ->
         val totalPages = pdf.numberOfPages
         if (totalPages <= 0) throw IllegalArgumentException("PDF contains no pages.")
-        val pagesProcessed = min(totalPages, maxPages)
+        val firstPage = startPage.coerceIn(0, totalPages)
+        val pagesProcessed = min(totalPages - firstPage, maxPages)
+        if (pagesProcessed <= 0) {
+          return@use mapOf(
+            "text" to "",
+            "pagesProcessed" to 0,
+            "totalPages" to totalPages,
+            "nextPage" to firstPage,
+            "mode" to "embedded",
+            "outputLimitReached" to false
+          )
+        }
         val stripper = PDFTextStripper().apply {
-          setStartPage(1)
-          setEndPage(pagesProcessed)
+          setStartPage(firstPage + 1)
+          setEndPage(firstPage + pagesProcessed)
           setSortByPosition(true)
         }
         val extracted = stripper.getText(pdf).trim()
@@ -77,7 +89,9 @@ class EzraDocumentOcrModule : Module() {
             "text" to output,
             "pagesProcessed" to pagesProcessed,
             "totalPages" to totalPages,
-            "truncated" to (pagesProcessed < totalPages || extracted.length > maxOutputChars)
+            "nextPage" to (firstPage + pagesProcessed),
+            "mode" to "embedded",
+            "outputLimitReached" to (extracted.length > maxOutputChars)
           )
         }
       }
@@ -95,14 +109,17 @@ class EzraDocumentOcrModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("EzraDocumentOcr")
 
-    AsyncFunction("extractPdfText") { uriString: String, requestedMaxPages: Int, requestedMaxOutputChars: Int ->
+    AsyncFunction("extractPdfText") { uriString: String, requestedStartPage: Int, requestedMaxPages: Int, requestedMaxOutputChars: Int, forceOcr: Boolean ->
       val context = appContext.reactContext?.applicationContext
         ?: throw IllegalStateException("Android application context is unavailable")
-      val maxPages = requestedMaxPages.coerceIn(1, 300)
-      val maxOutputChars = requestedMaxOutputChars.coerceIn(10_000, 16 * 1024 * 1024)
+      val startPage = requestedStartPage.coerceAtLeast(0)
+      val maxPages = requestedMaxPages.coerceIn(1, 20)
+      val maxOutputChars = requestedMaxOutputChars.coerceIn(10_000, 2 * 1024 * 1024)
 
       runBlocking(Dispatchers.IO) {
-        extractEmbeddedPdfText(context, uriString, maxPages, maxOutputChars)?.let { return@runBlocking it }
+        if (!forceOcr) {
+          extractEmbeddedPdfText(context, uriString, startPage, maxPages, maxOutputChars)?.let { return@runBlocking it }
+        }
 
         val tessdataDir = File(context.filesDir, "tesseract/tessdata")
         if (!tessdataDir.exists() && !tessdataDir.mkdirs()) {
@@ -124,12 +141,13 @@ class EzraDocumentOcrModule : Module() {
             try {
               val totalPages = renderer.pageCount
               if (totalPages <= 0) throw IllegalArgumentException("PDF contains no pages.")
-              val pagesToProcess = min(totalPages, maxPages)
+              val firstPage = startPage.coerceIn(0, totalPages)
+              val pagesToProcess = min(totalPages - firstPage, maxPages)
               val output = StringBuilder()
               var pagesProcessed = 0
               var outputLimitReached = false
 
-              for (pageIndex in 0 until pagesToProcess) {
+              for (pageIndex in firstPage until firstPage + pagesToProcess) {
                 if (output.length >= maxOutputChars) {
                   outputLimitReached = true
                   break
@@ -171,7 +189,9 @@ class EzraDocumentOcrModule : Module() {
                 "text" to output.toString().trim(),
                 "pagesProcessed" to pagesProcessed,
                 "totalPages" to totalPages,
-                "truncated" to (pagesProcessed < totalPages || outputLimitReached)
+                "nextPage" to (firstPage + pagesProcessed),
+                "mode" to "ocr",
+                "outputLimitReached" to outputLimitReached
               )
             } finally {
               renderer.close()
