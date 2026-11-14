@@ -1166,7 +1166,7 @@ export default function App() {
       const response = await fetch(file.uri);
       if (!response.ok) throw new Error('تعذّرت قراءة المستند المحدد.');
       const sourceBytes = new Uint8Array(await response.arrayBuffer());
-      const extracted = await extractDocumentText(file.name, sourceBytes, MAX_EXTRACTED_DOCUMENT_BYTES);
+      const extracted = await extractDocumentText(file.name, sourceBytes, MAX_EXTRACTED_DOCUMENT_BYTES, file.uri);
       const content = extracted.content;
       if (knowledgeDocuments.some(item => !item.deletedAt && item.name.toLowerCase() === file.name.toLowerCase())) {
         Alert.alert('الملف موجود مسبقاً', 'احذف النسخة القديمة أولاً إذا أردت استبدال هذا الملف.');
@@ -3011,7 +3011,7 @@ export default function App() {
       const response = await fetch(file.uri);
       if (!response.ok) throw new Error('تعذّرت قراءة الملف المحدد.');
       const sourceBytes = new Uint8Array(await response.arrayBuffer());
-      const extracted = await extractDocumentText(file.name, sourceBytes, MAX_EXTRACTED_DOCUMENT_BYTES);
+      const extracted = await extractDocumentText(file.name, sourceBytes, MAX_EXTRACTED_DOCUMENT_BYTES, file.uri);
       setAttachment({
         uri: file.uri,
         name: file.name,
