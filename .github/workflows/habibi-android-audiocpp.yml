@@ -145,8 +145,8 @@ jobs:
           NDK="$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin"
           "$NDK/llvm-nm" -D --defined-only "$LIB" | grep -q 'audiocpp_registry_create'
           "$NDK/llvm-nm" -D --defined-only "$LIB" | grep -q 'audiocpp_session_run'
-          grep -q 'audiocpp_options_set(sessionOptions, "frame_budget", "256")' modules/ezra-habibi-tts/android/src/main/cpp/ezra_habibi_jni.cpp
-          echo "Verified: F5-TTS frame_budget stays within the supported [256, 8192] range"
+          grep -q 'audiocpp_options_set(sessionOptions, "f5_tts.frame_budget", "256")' modules/ezra-habibi-tts/android/src/main/cpp/ezra_habibi_jni.cpp
+          echo "Verified: namespaced F5-TTS frame budget is set within the supported [256, 8192] range"
           "$NDK/llvm-nm" -D --defined-only modules/ezra-habibi-tts/android/src/main/jniLibs/arm64-v8a/libezra_habibi_jni.so | grep -q 'Java_expo_modules_ezrahabibitts_EzraHabibiTtsModule_nativeInitialize'
           mkdir -p habibi-android-runtime/include habibi-android-runtime/libs
           cp "$LIB" habibi-android-runtime/libs/
