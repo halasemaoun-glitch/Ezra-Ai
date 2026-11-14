@@ -1275,7 +1275,7 @@ export default function App() {
     }
     const contentBytes = new TextEncoder().encode(content).byteLength;
     if (contentBytes > MAX_EXTRACTED_DOCUMENT_BYTES) {
-      Alert.alert('المحتوى كبير جداً', 'الحد الأقصى لحجم النص المحفوظ هو 8 ميغابايت.');
+      Alert.alert('المحتوى كبير جداً', 'الحد الأقصى لحجم النص المحفوظ هو 50 ميغابايت.');
       return;
     }
     const updated: KnowledgeDocument = {
