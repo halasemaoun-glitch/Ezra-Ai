@@ -16,7 +16,8 @@ if (!fs.existsSync(sourcePath)) {
 let source = fs.readFileSync(sourcePath, 'utf8');
 const alreadyPatched =
   source.includes('MediaRecorder.AudioSource.VOICE_COMMUNICATION') &&
-  source.includes('AcousticEchoCanceler.create(this.audioSessionId)');
+  source.includes('AcousticEchoCanceler.create(this.audioSessionId)') &&
+  source.includes('acousticEchoCanceler?.release()');
 
 if (alreadyPatched) {
   console.log('Android voice communication source and AcousticEchoCanceler are already enabled.');
@@ -79,13 +80,14 @@ source = replaceExactlyOnce(
 
 source = replaceExactlyOnce(
   source,
-  '        isRecordingAudio = false\n        audioRecorder?.stop()\n        acousticEchoCanceler?.release()\n        acousticEchoCanceler = null\n        audioRecorder?.release()\n',
-  `        audioRecorder?.stop()
+  '        isRecordingAudio = false\n        audioRecorder?.stop()\n        audioRecorder?.release()\n        audioRecorder = null\n',
+  `        isRecordingAudio = false
+        audioRecorder?.stop()
         // Release the effect before releasing the AudioRecord session it is attached to.
         acousticEchoCanceler?.release()
         acousticEchoCanceler = null
-        stoppedAtMillis = System.currentTimeMillis()
         audioRecorder?.release()
+        audioRecorder = null
 `,
   'release AEC lifecycle',
 );
