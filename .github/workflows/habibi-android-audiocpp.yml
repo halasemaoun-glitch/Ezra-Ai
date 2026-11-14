@@ -184,6 +184,13 @@ jobs:
       - name: Install JavaScript dependencies
         run: npm install --no-audit --no-fund
 
+      - name: Verify Android acoustic echo cancellation patch
+        run: |
+          SOURCE="node_modules/expo-speech-recognition/android/src/main/java/expo/modules/speechrecognition/ExpoAudioRecorder.kt"
+          grep -q 'MediaRecorder.AudioSource.VOICE_COMMUNICATION' "$SOURCE"
+          grep -q 'AcousticEchoCanceler.create(this.audioSessionId)' "$SOURCE"
+          echo "Verified: Android mic input uses VOICE_COMMUNICATION with optional AEC"
+
       - name: Validate Expo and TypeScript
         run: |
           npx expo-doctor
