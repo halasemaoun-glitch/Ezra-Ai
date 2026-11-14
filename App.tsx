@@ -209,14 +209,19 @@ const isRecognizedUserInterruption = (candidate: string, assistantSpeech: string
     'لا', 'توقف', 'وقف', 'اسكت', 'اسكتي', 'كفى', 'انتظر',
     'stop', 'wait', 'cancel', 'no',
   ]);
-  if (words.length === 1 && explicitInterruptionWords.has(words[0])) {
-    return !spoken.split(' ').includes(words[0]);
+  const spokenWords = new Set(spoken.split(' ').filter(Boolean));
+
+  // A user may interrupt with a single meaningful word ("مرحبا", "انتظر", etc.).
+  // Never interrupt if that same word is part of EZRA's current spoken answer.
+  if (words.length === 1) {
+    return (
+      (explicitInterruptionWords.has(words[0]) || words[0].length >= 3) &&
+      !spokenWords.has(words[0])
+    );
   }
 
   if (words.length < 2 || heard.length < 6) return false;
   if (spoken.includes(heard)) return false;
-
-  const spokenWords = new Set(spoken.split(' ').filter(Boolean));
   const overlappingWords = words.filter(word => spokenWords.has(word)).length;
   if (overlappingWords >= 2 && overlappingWords / words.length >= 0.8) return false;
   return true;
