@@ -45,6 +45,7 @@ import { retrieveDentalClinicalCases } from './src/study/dentalKnowledge';
 import { DENTAL_CLINICAL_CASES } from './src/study/clinicalCases';
 import { supabase } from './src/lib/supabase';
 import { DEFAULT_EZRA_VOICE, detectEzraSpeechLanguage } from './src/voice/voiceProfile';
+import { startEzraLiveVoiceSession, type EzraLiveVoiceSession } from './src/voice/geminiLiveAudioSession';
 import { AI_MODELS, AI_PROVIDER_OPTIONS, DEFAULT_AI_MODELS, normalizeAiModel, normalizeAiProvider, type AiProvider } from './src/ai/aiModelSettings';
 import { DEFAULT_MIC_SENSITIVITY, normalizeMicSensitivity, scaleMicLevel } from './src/voice/micSensitivity';
 import { parseCallContactName } from './src/phone/commandParser';
@@ -420,6 +421,12 @@ export default function App() {
   const voiceInterruptionConfirmedRef = useRef(false);
   const ignoreNextVoiceEndRef = useRef(false);
   const voiceRetryCountRef = useRef(0);
+  const liveVoiceSessionRef = useRef<EzraLiveVoiceSession | null>(null);
+  const liveVoiceUnavailableRef = useRef(false);
+  const liveVoiceConnectingRef = useRef(false);
+  const liveVoiceInputTranscriptRef = useRef('');
+  const liveVoiceOutputTranscriptRef = useRef('');
+  const liveVoiceAssistantMessageIdRef = useRef<string | null>(null);
   const [ttsVoices, setTtsVoices] = useState<{ identifier: string; name: string; language: string; quality?: string }[]>([]);
   const [selectedTtsVoice, setSelectedTtsVoice] = useState<string | null>(null);
   const [selectedEnglishTtsVoice, setSelectedEnglishTtsVoice] = useState<string | null>(null);
@@ -1824,8 +1831,19 @@ export default function App() {
   });
 
   useEffect(() => {
+    if (appIsActive && voiceHome && autoListen && session?.user.id) return;
+    const activeLiveSession = liveVoiceSessionRef.current;
+    liveVoiceSessionRef.current = null;
+    liveVoiceUnavailableRef.current = false;
+    liveVoiceConnectingRef.current = false;
+    if (activeLiveSession) void activeLiveSession.stop();
+    setIsListening(false);
+    setSpeakingMessageId(null);
+  }, [appIsActive, voiceHome, autoListen, session?.user.id]);
+
+  useEffect(() => {
     if (voiceHome) return;
-    if (isListening) ExpoSpeechRecognitionModule.stop();
+    if (isListening && !liveVoiceSessionRef.current) ExpoSpeechRecognitionModule.stop();
     if (speakingMessageId) {
       Speech.stop();
       activeSpokenTextRef.current = '';
@@ -2925,11 +2943,141 @@ export default function App() {
     };
   }, [backgroundWakeEnabled, appIsActive, speechRate, speechPitch]);
 
+  const fallbackFromGeminiLive = (reason: string) => {
+    const activeLiveSession = liveVoiceSessionRef.current;
+    if (!activeLiveSession && !liveVoiceConnectingRef.current) return;
+    liveVoiceSessionRef.current = null;
+    liveVoiceConnectingRef.current = false;
+    liveVoiceUnavailableRef.current = true;
+    const pendingUserText = liveVoiceInputTranscriptRef.current.trim();
+    liveVoiceInputTranscriptRef.current = '';
+    liveVoiceOutputTranscriptRef.current = '';
+    liveVoiceAssistantMessageIdRef.current = null;
+    if (activeLiveSession) void activeLiveSession.stop();
+    setIsListening(false);
+    setSpeakingMessageId(null);
+    setSending(false);
+    setVoiceRetryMessage('تعذّر اتصال Gemini Live؛ أتحول إلى الصوت الاحتياطي…');
+    setVoiceRetrying(true);
+    console.warn('Gemini Live unavailable; switching to the existing voice path:', reason);
+    if (pendingUserText) {
+      setTimeout(() => {
+        setVoiceRetrying(false);
+        setVoiceRetryMessage('');
+        if (appIsActiveRef.current && voiceHome) {
+          setMessage(pendingUserText);
+          void sendMessage(true, pendingUserText);
+        }
+      }, 350);
+    } else {
+      setTimeout(() => {
+        setVoiceRetrying(false);
+        setVoiceRetryMessage('');
+        if (appIsActiveRef.current && autoListenRef.current && voiceHome) void beginListening();
+      }, 500);
+    }
+  };
+
   const beginListening = async (interruptSpeech = false, interruptionAlreadyConfirmed = false) => {
     if (!appIsActiveRef.current || !appIsActive || !autoListenRef.current || isListening || voiceRecognitionActiveRef.current || voiceStartInFlightRef.current || sending || (speakingMessageId && !interruptSpeech)) return;
     voiceStartInFlightRef.current = true;
     voiceRecognitionSessionIdRef.current += 1;
     try {
+      if (Platform.OS === 'android' && !liveVoiceUnavailableRef.current) {
+        liveVoiceConnectingRef.current = true;
+        try {
+          const microphonePermission = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
+          if (microphonePermission !== PermissionsAndroid.RESULTS.GRANTED) {
+            throw new Error('لم يتم منح إذن الميكروفون لتشغيل Gemini Live.');
+          }
+          liveVoiceInputTranscriptRef.current = '';
+          liveVoiceOutputTranscriptRef.current = '';
+          liveVoiceAssistantMessageIdRef.current = null;
+          const liveSession = await startEzraLiveVoiceSession(responseLanguage, {
+            onInputTranscript: (text, finished) => {
+              if (finished) {
+                liveVoiceInputTranscriptRef.current = appendVoiceTranscriptSegment(liveVoiceInputTranscriptRef.current, text);
+                setMessage(liveVoiceInputTranscriptRef.current);
+              } else {
+                setMessage(appendVoiceTranscriptSegment(liveVoiceInputTranscriptRef.current, text));
+              }
+            },
+            onOutputTranscript: (text) => {
+              liveVoiceOutputTranscriptRef.current = appendVoiceTranscriptSegment(liveVoiceOutputTranscriptRef.current, text);
+              if (!liveVoiceAssistantMessageIdRef.current) {
+                liveVoiceAssistantMessageIdRef.current = createConversationId();
+              }
+              setSpeakingMessageId(liveVoiceAssistantMessageIdRef.current);
+            },
+            onAssistantAudioStarted: () => {
+              if (!liveVoiceAssistantMessageIdRef.current) {
+                liveVoiceAssistantMessageIdRef.current = createConversationId();
+              }
+              setSpeakingMessageId(liveVoiceAssistantMessageIdRef.current);
+            },
+            onInterrupted: () => {
+              setSpeakingMessageId(null);
+              setVoiceLevel(0);
+            },
+            onTurnComplete: () => {
+              const userText = liveVoiceInputTranscriptRef.current.trim();
+              const assistantText = liveVoiceOutputTranscriptRef.current.trim();
+              const assistantId = liveVoiceAssistantMessageIdRef.current || createConversationId();
+              const additions: Message[] = [];
+              if (userText) additions.push({ id: createConversationId(), sender: 'user', text: userText });
+              if (assistantText) additions.push({ id: assistantId, sender: 'ezra', text: assistantText });
+              if (additions.length) {
+                setMessages(previous => [...previous, ...additions]);
+                if (session?.user.id && conversationId) {
+                  const rows = [
+                    ...(userText ? [{ owner_id: session.user.id, conversation_id: conversationId, role: 'user', content: userText }] : []),
+                    ...(assistantText ? [{ owner_id: session.user.id, conversation_id: conversationId, role: 'assistant', content: assistantText }] : []),
+                  ];
+                  void supabase.from('chat_messages').insert(rows).then(({ error }) => {
+                    if (error) console.warn('Could not save Gemini Live turn to chat history:', error);
+                  });
+                }
+              }
+              liveVoiceInputTranscriptRef.current = '';
+              liveVoiceOutputTranscriptRef.current = '';
+              liveVoiceAssistantMessageIdRef.current = null;
+              setMessage('');
+              setSpeakingMessageId(null);
+              setSending(false);
+              setVoiceRetrying(false);
+              setVoiceRetryMessage('');
+              setIsListening(true);
+            },
+            onError: message => {
+              if (liveVoiceSessionRef.current) fallbackFromGeminiLive(message);
+            },
+            onClosed: (code, reason) => {
+              if (liveVoiceSessionRef.current) fallbackFromGeminiLive(reason || `WebSocket closed (${code})`);
+            },
+          });
+          if (!appIsActiveRef.current || !autoListenRef.current || !voiceHome || liveVoiceUnavailableRef.current) {
+            await liveSession.stop();
+            liveVoiceConnectingRef.current = false;
+            voiceStartInFlightRef.current = false;
+            return;
+          }
+          liveVoiceSessionRef.current = liveSession;
+          liveVoiceConnectingRef.current = false;
+          voiceStartInFlightRef.current = false;
+          voiceRecognitionActiveRef.current = false;
+          setVoiceRetrying(false);
+          setVoiceRetryMessage('');
+          setAssistantConnection('online');
+          setVoiceLevel(0);
+          setIsListening(true);
+          return;
+        } catch (liveError) {
+          liveVoiceConnectingRef.current = false;
+          liveVoiceUnavailableRef.current = true;
+          console.warn('Gemini Live startup failed; using existing voice recognition:', liveError);
+        }
+      }
+
       const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
       if (!appIsActiveRef.current || !autoListenRef.current) {
         voiceStartInFlightRef.current = false;
@@ -2946,14 +3094,10 @@ export default function App() {
       voiceCaptureDuringSpeechRef.current = interruptSpeech && !interruptionAlreadyConfirmed;
       voiceInterruptionConfirmedRef.current = interruptionAlreadyConfirmed;
       interruptVoiceFramesRef.current = 0;
-      // Use the language explicitly selected by the user; do not auto-switch recognition locales.
       ExpoSpeechRecognitionModule.start({
         lang: responseLanguage === 'en' ? 'en-US' : (arabicRecognitionFallback === 1 ? 'ar-SA' : 'ar'),
         contextualStrings: responseLanguage === 'en' ? ['EZRA', 'Ezra'] : ['إزرا', 'ازرا', 'يا إزرا', 'EZRA'],
         interimResults: true,
-        // On Android 13+, segmented continuous mode emits final results for speech segments.
-        // Keep the recognition session open while the user pauses; the final-segment debounce
-        // below determines the end of a complete spoken turn.
         continuous: Platform.OS === 'android' && Number(Platform.Version) >= 33,
         volumeChangeEventOptions: { enabled: true, intervalMillis: 90 },
       });
@@ -2982,6 +3126,18 @@ export default function App() {
       AsyncStorage.setItem('ezra:autoListen', 'false').catch(() => {});
       voiceStartInFlightRef.current = false;
       ExpoSpeechRecognitionModule.abort();
+      return;
+    }
+    if (liveVoiceSessionRef.current) {
+      const activeLiveSession = liveVoiceSessionRef.current;
+      liveVoiceSessionRef.current = null;
+      await activeLiveSession.stop();
+      liveVoiceUnavailableRef.current = false;
+      autoListenRef.current = false;
+      setAutoListen(false);
+      await AsyncStorage.setItem('ezra:autoListen', 'false').catch(() => {});
+      setIsListening(false);
+      setSpeakingMessageId(null);
       return;
     }
     if (backgroundWakeEnabled && EzraWakeWord) {
@@ -3019,6 +3175,7 @@ export default function App() {
     }
     autoListenRef.current = true;
     setAutoListen(true);
+    liveVoiceUnavailableRef.current = false;
     AsyncStorage.setItem('ezra:autoListen', 'true').catch(() => {});
     await beginListening();
   };
