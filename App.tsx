@@ -3018,6 +3018,8 @@ export default function App() {
               setSpeakingMessageId(liveVoiceAssistantMessageIdRef.current);
             },
             onInterrupted: () => {
+              liveVoiceOutputTranscriptRef.current = '';
+              liveVoiceAssistantMessageIdRef.current = null;
               setSpeakingMessageId(null);
               setVoiceLevel(0);
             },
