@@ -45,7 +45,7 @@ import { DENTAL_CLINICAL_CASES } from './src/study/clinicalCases';
 import { supabase } from './src/lib/supabase';
 import { DEFAULT_EZRA_VOICE, detectEzraSpeechLanguage } from './src/voice/voiceProfile';
 import { AI_MODELS, AI_PROVIDER_OPTIONS, DEFAULT_AI_MODELS, normalizeAiModel, normalizeAiProvider, type AiProvider } from './src/ai/aiModelSettings';
-import { DEFAULT_MIC_SENSITIVITY, advanceMicInterruptionFrames, getMicInterruptionFramesRequired, normalizeMicSensitivity, scaleMicLevel } from './src/voice/micSensitivity';
+import { DEFAULT_MIC_SENSITIVITY, normalizeMicSensitivity, scaleMicLevel } from './src/voice/micSensitivity';
 import { parseCallContactName } from './src/phone/commandParser';
 import { parseSmsCommand, parseIncompleteSmsCommand } from './src/phone/smsCommandParser';
 import { isScreenCaptureCommand } from './src/phone/screenCaptureCommands';
@@ -220,6 +220,30 @@ const isRecognizedUserInterruption = (candidate: string, assistantSpeech: string
   const overlappingWords = words.filter(word => spokenWords.has(word)).length;
   if (overlappingWords >= 2 && overlappingWords / words.length >= 0.8) return false;
   return true;
+};
+
+const appendVoiceTranscriptSegment = (current: string, incoming: string) => {
+  const previous = current.trim();
+  const next = incoming.trim();
+  if (!next) return previous;
+  if (!previous) return next;
+  const previousNormalized = normalizeVoiceEchoText(previous);
+  const nextNormalized = normalizeVoiceEchoText(next);
+  if (previousNormalized === nextNormalized || previousNormalized.endsWith(nextNormalized)) return previous;
+  if (nextNormalized.startsWith(previousNormalized)) return next;
+
+  const previousWords = previous.split(/\\s+/);
+  const nextWords = next.split(/\\s+/);
+  const previousComparable = previousWords.map(normalizeVoiceEchoText);
+  const nextComparable = nextWords.map(normalizeVoiceEchoText);
+  let overlap = Math.min(previousWords.length, nextWords.length);
+  while (overlap > 0) {
+    const left = previousComparable.slice(-overlap);
+    const right = nextComparable.slice(0, overlap);
+    if (left.every((word, index) => word === right[index])) break;
+    overlap -= 1;
+  }
+  return [previous, ...nextWords.slice(overlap)].filter(Boolean).join(' ');
 };
 
 const WELCOME_MESSAGE: Message = {
@@ -399,6 +423,7 @@ export default function App() {
   const [pendingWakeCommand, setPendingWakeCommand] = useState('');
   const autoListenRef = useRef(true);
   const voiceTranscriptRef = useRef('');
+  const voiceFinalSegmentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const voiceTurnInProgressRef = useRef(false);
   const voiceRequestStartedRef = useRef(false);
   const interruptVoiceFramesRef = useRef(0);
@@ -1634,6 +1659,8 @@ export default function App() {
   }, [session?.user.id, conversationId]);
 
   useSpeechRecognitionEvent('start', () => {
+    if (voiceFinalSegmentTimerRef.current) clearTimeout(voiceFinalSegmentTimerRef.current);
+    voiceFinalSegmentTimerRef.current = null;
     voiceStartInFlightRef.current = false;
     voiceRecognitionActiveRef.current = true;
     if (!voiceCaptureDuringSpeechRef.current) voiceInterruptionConfirmedRef.current = false;
@@ -1652,6 +1679,8 @@ export default function App() {
     setVoiceLevel(0);
   });
   useSpeechRecognitionEvent('end', () => {
+    if (voiceFinalSegmentTimerRef.current) clearTimeout(voiceFinalSegmentTimerRef.current);
+    voiceFinalSegmentTimerRef.current = null;
     voiceStartInFlightRef.current = false;
     voiceRecognitionActiveRef.current = false;
     setIsListening(false);
@@ -1702,30 +1731,41 @@ export default function App() {
       if (voiceCaptureDuringSpeechRef.current && !voiceInterruptionConfirmedRef.current) return;
       voiceRetryCountRef.current = 0;
       setArabicRecognitionFallback(0);
-      voiceTranscriptRef.current = transcript;
-      setMessage(transcript);
 
-      // On Android 13+ continuous mode emits a final result for each speech segment
-      // without ending the microphone session. Consume that segment immediately,
-      // then abort the recognizer so the existing reply/auto-listen lifecycle can run.
-      if (Platform.OS === 'android' && Number(Platform.Version) >= 33 && event.isFinal) {
-        voiceTranscriptRef.current = '';
-        voiceTurnInProgressRef.current = true;
-        ignoreNextVoiceEndRef.current = true;
-        voiceStartInFlightRef.current = false;
-        voiceRecognitionActiveRef.current = false;
-        setIsListening(false);
-        setVoiceLevel(0);
-        ExpoSpeechRecognitionModule.abort();
-        setTimeout(() => {
-          if (appIsActiveRef.current && autoListenRef.current && voiceHome) {
-            void sendMessage(true, transcript);
-          }
-        }, 120);
+      const segmentedAndroid = Platform.OS === 'android' && Number(Platform.Version) >= 33;
+      let visibleTranscript = transcript;
+      if (segmentedAndroid) {
+        if (event.isFinal) {
+          voiceTranscriptRef.current = appendVoiceTranscriptSegment(voiceTranscriptRef.current, transcript);
+          visibleTranscript = voiceTranscriptRef.current;
+          // Android 13+ continuous recognition returns final speech *segments*.
+          // Accumulate segments and end the turn only after a quiet debounce window,
+          // instead of aborting after the first short segment.
+          if (voiceFinalSegmentTimerRef.current) clearTimeout(voiceFinalSegmentTimerRef.current);
+          voiceFinalSegmentTimerRef.current = setTimeout(() => {
+            voiceFinalSegmentTimerRef.current = null;
+            if (
+              appIsActiveRef.current &&
+              autoListenRef.current &&
+              voiceHome &&
+              voiceRecognitionActiveRef.current &&
+              voiceTranscriptRef.current.trim()
+            ) {
+              ExpoSpeechRecognitionModule.stop();
+            }
+          }, 1900);
+        } else {
+          visibleTranscript = appendVoiceTranscriptSegment(voiceTranscriptRef.current, transcript);
+        }
+      } else {
+        voiceTranscriptRef.current = transcript;
       }
+      setMessage(visibleTranscript);
     }
   });
   useSpeechRecognitionEvent('error', event => {
+    if (voiceFinalSegmentTimerRef.current) clearTimeout(voiceFinalSegmentTimerRef.current);
+    voiceFinalSegmentTimerRef.current = null;
     const failedSessionId = voiceRecognitionSessionIdRef.current;
     if (voiceErrorHandledSessionRef.current === failedSessionId) {
       console.warn('Ignoring duplicate EZRA speech recognition error:', event.error);
@@ -2917,21 +2957,10 @@ export default function App() {
         lang: responseLanguage === 'en' ? 'en-US' : (arabicRecognitionFallback === 1 ? 'ar-SA' : 'ar'),
         contextualStrings: responseLanguage === 'en' ? ['EZRA', 'Ezra'] : ['إزرا', 'ازرا', 'يا إزرا', 'EZRA'],
         interimResults: true,
-        // Android 13+ supports a segmented continuous microphone session. It stays
-        // open while the user pauses to think instead of timing out after a short silence.
-        // Final segments are submitted below, then the recognizer is cleanly aborted.
+        // On Android 13+, segmented continuous mode emits final results for speech segments.
+        // Keep the recognition session open while the user pauses; the final-segment debounce
+        // below determines the end of a complete spoken turn.
         continuous: Platform.OS === 'android' && Number(Platform.Version) >= 33,
-        // On Android 13+, segment by a real silence window instead of waiting
-        // for the custom audio source to close. Give the user time to begin speaking
-        // and avoid finalizing on a short pause between words.
-        androidIntentOptions: Platform.OS === 'android' && Number(Platform.Version) >= 33
-          ? {
-              EXTRA_SEGMENTED_SESSION: 'android.speech.extras.SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS',
-              EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 5000,
-              EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS: 3000,
-              EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS: 10000,
-            }
-          : undefined,
         volumeChangeEventOptions: { enabled: true, intervalMillis: 90 },
       });
     } catch (error) {
@@ -3090,6 +3119,8 @@ export default function App() {
 
   const finishVoiceCaptureAfterPlayback = () => {
     activeSpokenTextRef.current = '';
+    if (voiceFinalSegmentTimerRef.current) clearTimeout(voiceFinalSegmentTimerRef.current);
+    voiceFinalSegmentTimerRef.current = null;
     if (!voiceCaptureDuringSpeechRef.current || voiceInterruptionConfirmedRef.current) return;
     voiceCaptureDuringSpeechRef.current = false;
     voiceInterruptionConfirmedRef.current = false;
