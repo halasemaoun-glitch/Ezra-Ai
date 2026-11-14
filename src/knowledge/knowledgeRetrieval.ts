@@ -121,10 +121,16 @@ export function retrieveKnowledgeChunks(
       .filter(document => !document.deletedAt && document.content.trim())
       .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
       .slice(0, maxDocuments);
+    const fallbackChunkBudget = Math.max(1, Math.floor(maxTotalCharacters / (maxChunkCharacters + 120)));
+    const chunksPerFallbackDocument = Math.max(1, Math.floor(fallbackChunkBudget / Math.max(1, fallbackDocuments.length)));
     for (const document of fallbackDocuments) {
       const chunks = splitIntoChunks(document.content, maxChunkCharacters);
-      for (const text of chunks.slice(0, maxChunksPerDocument)) {
-        ranked.push({ document, text, score: 0 });
+      const take = Math.min(chunks.length, chunksPerFallbackDocument);
+      for (let index = 0; index < take; index += 1) {
+        const chunkIndex = take <= 1
+          ? 0
+          : Math.floor(index * (chunks.length - 1) / (take - 1));
+        ranked.push({ document, text: chunks[chunkIndex], score: 0 });
       }
     }
   }
