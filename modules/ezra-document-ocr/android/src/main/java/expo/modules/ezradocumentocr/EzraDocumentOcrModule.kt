@@ -183,7 +183,7 @@ class EzraDocumentOcrModule : Module() {
           ocr.release()
         }
       }
-    }.runOnQueue(Queues.IO)
+    }.runOnQueue(Queues.DEFAULT)
   }
 
   private fun openPdfDescriptor(context: Context, uriString: String): ParcelFileDescriptor {
