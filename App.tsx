@@ -612,7 +612,7 @@ export default function App() {
       if (result.canceled || !result.assets[0]) return;
       const selected = result.assets[0];
       if (!selected.name.toLowerCase().endsWith('.wav')) {
-        Alert.alert('صيغة غير مدعومة', 'اختر تسجيلًا بصيغة WAV فقط. يجب أن تكون العينة صوتًا رجاليًا واضحًا ومدتها من نصف ثانية إلى 1.3 ثانية.');
+        Alert.alert('صيغة غير مدعومة', 'اختر تسجيلًا بصيغة WAV فقط. يجب أن تكون العينة صوتًا رجاليًا واضحًا ومدتها من نصف ثانية إلى 1.2 ثانية.');
         return;
       }
       const target = `${FileSystem.documentDirectory}habibi-reference.wav`;
@@ -685,11 +685,12 @@ export default function App() {
       if (referenceWav.durationSeconds < 0.5) {
         throw new Error('عينة Habibi قصيرة جدًا. يجب أن تكون مدتها نصف ثانية على الأقل.');
       }
-      // Longer references are deliberately allowed: the native engine trims them
-      // to its safe 1.2-second frame budget before model initialization.
+      if (referenceWav.durationSeconds > 1.2) {
+        throw new Error('عينة Habibi يجب ألا تتجاوز 1.2 ثانية. قصّ التسجيل أولًا، واكتب النص المطابق لهذا المقطع كاملًا حتى لا يختلط الكلام المرجعي بالنطق الناتج.');
+      }
       const capacity = await EzraHabibiTts.getDeviceCapacity();
       // Android uses sequential single-batch CFG, Q8_0 DiT linear weights,
-      // a 128-frame synthesis budget, and a 768 MiB minimum CPU graph arena.
+      // a 256-frame synthesis budget, and a 768 MiB minimum CPU graph arena.
       // Keep 2.2 GiB free for the model, Vocos, app heap, and Android.
       // Never bypass Android's low-memory flag.
       const minimumHabibiFreeRamBytes = 2_200 * 1024 * 1024;
