@@ -2983,6 +2983,7 @@ export default function App() {
     setIsListening(false);
     setSpeakingMessageId(null);
     setSending(false);
+    setAssistantConnection('offline');
     setVoiceRetryMessage('تعذّر اتصال Gemini Live؛ أتحول إلى الصوت الاحتياطي…');
     setVoiceRetrying(true);
     console.warn('Gemini Live unavailable; switching to the existing voice path:', reason);
