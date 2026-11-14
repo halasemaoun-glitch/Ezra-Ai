@@ -2889,6 +2889,17 @@ export default function App() {
         // open while the user pauses to think instead of timing out after a short silence.
         // Final segments are submitted below, then the recognizer is cleanly aborted.
         continuous: Platform.OS === 'android' && Number(Platform.Version) >= 33,
+        // On Android 13+, segment by a real silence window instead of waiting
+        // for the custom audio source to close. Give the user time to begin speaking
+        // and avoid finalizing on a short pause between words.
+        androidIntentOptions: Platform.OS === 'android' && Number(Platform.Version) >= 33
+          ? {
+              EXTRA_SEGMENTED_SESSION: 'android.speech.extras.SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS',
+              EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 5000,
+              EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS: 3000,
+              EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS: 10000,
+            }
+          : undefined,
         volumeChangeEventOptions: { enabled: true, intervalMillis: 90 },
       });
     } catch (error) {
