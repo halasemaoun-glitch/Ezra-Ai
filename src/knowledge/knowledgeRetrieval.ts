@@ -66,7 +66,18 @@ function scoreChunk(chunk: string, title: string, queryTerms: string[], phrase: 
   let score = 0;
   for (const term of queryTerms) {
     const count = counts.get(term) ?? 0;
-    if (count) score += (1 + Math.log(count)) * (titleTerms.has(term) ? 2.5 : 1);
+    if (count) {
+      score += (1 + Math.log(count)) * (titleTerms.has(term) ? 2.5 : 1);
+      continue;
+    }
+    // Arabic and English words often appear in documents with inflectional suffixes
+    // or a longer compound form. Give close token-prefix matches partial credit.
+    const nearMatches = tokens.filter(token =>
+      token !== term &&
+      Math.min(token.length, term.length) >= 3 &&
+      (token.startsWith(term) || term.startsWith(token))
+    ).length;
+    if (nearMatches) score += Math.min(nearMatches, 2) * 0.45;
   }
   const normalizedChunk = normalizeKnowledgeText(chunk);
   if (phrase.length > 3 && normalizedChunk.includes(phrase)) score += 2;
@@ -100,6 +111,24 @@ export function retrieveKnowledgeChunks(
   }
 
   ranked.sort((a, b) => b.score - a.score || Date.parse(b.document.updatedAt) - Date.parse(a.document.updatedAt));
+
+  // Never silently hide the user's library from EZRA when wording differs from
+  // the document vocabulary. If lexical matching finds nothing, pass a small,
+  // clearly labelled sample from the newest active documents so the model can
+  // inspect the actual source and admit when the requested fact is not present.
+  if (!ranked.length) {
+    const fallbackDocuments = documents
+      .filter(document => !document.deletedAt && document.content.trim())
+      .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+      .slice(0, maxDocuments);
+    for (const document of fallbackDocuments) {
+      const chunks = splitIntoChunks(document.content, maxChunkCharacters);
+      for (const text of chunks.slice(0, 1)) {
+        ranked.push({ document, text, score: 0 });
+      }
+    }
+  }
+
   const selected: KnowledgeRetrievalChunk[] = [];
   const selectedDocumentIds = new Set<string>();
   let usedCharacters = 0;
