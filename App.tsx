@@ -54,7 +54,7 @@ import { PHONE_SETTINGS_COMMANDS, parsePhoneSettingsTarget, type PhoneSettingsTa
 import { parsePhoneActionCommand } from './src/phone/phoneActionCommands';
 import type { KnowledgeDocumentRecord } from './src/knowledge/knowledgeSync';
 import { knowledgeDocumentsFromCloud, knowledgeDocumentsToCloud, mergeKnowledgeDocuments, normalizeKnowledgeDocuments } from './src/knowledge/knowledgeSync';
-import { extractDocumentText, MAX_DOCUMENT_SOURCE_BYTES, MAX_EXTRACTED_DOCUMENT_BYTES } from './src/documents/documentExtractor';
+import { extractDocumentTextFromUri, MAX_DOCUMENT_SOURCE_BYTES, MAX_EXTRACTED_DOCUMENT_BYTES } from './src/documents/documentExtractor';
 import { getDocumentExtension, getDocumentMimeType, isSupportedDocumentExtension, selectRelevantDocumentText } from './src/documents/documentTextUtils';
 import { filterAndSortKnowledgeDocuments, getKnowledgeCategoryLabel, KNOWLEDGE_CATEGORY_OPTIONS, type KnowledgeCategory, type KnowledgeSort } from './src/knowledge/knowledgeLibraryTools';
 import { retrieveKnowledgeChunks } from './src/knowledge/knowledgeRetrieval';
@@ -187,6 +187,39 @@ type Message = {
   text: string;
   sender: 'ezra' | 'user';
   attachment?: Attachment;
+};
+
+const normalizeVoiceEchoText = (value: string) => value
+  .normalize('NFKC')
+  .toLocaleLowerCase()
+  .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+  .replace(/[أإآ]/g, 'ا')
+  .replace(/ى/g, 'ي')
+  .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+const isRecognizedUserInterruption = (candidate: string, assistantSpeech: string) => {
+  const heard = normalizeVoiceEchoText(candidate);
+  const spoken = normalizeVoiceEchoText(assistantSpeech);
+  if (!heard || heard.length < 2) return false;
+
+  const words = heard.split(' ').filter(Boolean);
+  const explicitInterruptionWords = new Set([
+    'لا', 'توقف', 'وقف', 'اسكت', 'اسكتي', 'كفى', 'انتظر',
+    'stop', 'wait', 'cancel', 'no',
+  ]);
+  if (words.length === 1 && explicitInterruptionWords.has(words[0])) {
+    return !spoken.split(' ').includes(words[0]);
+  }
+
+  if (words.length < 2 || heard.length < 6) return false;
+  if (spoken.includes(heard)) return false;
+
+  const spokenWords = new Set(spoken.split(' ').filter(Boolean));
+  const overlappingWords = words.filter(word => spokenWords.has(word)).length;
+  if (overlappingWords >= 2 && overlappingWords / words.length >= 0.8) return false;
+  return true;
 };
 
 const WELCOME_MESSAGE: Message = {
@@ -338,6 +371,7 @@ export default function App() {
   const [habibiEngineBusy, setHabibiEngineBusy] = useState(false);
   const [habibiEngineError, setHabibiEngineError] = useState('');
   const activeHabibiSpeechRef = useRef<{ text: string; messageId: string; chunks: string[]; nextIndex: number } | null>(null);
+  const activeSpokenTextRef = useRef('');
   const habibiAutoInitStartedRef = useRef(false);
   const [autoSpeak, setAutoSpeak] = useState(true);
   const [speechRate, setSpeechRate] = useState(DEFAULT_EZRA_VOICE.rate);
@@ -348,6 +382,9 @@ export default function App() {
   const chatShouldAutoScrollRef = useRef(true);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [attachment, setAttachment] = useState<Attachment | null>(null);
+  const [attachmentImporting, setAttachmentImporting] = useState(false);
+  const [attachmentImportName, setAttachmentImportName] = useState('');
+  const [knowledgeImporting, setKnowledgeImporting] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [voiceLevel, setVoiceLevel] = useState(0);
   const [micSensitivity, setMicSensitivity] = useState(DEFAULT_MIC_SENSITIVITY);
@@ -1145,7 +1182,7 @@ export default function App() {
   }, [session?.user.id]);
 
   const addKnowledgeDocument = async () => {
-    if (!session || !knowledgeLoaded || knowledgeLoading || !!knowledgeError) return;
+    if (!session || !knowledgeLoaded || knowledgeLoading || knowledgeImporting || !!knowledgeError) return;
     if (knowledgeDocuments.filter(item => !item.deletedAt).length >= 100) {
       Alert.alert('وصلت إلى الحد الأقصى', 'يمكنك حفظ 100 مادة حالياً. احذفي مادة قديمة لإضافة مادة جديدة.');
       return;
@@ -1163,20 +1200,22 @@ export default function App() {
         Alert.alert('الملف كبير', 'الحد الأقصى لحجم المستند الأصلي 50 ميغابايت.');
         return;
       }
-      const response = await fetch(file.uri);
-      if (!response.ok) throw new Error('تعذّرت قراءة المستند المحدد.');
-      const sourceBytes = new Uint8Array(await response.arrayBuffer());
-      const extracted = await extractDocumentText(file.name, sourceBytes, MAX_EXTRACTED_DOCUMENT_BYTES, file.uri);
-      const content = extracted.content;
       if (knowledgeDocuments.some(item => !item.deletedAt && item.name.toLowerCase() === file.name.toLowerCase())) {
         Alert.alert('الملف موجود مسبقاً', 'احذف النسخة القديمة أولاً إذا أردت استبدال هذا الملف.');
         return;
       }
+      setKnowledgeImporting(true);
+      const extracted = await extractDocumentTextFromUri(
+        file.name,
+        file.uri,
+        typeof file.size === 'number' ? file.size : undefined,
+        MAX_EXTRACTED_DOCUMENT_BYTES,
+      );
       const now = new Date().toISOString();
       const next: KnowledgeDocument[] = [{
         id: `knowledge-${Date.now()}`,
         name: file.name,
-        content,
+        content: extracted.content,
         sizeBytes: extracted.extractedBytes,
         addedAt: now,
         updatedAt: now,
@@ -1198,6 +1237,8 @@ export default function App() {
     } catch (error) {
       console.error('Could not add knowledge document:', error);
       Alert.alert('تعذّرت إضافة الملف', error instanceof Error ? error.message : 'لم نتمكن من قراءة الملف أو حفظه. حاول مرة أخرى.');
+    } finally {
+      setKnowledgeImporting(false);
     }
   };
 
@@ -1527,6 +1568,7 @@ export default function App() {
   const returnToVoiceHome = () => {
     if (isListening) ExpoSpeechRecognitionModule.stop();
     Speech.stop();
+    activeSpokenTextRef.current = '';
     EzraHabibiTts?.stopAudio().catch(() => {});
     setIsListening(false);
     setSpeakingMessageId(null);
@@ -1603,30 +1645,8 @@ export default function App() {
   });
   useSpeechRecognitionEvent('volumechange', event => {
     const normalized = scaleMicLevel(event.value, micSensitivityRef.current);
+    // Meter the microphone for the UI only. Loudspeaker echo must never stop TTS.
     setVoiceLevel(previous => previous * 0.58 + normalized * 0.42);
-
-    // During EZRA playback, require several consecutive strong mic-energy frames
-    // before treating input as an interruption. The recognition session stays open
-    // so the user's words continue into the transcript after playback stops.
-    if (voiceCaptureDuringSpeechRef.current && speakingMessageId && voiceHome && autoListenRef.current && appIsActiveRef.current) {
-      // Require a sustained, clear voice signal so EZRA's own speaker echo is less likely to interrupt it.
-      interruptVoiceFramesRef.current = advanceMicInterruptionFrames(
-        interruptVoiceFramesRef.current,
-        normalized,
-        micSensitivityRef.current,
-      );
-      if (interruptVoiceFramesRef.current >= getMicInterruptionFramesRequired(micSensitivityRef.current)) {
-        interruptVoiceFramesRef.current = 0;
-        voiceInterruptionConfirmedRef.current = true;
-        Speech.stop();
-        EzraHabibiTts?.stopAudio().catch(() => {});
-        activeHabibiSpeechRef.current = null;
-        setSpeakingMessageId(null);
-        setVoiceLevel(0);
-      }
-    } else {
-      interruptVoiceFramesRef.current = 0;
-    }
   });
   useSpeechRecognitionEvent('soundend', () => {
     setVoiceLevel(0);
@@ -1665,10 +1685,21 @@ export default function App() {
   });
   useSpeechRecognitionEvent('result', event => {
     if (!appIsActiveRef.current) return;
-    if (voiceCaptureDuringSpeechRef.current && !voiceInterruptionConfirmedRef.current) return;
     const latestResult = event.results[event.results.length - 1];
     const transcript = latestResult?.transcript?.trim();
     if (transcript) {
+      if (voiceCaptureDuringSpeechRef.current && speakingMessageId && !voiceInterruptionConfirmedRef.current) {
+        if (!isRecognizedUserInterruption(transcript, activeSpokenTextRef.current)) return;
+        voiceInterruptionConfirmedRef.current = true;
+        interruptVoiceFramesRef.current = 0;
+        Speech.stop();
+        EzraHabibiTts?.stopAudio().catch(() => {});
+        activeHabibiSpeechRef.current = null;
+        activeSpokenTextRef.current = '';
+        setSpeakingMessageId(null);
+        setVoiceLevel(0);
+      }
+      if (voiceCaptureDuringSpeechRef.current && !voiceInterruptionConfirmedRef.current) return;
       voiceRetryCountRef.current = 0;
       setArabicRecognitionFallback(0);
       voiceTranscriptRef.current = transcript;
@@ -1767,6 +1798,7 @@ export default function App() {
     if (isListening) ExpoSpeechRecognitionModule.stop();
     if (speakingMessageId) {
       Speech.stop();
+      activeSpokenTextRef.current = '';
       EzraHabibiTts?.stopAudio().catch(() => {});
       setSpeakingMessageId(null);
     }
@@ -2935,6 +2967,7 @@ export default function App() {
     }
     if (speakingMessageId) {
       Speech.stop();
+      activeSpokenTextRef.current = '';
       EzraHabibiTts?.stopAudio().catch(() => {});
       activeHabibiSpeechRef.current = null;
       setSpeakingMessageId(null);
@@ -3003,6 +3036,7 @@ export default function App() {
   };
 
   const pickملف = async () => {
+    let importStarted = false;
     try {
       const result = await DocumentPicker.getDocumentAsync({
         copyToCacheDirectory: true,
@@ -3019,20 +3053,30 @@ export default function App() {
         Alert.alert('الملف كبير جدًا', 'الحد الأقصى لحجم المرفق 50 ميغابايت.');
         return;
       }
-      const response = await fetch(file.uri);
-      if (!response.ok) throw new Error('تعذّرت قراءة الملف المحدد.');
-      const sourceBytes = new Uint8Array(await response.arrayBuffer());
-      const extracted = await extractDocumentText(file.name, sourceBytes, MAX_EXTRACTED_DOCUMENT_BYTES, file.uri);
+      setAttachmentImportName(file.name);
+      setAttachmentImporting(true);
+      importStarted = true;
+      const extracted = await extractDocumentTextFromUri(
+        file.name,
+        file.uri,
+        typeof file.size === 'number' ? file.size : undefined,
+        MAX_EXTRACTED_DOCUMENT_BYTES,
+      );
       setAttachment({
         uri: file.uri,
         name: file.name,
         kind: 'file',
         mimeType: file.mimeType || getDocumentMimeType(extension),
         textContent: extracted.content,
-        sizeBytes: typeof file.size === 'number' ? file.size : sourceBytes.byteLength,
+        sizeBytes: typeof file.size === 'number' ? file.size : 0,
       });
     } catch (error) {
       Alert.alert('تعذّر فتح الملف', error instanceof Error ? error.message : 'حاول مرة أخرى.');
+    } finally {
+      if (importStarted) {
+        setAttachmentImporting(false);
+        setAttachmentImportName('');
+      }
     }
   };
 
@@ -3045,6 +3089,7 @@ export default function App() {
   };
 
   const finishVoiceCaptureAfterPlayback = () => {
+    activeSpokenTextRef.current = '';
     if (!voiceCaptureDuringSpeechRef.current || voiceInterruptionConfirmedRef.current) return;
     voiceCaptureDuringSpeechRef.current = false;
     voiceInterruptionConfirmedRef.current = false;
@@ -3125,6 +3170,7 @@ export default function App() {
   const speak = async (text: string, messageId: string) => {
     if (speakingMessageId === messageId) {
       Speech.stop();
+      activeSpokenTextRef.current = '';
       finishVoiceCaptureAfterPlayback();
       EzraHabibiTts?.stopAudio().catch(() => {});
       activeHabibiSpeechRef.current = null;
@@ -3134,6 +3180,7 @@ export default function App() {
     Speech.stop();
     await EzraHabibiTts?.stopAudio().catch(() => {});
     activeHabibiSpeechRef.current = null;
+    activeSpokenTextRef.current = text;
     setSpeakingMessageId(messageId);
     const speechLanguage = DEFAULT_EZRA_VOICE.automaticOutputLanguage
       ? detectEzraSpeechLanguage(text, responseLanguage)
@@ -3602,9 +3649,10 @@ export default function App() {
                       <Text style={{ color: '#B9AAB7', fontSize: 12, textAlign: 'right' }}>TXT · MD · CSV · JSON · PDF · DOCX · PPTX · XLSX</Text>
                       <Text style={{ color: '#8F8290', fontSize: 10, lineHeight: 17, textAlign: 'right' }}>حتى 100 مادة، وبحد أقصى 50 ميغابايت للملف الأصلي والنص المستخرج. تُقرأ ملفات PDF المصوّرة باستخدام OCR على الجهاز.</Text>
                     </View>
-                    <TouchableOpacity onPress={addKnowledgeDocument} disabled={!knowledgeLoaded || knowledgeLoading || !!knowledgeError || knowledgeDocuments.filter(item => !item.deletedAt).length >= 100} style={{ borderRadius: 15, paddingVertical: 14, alignItems: 'center', backgroundColor: '#754765', borderWidth: 1, borderColor: '#C58DBB', opacity: !knowledgeLoaded || knowledgeLoading || !!knowledgeError || knowledgeDocuments.filter(item => !item.deletedAt).length >= 100 ? 0.55 : 1 }}>
-                      <Text style={{ color: '#FFF0F8', fontSize: 14, fontWeight: '800' }}>{knowledgeLoading ? 'جارٍ تحميل المكتبة…' : '＋ إضافة ملف إلى مكتبة المعرفة'}</Text>
+                    <TouchableOpacity onPress={addKnowledgeDocument} disabled={!knowledgeLoaded || knowledgeLoading || knowledgeImporting || !!knowledgeError || knowledgeDocuments.filter(item => !item.deletedAt).length >= 100} style={{ borderRadius: 15, paddingVertical: 14, alignItems: 'center', backgroundColor: '#754765', borderWidth: 1, borderColor: '#C58DBB', opacity: !knowledgeLoaded || knowledgeLoading || knowledgeImporting || !!knowledgeError || knowledgeDocuments.filter(item => !item.deletedAt).length >= 100 ? 0.55 : 1 }}>
+                      <Text style={{ color: '#FFF0F8', fontSize: 14, fontWeight: '800' }}>{knowledgeImporting ? 'جارٍ استخراج نص الملف…' : knowledgeLoading ? 'جارٍ تحميل المكتبة…' : '＋ إضافة ملف إلى مكتبة المعرفة'}</Text>
                     </TouchableOpacity>
+                    {knowledgeImporting ? <Text style={{ color: '#D5A9CC', fontSize: 10, lineHeight: 17, textAlign: 'right' }}>يجري استخراج النص محليًا. قد تستغرق ملفات PDF المصوّرة وقتًا؛ لا تغلقي الصفحة.</Text> : null}
                     <TextInput value={knowledgeSearch} onChangeText={setKnowledgeSearch} placeholder="ابحث باسم الملف أو داخل محتواه…" placeholderTextColor="#817482" style={{ minHeight: 46, borderRadius: 13, borderWidth: 1, borderColor: '#594253', backgroundColor: '#17121A', color: '#F5EAF2', paddingHorizontal: 13, textAlign: 'right', writingDirection: 'rtl' }} accessibilityLabel="البحث في أسماء الملفات ومحتوياتها" />
                     <View style={{ gap: 8 }}>
                       <Text style={{ color: '#B9AAB7', fontSize: 10, textAlign: 'right' }}>تصنيف الملفات</Text>
@@ -4577,6 +4625,15 @@ export default function App() {
 
 
 
+        {attachmentImporting && (
+          <View style={styles.pendingAttachment} accessibilityLiveRegion="polite">
+            <View style={styles.pendingAttachmentDetails}>
+              <Text style={styles.pendingText}>جارٍ تجهيز الملف للقراءة…</Text>
+              <Text style={styles.pendingFileName} numberOfLines={1}>{attachmentImportName}</Text>
+              <Text style={styles.attachmentSize}>قد تستغرق معالجة PDF المصوّر وقتًا. اتركي EZRA مفتوحًا.</Text>
+            </View>
+          </View>
+        )}
         {attachment && (
           <View style={styles.pendingAttachment}>
             {attachment.kind === 'image' && (
@@ -4660,9 +4717,9 @@ export default function App() {
             </TouchableOpacity>
           )}
           <TouchableOpacity
-            style={[styles.sendButton, (sending || chatLoading || (!message.trim() && !attachment)) && styles.sendButtonDisabled]}
+            style={[styles.sendButton, (sending || chatLoading || attachmentImporting || (!message.trim() && !attachment)) && styles.sendButtonDisabled]}
             onPress={() => sendMessage()}
-            disabled={sending || chatLoading || (!message.trim() && !attachment)}
+            disabled={sending || chatLoading || attachmentImporting || (!message.trim() && !attachment)}
             accessibilityRole="button"
             accessibilityLabel="إرسال الرسالة"
             accessibilityState={{ disabled: sending || chatLoading || (!message.trim() && !attachment) }}
