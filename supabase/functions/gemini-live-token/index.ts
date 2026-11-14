@@ -75,25 +75,10 @@ Deno.serve(async (req: Request) => {
       uses: 1,
       expireTime: new Date(now + 30 * 60 * 1000).toISOString(),
       newSessionExpireTime: new Date(now + 60 * 1000).toISOString(),
-      liveConnectConstraints: {
-        model: "models/gemini-3.8-live",
-        config: {
-          responseModalities: ["AUDIO"],
-          sessionResumption: {},
-          contextWindowCompression: {
-            slidingWindow: {},
-          },
-          systemInstruction: {
-            parts: [{ text: systemInstruction }],
-          },
-          inputAudioTranscription: {},
-          outputAudioTranscription: {},
-        },
-      },
     };
 
     const tokenResponse = await fetch(
-      "https://generativelanguage.googleapis.com/v1alpha/auth_tokens",
+      "https://generativelanguage.googleapis.com/v1beta/auth_tokens",
       {
         method: "POST",
         headers: {
@@ -120,6 +105,7 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({
       token: tokenData.name,
       model: "models/gemini-3.8-live",
+      systemInstruction,
       expiresAt: payload.expireTime,
     }), { status: 200, headers: jsonHeaders });
   } catch (error) {
