@@ -22,6 +22,7 @@ on:
       - "docs/HABIBI_ANDROID_INTEGRATION.md"
       - "scripts/patch_habibi_q8.py"
       - "scripts/patch-expo-speech-recognition-voice-processing.js"
+      - "scripts/patch-expo-speech-recognition-voice-processing.js"
       - ".github/workflows/habibi-android-audiocpp.yml"
   workflow_dispatch:
 
