@@ -8,10 +8,12 @@ export type GeminiLiveCallbacks = {
 };
 
 export type GeminiLiveConnection = {
-  socket: WebSocket;
+  readonly socket: WebSocket;
+  readonly expiresAt: number;
   sendAudio: (base64Pcm: string) => void;
   endAudioStream: () => void;
   sendText: (text: string) => void;
+  resume: (handle: string) => Promise<void>;
   close: () => void;
 };
 
@@ -30,20 +32,27 @@ export async function connectEzraGeminiLive(
     throw new Error(data?.error || error?.message || 'تعذر الحصول على تصريح الاتصال الصوتي.');
   }
 
-  const socket = new WebSocket(
-    `${LIVE_SOCKET_URL}?access_token=${encodeURIComponent(data.token)}`,
-  );
-  let setupCompleted = false;
-  let closed = false;
-  let settled = false;
-  let setupTimer: ReturnType<typeof setTimeout> | null = null;
+  const token = data.token as string;
+  const expiresAt = typeof data.expiresAt === 'string'
+    ? new Date(data.expiresAt).getTime()
+    : Date.now() + 30 * 60 * 1000;
+  let socket: WebSocket;
+  let intentionallyClosed = false;
 
-  await new Promise<void>((resolve, reject) => {
+  const openSocket = (resumptionHandle?: string) => new Promise<void>((resolve, reject) => {
+    const nextSocket = new WebSocket(
+      `${LIVE_SOCKET_URL}?access_token=${encodeURIComponent(token)}`,
+    );
+    socket = nextSocket;
+    let setupCompleted = false;
+    let settled = false;
+    let setupTimer: ReturnType<typeof setTimeout> | null = null;
+
     const failSetup = (message: string) => {
       if (settled) return;
       settled = true;
       if (setupTimer) clearTimeout(setupTimer);
-      socket.close();
+      nextSocket.close();
       reject(new Error(message));
     };
 
@@ -51,13 +60,16 @@ export async function connectEzraGeminiLive(
       failSetup('انتهت مهلة الاتصال بخدمة Gemini Live.');
     }, 20000);
 
-    socket.onopen = () => {
+    nextSocket.onopen = () => {
       setupTimer = setTimeout(() => {
         failSetup('لم تكتمل تهيئة جلسة Gemini Live في الوقت المحدد.');
       }, 15000);
       try {
-        socket.send(JSON.stringify({
-          setup: { model: LIVE_MODEL },
+        nextSocket.send(JSON.stringify({
+          setup: {
+            model: LIVE_MODEL,
+            ...(resumptionHandle ? { sessionResumption: { handle: resumptionHandle } } : {}),
+          },
         }));
       } catch {
         clearTimeout(connectionTimer);
@@ -65,7 +77,7 @@ export async function connectEzraGeminiLive(
       }
     };
 
-    socket.onerror = () => {
+    nextSocket.onerror = () => {
       if (!setupCompleted) {
         clearTimeout(connectionTimer);
         failSetup('تعذر الاتصال بخدمة Gemini Live.');
@@ -74,18 +86,17 @@ export async function connectEzraGeminiLive(
       }
     };
 
-    socket.onclose = event => {
-      closed = true;
+    nextSocket.onclose = event => {
       clearTimeout(connectionTimer);
       if (setupTimer) clearTimeout(setupTimer);
       if (!setupCompleted) {
         failSetup(event.reason || 'رفض Gemini Live إعداد الجلسة.');
-      } else {
+      } else if (!intentionallyClosed) {
         callbacks.onClose?.(event.code, event.reason || '');
       }
     };
 
-    socket.onmessage = event => {
+    nextSocket.onmessage = event => {
       let parsed: any;
       try {
         parsed = JSON.parse(String(event.data));
@@ -111,15 +122,18 @@ export async function connectEzraGeminiLive(
     };
   });
 
+  await openSocket();
+
   const send = (payload: unknown) => {
-    if (closed || socket.readyState !== WebSocket.OPEN) {
+    if (intentionallyClosed || !socket || socket.readyState !== WebSocket.OPEN) {
       throw new Error('اتصال Gemini Live غير متاح.');
     }
     socket.send(JSON.stringify(payload));
   };
 
   return {
-    socket,
+    get socket() { return socket; },
+    expiresAt,
     sendAudio: base64Pcm => send({
       realtimeInput: {
         audio: { data: base64Pcm, mimeType: 'audio/pcm;rate=16000' },
@@ -127,9 +141,14 @@ export async function connectEzraGeminiLive(
     }),
     endAudioStream: () => send({ realtimeInput: { audioStreamEnd: true } }),
     sendText: text => send({ realtimeInput: { text } }),
+    resume: async handle => {
+      if (intentionallyClosed) throw new Error('تم إغلاق جلسة Gemini Live.');
+      if (!handle) throw new Error('لا يوجد رمز لاستئناف جلسة Gemini Live.');
+      await openSocket(handle);
+    },
     close: () => {
-      closed = true;
-      if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+      intentionallyClosed = true;
+      if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
         socket.close(1000, 'EZRA voice session ended');
       }
     },
