@@ -474,6 +474,11 @@ export default function App() {
       appIsActiveRef.current = active;
       setAppIsActive(active);
       if (!active) {
+        const liveSession = liveVoiceSessionRef.current;
+        liveVoiceSessionRef.current = null;
+        liveVoiceUnavailableRef.current = false;
+        liveVoiceConnectingRef.current = false;
+        if (liveSession) void liveSession.stop();
         // Discard partial speech so background transitions can never submit an unfinished phrase.
         const hadPartialTranscript = !!voiceTranscriptRef.current;
         voiceTranscriptRef.current = '';
