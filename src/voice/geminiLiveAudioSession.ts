@@ -56,6 +56,7 @@ export async function startEzraLiveVoiceSession(
 
   let active = true;
   let playbackGeneration = 0;
+  let interruptedAwaitingTurnComplete = false;
   let playbackQueue = Promise.resolve();
   let connection: GeminiLiveConnection | null = null;
   let micSubscription: { remove: () => void } | null = null;
@@ -85,6 +86,7 @@ export async function startEzraLiveVoiceSession(
         if (!active) return;
         const serverContent = message?.serverContent;
         if (serverContent?.interrupted) {
+          interruptedAwaitingTurnComplete = true;
           playbackGeneration += 1;
           playbackQueue = Promise.resolve();
           void NativeLiveAudio.clearPlayback().catch(error => {
@@ -119,6 +121,10 @@ export async function startEzraLiveVoiceSession(
           }
         }
 
+        if (serverContent?.turnComplete && interruptedAwaitingTurnComplete) {
+          interruptedAwaitingTurnComplete = false;
+          return;
+        }
         if (serverContent?.turnComplete) {
           const finalOutput = transcriptionText(serverContent?.outputTranscription ?? message?.outputTranscription);
           if (finalOutput) callbacks.onOutputTranscript?.(finalOutput, true);
