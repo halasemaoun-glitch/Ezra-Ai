@@ -93,7 +93,7 @@ Deno.serve(async (req: Request) => {
     };
 
     const tokenResponse = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/auth_tokens",
+      "https://generativelanguage.googleapis.com/v1alpha/auth_tokens",
       {
         method: "POST",
         headers: {
@@ -106,9 +106,13 @@ Deno.serve(async (req: Request) => {
     );
     const tokenData = await tokenResponse.json().catch(() => null);
     if (!tokenResponse.ok || typeof tokenData?.name !== "string") {
-      console.error("Gemini Live token provisioning failed:", tokenResponse.status);
+      const providerMessage = typeof tokenData?.error?.message === "string"
+        ? tokenData.error.message.slice(0, 500)
+        : "No provider error message was returned.";
+      console.error("Gemini Live token provisioning failed:", tokenResponse.status, providerMessage);
       return new Response(JSON.stringify({
         error: "Could not start a Gemini Live session. Check the server-side Gemini key and Live API access.",
+        providerStatus: tokenResponse.status,
       }), { status: 502, headers: jsonHeaders });
     }
 
