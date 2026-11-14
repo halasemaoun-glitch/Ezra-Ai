@@ -42,7 +42,7 @@ import { DENTAL_REFERENCE_LIBRARY } from './src/study/studyLibrary';
 import { retrieveDentalReferences } from './src/study/dentalKnowledge';
 import { retrieveDentalClinicalCases } from './src/study/dentalKnowledge';
 import { DENTAL_CLINICAL_CASES } from './src/study/clinicalCases';
-import { supabase } from './src/lib/supabase';
+import { supabase, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from './src/lib/supabase';
 import { DEFAULT_EZRA_VOICE, detectEzraSpeechLanguage } from './src/voice/voiceProfile';
 import { AI_MODELS, AI_PROVIDER_OPTIONS, DEFAULT_AI_MODELS, normalizeAiModel, normalizeAiProvider, type AiProvider } from './src/ai/aiModelSettings';
 import { DEFAULT_MIC_SENSITIVITY, normalizeMicSensitivity, scaleMicLevel } from './src/voice/micSensitivity';
@@ -202,6 +202,33 @@ const isRecognizedUserInterruption = (candidate: string, assistantSpeech: string
   const overlappingWords = words.filter(word => spokenWords.has(word)).length;
   if (overlappingWords >= 2 && overlappingWords / words.length >= 0.8) return false;
   return true;
+};
+
+/**
+ * Android TextToSpeech rejects oversized utterances. Keep each native utterance
+ * safely below Android's maximum and split at sentence/phrase boundaries.
+ */
+const splitEzraSpeechText = (value: string, maxChars = 2200): string[] => {
+  let remaining = value.trim();
+  const chunks: string[] = [];
+  const separators = ['\n\n', '\n', '. ', '! ', '? ', '؟ ', '۔ ', '، ', '; ', ', ', ' '];
+  while (remaining.length > maxChars) {
+    let bestIndex = -1;
+    let bestSeparator = ' ';
+    for (const separator of separators) {
+      const index = remaining.lastIndexOf(separator, maxChars);
+      if (index > bestIndex && index >= Math.floor(maxChars * 0.55)) {
+        bestIndex = index;
+        bestSeparator = separator;
+      }
+    }
+    const cut = bestIndex >= 0 ? bestIndex + bestSeparator.length : maxChars;
+    const part = remaining.slice(0, cut).trim();
+    if (part) chunks.push(part);
+    remaining = remaining.slice(cut).trim();
+  }
+  if (remaining) chunks.push(remaining);
+  return chunks;
 };
 
 const appendVoiceTranscriptSegment = (current: string, incoming: string) => {
@@ -376,7 +403,7 @@ export default function App() {
   const [habibiEngineReady, setHabibiEngineReady] = useState(false);
   const [habibiEngineBusy, setHabibiEngineBusy] = useState(false);
   const [habibiEngineError, setHabibiEngineError] = useState('');
-  const activeHabibiSpeechRef = useRef<{ text: string; messageId: string } | null>(null);
+  const activeHabibiSpeechRef = useRef<{ text: string; messageId: string; generation: number } | null>(null);
   const activeSpokenTextRef = useRef('');
   const habibiAutoInitStartedRef = useRef(false);
   const [autoSpeak, setAutoSpeak] = useState(true);
@@ -423,6 +450,7 @@ export default function App() {
   const [selectedTtsVoice, setSelectedTtsVoice] = useState<string | null>(null);
   const [selectedEnglishTtsVoice, setSelectedEnglishTtsVoice] = useState<string | null>(null);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
+  const speechPlaybackGenerationRef = useRef(0);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [chatLoading, setChatLoading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -1834,12 +1862,9 @@ export default function App() {
     setVoiceLevel(0);
   }, [voiceHome, isListening, speakingMessageId]);
 
-  useEffect(() => {
-    if (!voicePrefsLoaded || !appIsActive || !session || !voiceHome || !autoListen || backgroundWakeEnabled || !speakingMessageId || isListening || sending || chatLoading) return;
-    interruptVoiceFramesRef.current = 0;
-    const timer = setTimeout(() => beginListening(true), 180);
-    return () => clearTimeout(timer);
-  }, [voicePrefsLoaded, appIsActive, session?.user.id, voiceHome, autoListen, backgroundWakeEnabled, speakingMessageId, isListening, sending, chatLoading]);
+  // Do not start Android SpeechRecognizer while system TTS is speaking:
+  // a concurrent recorder can take the audio input/focus and truncate playback.
+  // The mic button remains an explicit stop-and-listen interruption control.
 
   useEffect(() => {
     // Wait until persisted voice preferences are restored before opening the microphone.
@@ -2416,24 +2441,37 @@ export default function App() {
         const contentType = allowedMimeTypes.includes(attachment.mimeType ?? '')
           ? attachment.mimeType!
           : (mimeByExtension[extension] ?? (attachment.kind === 'image' ? 'image/jpeg' : 'text/plain'));
-        const fileResponse = await fetch(attachment.uri);
-        if (!fileResponse.ok) throw new Error('تعذّر قراءة الملف المحدد.');
-        const fileBlob = await fileResponse.blob();
-        if (!fileBlob.size || fileBlob.size > 5 * 1024 * 1024) {
-          throw new Error('حجم المرفق غير صالح أو يتجاوز الحد المسموح (5 ميغابايت).');
+        const localInfo = await FileSystem.getInfoAsync(attachment.uri).catch(() => null);
+        const localSize = attachment.sizeBytes || (localInfo?.exists ? localInfo.size : 0);
+        if (!localInfo?.exists || !localSize || localSize > MAX_DOCUMENT_SOURCE_BYTES) {
+          throw new Error('حجم المرفق غير صالح أو يتجاوز الحد المسموح (50 ميغابايت)، أو أن الملف لم يعد متاحًا.');
         }
         const safeName = attachment.name.normalize('NFKC').replace(/[^\p{L}\p{N}._-]/gu, '_').slice(0, 100) || 'attachment';
         uploadedAttachmentPath = `${session.user.id}/${conversationId}/${messageId}/${safeName}`;
         uploadedAttachmentMime = contentType;
-        uploadedAttachmentSize = fileBlob.size;
-        const { error: uploadError } = await supabase.storage
-          .from('ezra-chat-attachments')
-          .upload(uploadedAttachmentPath, fileBlob, {
-            contentType,
-            cacheControl: '3600',
-            upsert: false,
-          });
-        if (uploadError) throw new Error(`تعذّر حفظ المرفق بأمان: ${uploadError.message}`);
+        uploadedAttachmentSize = localSize;
+        const objectPath = uploadedAttachmentPath.split('/').map(encodeURIComponent).join('/');
+        const uploadUrl = `${SUPABASE_URL}/storage/v1/object/ezra-chat-attachments/${objectPath}`;
+        const uploadResult = await FileSystem.uploadAsync(uploadUrl, attachment.uri, {
+          httpMethod: 'POST',
+          uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+          headers: {
+            apikey: SUPABASE_PUBLISHABLE_KEY,
+            Authorization: `Bearer ${session.access_token}`,
+            'Content-Type': contentType,
+            'Cache-Control': '3600',
+            'x-upsert': 'false',
+          },
+        });
+        if (uploadResult.status < 200 || uploadResult.status >= 300) {
+          let uploadMessage = uploadResult.body;
+          try {
+            const parsed = JSON.parse(uploadResult.body);
+            uploadMessage = parsed.message || parsed.error || uploadMessage;
+          } catch {}
+          throw new Error(`تعذّر حفظ المرفق بأمان (HTTP ${uploadResult.status}): ${String(uploadMessage).slice(0, 220)}`);
+        }
+
       }
 
       const { data, error } = await supabase
@@ -3055,6 +3093,7 @@ export default function App() {
 
   const pickملف = async () => {
     let importStarted = false;
+    let importedFileUri: string | null = null;
     try {
       const result = await DocumentPicker.getDocumentAsync({
         copyToCacheDirectory: true,
@@ -3062,6 +3101,7 @@ export default function App() {
       });
       if (result.canceled || !result.assets[0]) return;
       const file = result.assets[0];
+      importedFileUri = file.uri;
       const extension = getDocumentExtension(file.name);
       if (!isSupportedDocumentExtension(extension)) {
         Alert.alert('نوع الملف غير مدعوم', 'يمكنك إرفاق TXT وMD وCSV وJSON وPDF وDOCX وPPTX وXLSX.');
@@ -3076,21 +3116,25 @@ export default function App() {
       setAttachmentImportName(file.name);
       setAttachmentImporting(true);
       importStarted = true;
+      setAttachment({
+        uri: file.uri,
+        name: file.name,
+        kind: 'file',
+        mimeType: file.mimeType || getDocumentMimeType(extension),
+        textContent: '',
+        sizeBytes: typeof sourceSizeBytes === 'number' ? sourceSizeBytes : 0,
+      });
       const extracted = await extractDocumentTextFromUri(
         file.name,
         file.uri,
         sourceSizeBytes,
         MAX_EXTRACTED_DOCUMENT_BYTES,
       );
-      setAttachment({
-        uri: file.uri,
-        name: file.name,
-        kind: 'file',
-        mimeType: file.mimeType || getDocumentMimeType(extension),
-        textContent: extracted.content,
-        sizeBytes: typeof sourceSizeBytes === 'number' ? sourceSizeBytes : 0,
-      });
+      setAttachment(current => current?.uri === file.uri
+        ? { ...current, textContent: extracted.content }
+        : current);
     } catch (error) {
+      if (importedFileUri) setAttachment(current => current?.uri === importedFileUri ? null : current);
       Alert.alert('تعذّر فتح الملف', error instanceof Error ? error.message : 'حاول مرة أخرى.');
     } finally {
       if (importStarted) {
