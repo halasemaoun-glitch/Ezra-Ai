@@ -169,7 +169,12 @@ export async function startEzraLiveVoiceSession(
 
     await NativeLiveAudio.startPlayback();
     micSubscription = NativeLiveAudio.addListener('onAudioChunk', event => {
-      if (!active || !connection || !('data' in event)) return;
+      if (
+        !active ||
+        !connection ||
+        connection.socket.readyState !== WebSocket.OPEN ||
+        !('data' in event)
+      ) return;
       try {
         connection.sendAudio(event.data);
       } catch (error) {
