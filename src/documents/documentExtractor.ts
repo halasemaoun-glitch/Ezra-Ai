@@ -201,3 +201,50 @@ export async function extractDocumentText(
   }
   return { content, extension, extractedBytes };
 }
+
+
+/**
+ * URI-first import path for picked files. Large PDFs are sent straight to the
+ * Android PdfRenderer/Tesseract worker instead of parsing a 30–50 MB scanned
+ * PDF synchronously in the React Native JS runtime (which can freeze the UI).
+ */
+export async function extractDocumentTextFromUri(
+  fileName: string,
+  sourceUri: string,
+  sourceSizeBytes?: number,
+  maxExtractedBytes = MAX_EXTRACTED_DOCUMENT_BYTES,
+): Promise<ExtractedDocument> {
+  const extension = getDocumentExtension(fileName);
+  if (!isSupportedDocumentExtension(extension)) {
+    throw new Error('صيغة الملف غير مدعومة.');
+  }
+  if (typeof sourceSizeBytes === 'number' && sourceSizeBytes > MAX_DOCUMENT_SOURCE_BYTES) {
+    throw new Error('حجم الملف يتجاوز الحد الأقصى البالغ 50 ميغابايت.');
+  }
+
+  // The known failing use case is a large scanned book PDF. Avoid Ream.parse()
+  // on the JS thread; Android's PdfRenderer/Tesseract implementation runs on IO.
+  const LARGE_PDF_DIRECT_OCR_BYTES = 8 * 1024 * 1024;
+  if (
+    extension === 'pdf' &&
+    Platform.OS === 'android' &&
+    EzraDocumentOcr &&
+    typeof sourceSizeBytes === 'number' &&
+    sourceSizeBytes >= LARGE_PDF_DIRECT_OCR_BYTES
+  ) {
+    const content = await extractScannedPdfText(sourceUri);
+    const extractedBytes = new TextEncoder().encode(content).byteLength;
+    if (!content.trim()) {
+      throw new Error('لم يتمكن OCR من العثور على نص واضح في صفحات PDF.');
+    }
+    if (extractedBytes > maxExtractedBytes) {
+      throw new Error('النص المستخرج أكبر من الحد المسموح (50 ميغابايت). قسّم المستند إلى ملفات أصغر.');
+    }
+    return { content, extension, extractedBytes };
+  }
+
+  const response = await fetch(sourceUri);
+  if (!response.ok) throw new Error('تعذّرت قراءة الملف المحدد من مساحة التخزين.');
+  const sourceBytes = new Uint8Array(await response.arrayBuffer());
+  return extractDocumentText(fileName, sourceBytes, maxExtractedBytes, sourceUri);
+}
