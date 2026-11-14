@@ -14,6 +14,7 @@ on:
       - "plugins/withEzraWakeWord.js"
       - "src/voice/**"
       - "src/documents/**"
+      - "src/knowledge/**"
       - "modules/ezra-document-ocr/**"
       - "src/phone/**"
       - "src/EzraOrb3D.tsx"
