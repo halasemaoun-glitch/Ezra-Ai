@@ -101,7 +101,33 @@ function installDocumentTextDecoderCompat(): void {
   (CompatibleTextDecoder as any).__ezraDocumentCompat = true;
   (globalThis as any).TextDecoder = CompatibleTextDecoder;
 }
-export const MAX_EXTRACTED_DOCUMENT_BYTES = 1024 * 1024;
+export const MAX_EXTRACTED_DOCUMENT_BYTES = 8 * 1024 * 1024;
+
+ type EzraDocumentOcrNative = {
+  extractPdfText: (uri: string, maxPages: number, maxOutputChars: number) => Promise<{
+    text: string;
+    pagesProcessed: number;
+    totalPages: number;
+    truncated: boolean;
+  }>;
+};
+
+const EzraDocumentOcr = Platform.OS === 'android'
+  ? requireNativeModule<EzraDocumentOcrNative>('EzraDocumentOcr')
+  : null;
+
+async function extractScannedPdfText(uri?: string): Promise<string> {
+  if (Platform.OS !== 'android' || !EzraDocumentOcr || !uri) {
+    throw new Error('هذا PDF لا يحتوي على نص رقمي. قراءة الصفحات المصوّرة تحتاج OCR على Android.');
+  }
+  const result = await EzraDocumentOcr.extractPdfText(uri, 250, 4 * 1024 * 1024);
+  const text = result.text.trim();
+  if (!text) throw new Error('لم يتمكن OCR من العثور على نص واضح في صفحات PDF.');
+  const pageNotice = result.truncated
+    ? `\n\n[ملاحظة: تمت معالجة ${result.pagesProcessed} من أصل ${result.totalPages} صفحة بسبب حدود المعالجة.]`
+    : '';
+  return `${text}${pageNotice}`;
+}
 
 export type ExtractedDocument = {
   content: string;
@@ -143,28 +169,32 @@ export async function extractDocumentText(
       if (/password|encrypt/i.test(message)) {
         throw new Error('هذا المستند محمي بكلمة مرور أو مشفّر. أزل الحماية ثم أعد اختياره.');
       }
-      if (/format|unsupported|sniff|invalid|corrupt/i.test(message)) {
+      if (extension === 'pdf') {
+        // Ream extracts embedded text from digital PDFs. If parsing fails or the
+        // PDF is image-only, use the Android on-device Arabic/English OCR engine.
+        content = await extractScannedPdfText(sourceUri);
+      } else if (/format|unsupported|sniff|invalid|corrupt/i.test(message)) {
         throw new Error('تعذّرت قراءة بنية الملف. تأكد أن امتداده يطابق محتواه وأنه غير تالف.');
-      }
-      if (/textdecoder|encoding|windows-1252|codec/i.test(message)) {
+      } else if (/textdecoder|encoding|windows-1252|codec/i.test(message)) {
         throw new Error('تعذّر فك ترميز نص المستند على هذا الجهاز. أُضيف دعم الترميز المطلوب؛ إذا تكررت المشكلة نحتاج نسخة الملف لفحصها.');
+      } else {
+        const detail = message.trim().slice(0, 140);
+        throw new Error(detail
+          ? `تعذّر استخراج نص المستند: ${detail}`
+          : 'تعذّر استخراج النص.');
       }
-      const detail = message.trim().slice(0, 140);
-      throw new Error(detail
-        ? `تعذّر استخراج نص المستند: ${detail}`
-        : 'تعذّر استخراج النص. إذا كان PDF عبارة عن صور ممسوحة ضوئياً، فهو يحتاج OCR.');
-
     }
   }
 
+  if (!content.trim() && extension === 'pdf') {
+    content = await extractScannedPdfText(sourceUri);
+  }
   if (!content.trim()) {
-    throw new Error(extension === 'pdf'
-      ? 'لم يُعثر على نص داخل PDF. إذا كان ممسوحاً ضوئياً كصور، فلن يمكن قراءته دون OCR.'
-      : 'الملف فارغ أو لا يحتوي على نص قابل للاستخراج.');
+    throw new Error('الملف فارغ أو لا يحتوي على نص قابل للاستخراج.');
   }
   const extractedBytes = new TextEncoder().encode(content).byteLength;
   if (extractedBytes > maxExtractedBytes) {
-    throw new Error('النص المستخرج أكبر من الحد المسموح (1 ميغابايت). قسّم المستند إلى ملفات أصغر.');
+    throw new Error('النص المستخرج أكبر من الحد المسموح (8 ميغابايت). قسّم المستند إلى ملفات أصغر.');
   }
   return { content, extension, extractedBytes };
 }
