@@ -195,7 +195,7 @@ const normalizeVoiceEchoText = (value: string) => value
   .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
   .replace(/[أإآ]/g, 'ا')
   .replace(/ى/g, 'ي')
-  .replace(/[^a-z0-9\\u0600-\\u06FF\\s]/g, ' ')
+  .replace(/[^a-z0-9\u0600-\u06FF\s]/g, ' ')
   .replace(/\s+/g, ' ')
   .trim();
 
