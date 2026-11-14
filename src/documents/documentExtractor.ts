@@ -219,7 +219,9 @@ export async function extractDocumentTextFromUri(
   if (!isSupportedDocumentExtension(extension)) {
     throw new Error('صيغة الملف غير مدعومة.');
   }
-  if (typeof sourceSizeBytes === 'number' && sourceSizeBytes > MAX_DOCUMENT_SOURCE_BYTES) {
+  const sourceFile = new File(sourceUri);
+  const actualSourceSizeBytes = sourceSizeBytes || sourceFile.size;
+  if (actualSourceSizeBytes > MAX_DOCUMENT_SOURCE_BYTES) {
     throw new Error('حجم الملف يتجاوز الحد الأقصى البالغ 50 ميغابايت.');
   }
 
@@ -230,8 +232,7 @@ export async function extractDocumentTextFromUri(
     extension === 'pdf' &&
     Platform.OS === 'android' &&
     EzraDocumentOcr &&
-    typeof sourceSizeBytes === 'number' &&
-    sourceSizeBytes >= LARGE_PDF_DIRECT_OCR_BYTES
+    actualSourceSizeBytes >= LARGE_PDF_DIRECT_OCR_BYTES
   ) {
     const content = await extractScannedPdfText(sourceUri);
     const extractedBytes = new TextEncoder().encode(content).byteLength;
@@ -247,9 +248,7 @@ export async function extractDocumentTextFromUri(
   // DocumentPicker copies selected files to the app cache. Read local URIs
   // with Expo's native File API; fetch(file://...) is unreliable in React Native
   // and previously caused selected files to fail or stall during import.
-  const sourceFile = new File(sourceUri);
-  const actualSizeBytes = sourceFile.size || sourceSizeBytes || 0;
-  if (actualSizeBytes > MAX_DOCUMENT_SOURCE_BYTES) {
+  if (sourceFile.size > MAX_DOCUMENT_SOURCE_BYTES) {
     throw new Error('حجم الملف يتجاوز الحد الأقصى البالغ 50 ميغابايت.');
   }
 
