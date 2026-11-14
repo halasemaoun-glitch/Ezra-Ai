@@ -3,7 +3,7 @@
 
 - Q8_0 for 2-D DiT linear matrices; non-linear tensors remain F32.
 - Sequential classifier-free guidance; same CFG equation, one branch graph at a time.
-- Smaller single-batch CPU graph arena, paired with a 128-frame synthesis budget.
+- Smaller single-batch CPU graph arena, paired with a 256-frame synthesis budget.
 """
 from pathlib import Path
 import sys
