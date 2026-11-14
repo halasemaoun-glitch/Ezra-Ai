@@ -45,7 +45,7 @@ import { DENTAL_CLINICAL_CASES } from './src/study/clinicalCases';
 import { supabase } from './src/lib/supabase';
 import { DEFAULT_EZRA_VOICE, detectEzraSpeechLanguage } from './src/voice/voiceProfile';
 import { AI_MODELS, AI_PROVIDER_OPTIONS, DEFAULT_AI_MODELS, normalizeAiModel, normalizeAiProvider, type AiProvider } from './src/ai/aiModelSettings';
-import { DEFAULT_MIC_SENSITIVITY, advanceMicInterruptionFrames, getCompleteSilenceLengthMs, getMinimumSpeechLengthMs, getMicInterruptionFramesRequired, getPossibleSilenceLengthMs, normalizeMicSensitivity, scaleMicLevel } from './src/voice/micSensitivity';
+import { DEFAULT_MIC_SENSITIVITY, advanceMicInterruptionFrames, getMicInterruptionFramesRequired, normalizeMicSensitivity, scaleMicLevel } from './src/voice/micSensitivity';
 import { parseCallContactName } from './src/phone/commandParser';
 import { parseSmsCommand, parseIncompleteSmsCommand } from './src/phone/smsCommandParser';
 import { isScreenCaptureCommand } from './src/phone/screenCaptureCommands';
@@ -1667,12 +1667,31 @@ export default function App() {
     if (!appIsActiveRef.current) return;
     if (voiceCaptureDuringSpeechRef.current && !voiceInterruptionConfirmedRef.current) return;
     const latestResult = event.results[event.results.length - 1];
-    const transcript = latestResult?.transcript;
+    const transcript = latestResult?.transcript?.trim();
     if (transcript) {
       voiceRetryCountRef.current = 0;
       setArabicRecognitionFallback(0);
       voiceTranscriptRef.current = transcript;
       setMessage(transcript);
+
+      // On Android 13+ continuous mode emits a final result for each speech segment
+      // without ending the microphone session. Consume that segment immediately,
+      // then abort the recognizer so the existing reply/auto-listen lifecycle can run.
+      if (Platform.OS === 'android' && Number(Platform.Version) >= 33 && event.isFinal) {
+        voiceTranscriptRef.current = '';
+        voiceTurnInProgressRef.current = true;
+        ignoreNextVoiceEndRef.current = true;
+        voiceStartInFlightRef.current = false;
+        voiceRecognitionActiveRef.current = false;
+        setIsListening(false);
+        setVoiceLevel(0);
+        ExpoSpeechRecognitionModule.abort();
+        setTimeout(() => {
+          if (appIsActiveRef.current && autoListenRef.current && voiceHome) {
+            void sendMessage(true, transcript);
+          }
+        }, 120);
+      }
     }
   });
   useSpeechRecognitionEvent('error', event => {
@@ -2866,16 +2885,10 @@ export default function App() {
         lang: responseLanguage === 'en' ? 'en-US' : (arabicRecognitionFallback === 1 ? 'ar-SA' : 'ar'),
         contextualStrings: responseLanguage === 'en' ? ['EZRA', 'Ezra'] : ['إزرا', 'ازرا', 'يا إزرا', 'EZRA'],
         interimResults: true,
-        continuous: false,
-        // Apply the user's sensitivity preference to Android's minimum utterance
-        // and end-of-utterance silence hints. Some recognition providers may ignore these extras.
-        ...(Platform.OS === 'android' ? {
-          androidIntentOptions: {
-            EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS: getMinimumSpeechLengthMs(micSensitivityRef.current),
-            EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS: getPossibleSilenceLengthMs(micSensitivityRef.current),
-            EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: getCompleteSilenceLengthMs(micSensitivityRef.current),
-          },
-        } : {}),
+        // Android 13+ supports a segmented continuous microphone session. It stays
+        // open while the user pauses to think instead of timing out after a short silence.
+        // Final segments are submitted below, then the recognizer is cleanly aborted.
+        continuous: Platform.OS === 'android' && Number(Platform.Version) >= 33,
         volumeChangeEventOptions: { enabled: true, intervalMillis: 90 },
       });
     } catch (error) {
