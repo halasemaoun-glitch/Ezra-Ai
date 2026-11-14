@@ -6,6 +6,7 @@ on:
       - ezra/habibi-android-spike
       - ezra/stability-voice-memory-files
       - ezra/fix-document-voice-wake
+      - ezra/live-voice-and-file-fix
     paths:
       - "modules/ezra-habibi-tts/**"
       - "App.tsx"
