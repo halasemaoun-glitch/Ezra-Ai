@@ -122,7 +122,7 @@ async function extractScannedPdfText(uri?: string): Promise<string> {
   if (Platform.OS !== 'android' || !EzraDocumentOcr || !uri) {
     throw new Error('هذا PDF لا يحتوي على نص رقمي. قراءة الصفحات المصوّرة تحتاج OCR على Android.');
   }
-  const result = await EzraDocumentOcr.extractPdfText(uri, 250, 4 * 1024 * 1024);
+  const result = await EzraDocumentOcr.extractPdfText(uri, 250, 2_500_000);
   const text = result.text.trim();
   if (!text) throw new Error('لم يتمكن OCR من العثور على نص واضح في صفحات PDF.');
   const pageNotice = result.truncated
