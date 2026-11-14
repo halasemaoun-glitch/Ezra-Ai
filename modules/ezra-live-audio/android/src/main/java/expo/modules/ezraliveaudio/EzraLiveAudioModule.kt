@@ -151,6 +151,20 @@ class EzraLiveAudioModule : Module() {
       mapOf("writtenBytes" to offset)
     }
 
+    AsyncFunction("clearPlayback") {
+      val track = player
+      if (track != null && playing.get()) {
+        try {
+          track.pause()
+          track.flush()
+          track.play()
+        } catch (error: Exception) {
+          throw IllegalStateException(error.message ?: "Could not clear audio playback.")
+        }
+      }
+      mapOf("cleared" to true)
+    }
+
     AsyncFunction("stopPlayback") {
       playing.set(false)
       try { player?.pause() } catch (_: Exception) {}
