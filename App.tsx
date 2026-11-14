@@ -427,6 +427,7 @@ export default function App() {
   const liveVoiceInputTranscriptRef = useRef('');
   const liveVoiceOutputTranscriptRef = useRef('');
   const liveVoiceAssistantMessageIdRef = useRef<string | null>(null);
+  const liveVoiceLocalCommandHandledRef = useRef(false);
   const [ttsVoices, setTtsVoices] = useState<{ identifier: string; name: string; language: string; quality?: string }[]>([]);
   const [selectedTtsVoice, setSelectedTtsVoice] = useState<string | null>(null);
   const [selectedEnglishTtsVoice, setSelectedEnglishTtsVoice] = useState<string | null>(null);
@@ -2948,6 +2949,26 @@ export default function App() {
     };
   }, [backgroundWakeEnabled, appIsActive, speechRate, speechPitch]);
 
+  const isEzraLocalVoiceCommand = (value: string) => {
+    const text = value.trim();
+    const normalized = text.toLowerCase()
+      .replace(/[إأآ]/g, 'ا')
+      .replace(/[\u064B-\u065F\u0670ـ]/g, '');
+    return !!parseCallContactName(text) ||
+      !!parseSmsCommand(text) ||
+      !!parseIncompleteSmsCommand(text) ||
+      isScreenCaptureCommand(text) ||
+      !!parseAccessibilityCommand(text) ||
+      !!parsePhoneActionCommand(text) ||
+      !!parsePhoneSettingsTarget(text) ||
+      /^(?:يا\s*(?:إزرا|ازرا|ezra)[\s،,:-]*)?(?:تذكر(?:ي)?|احفظ(?:ي)?|لا\s*تنس(?:ى|ي)|سجل(?:ي)?)/i.test(text) ||
+      /(?:الفلاش|الكشاف|ضوء الهاتف|flash|torch)/i.test(normalized) ||
+      /(?:مؤقت|تايمر|timer|المنبه|منبه|alarm)/i.test(normalized) ||
+      /(?:ارفع|زود|علي|زيد|اخفض|وطي|قلل|نقص|اكتم|الغاء كتم).{0,16}(?:الصوت|الصوتية)|(?:الموسيقى|الاغنية|المقطع|الوسائط|البودكاست|الراديو|media|music|song|podcast|radio)/i.test(normalized) ||
+      /(?:افتح|اذهب الى|روح على|show|open)\s*(?:اعدادات|الاعدادات|settings)?\s*(?:الواي فاي|wifi|wi-fi|الانترنت|internet|البلوتوث|bluetooth|الصوت|الصوتيات|sound|volume|الشاشة|display|الموقع|location|البطارية|battery|التطبيقات|apps|الاشعارات|notifications|امكانية الوصول|accessibility)/i.test(normalized) ||
+      /(?:افتح|شغل|ابدأ|open|launch)\s+(?:تطبيق\s+)?[\p{L}0-9 ._-]{2,40}$/iu.test(text);
+  };
+
   const fallbackFromGeminiLive = (reason: string) => {
     const activeLiveSession = liveVoiceSessionRef.current;
     if (!activeLiveSession && !liveVoiceConnectingRef.current) return;
@@ -2998,11 +3019,30 @@ export default function App() {
           liveVoiceInputTranscriptRef.current = '';
           liveVoiceOutputTranscriptRef.current = '';
           liveVoiceAssistantMessageIdRef.current = null;
+          liveVoiceLocalCommandHandledRef.current = false;
           const liveSession = await startEzraLiveVoiceSession(responseLanguage, {
             onInputTranscript: (text, finished) => {
               if (finished) {
                 liveVoiceInputTranscriptRef.current = appendVoiceTranscriptSegment(liveVoiceInputTranscriptRef.current, text);
-                setMessage(liveVoiceInputTranscriptRef.current);
+                const recognizedText = liveVoiceInputTranscriptRef.current;
+                setMessage(recognizedText);
+                if (!liveVoiceLocalCommandHandledRef.current && isEzraLocalVoiceCommand(recognizedText)) {
+                  liveVoiceLocalCommandHandledRef.current = true;
+                  const activeLiveSession = liveVoiceSessionRef.current;
+                  liveVoiceSessionRef.current = null;
+                  liveVoiceUnavailableRef.current = false;
+                  if (activeLiveSession) void activeLiveSession.stop();
+                  setIsListening(false);
+                  setSpeakingMessageId(null);
+                  voiceTurnInProgressRef.current = true;
+                  setTimeout(() => {
+                    if (appIsActiveRef.current && voiceHome && autoListenRef.current) {
+                      liveVoiceInputTranscriptRef.current = '';
+                      setMessage(recognizedText);
+                      void sendMessage(true, recognizedText, true);
+                    }
+                  }, 180);
+                }
               } else {
                 setMessage(appendVoiceTranscriptSegment(liveVoiceInputTranscriptRef.current, text));
               }
