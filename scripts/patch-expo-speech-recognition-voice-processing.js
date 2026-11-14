@@ -62,7 +62,7 @@ source = replaceExactlyOnce(
                     acousticEchoCanceler = AcousticEchoCanceler.create(this.audioSessionId)?.also {
                         it.enabled = true
                     }
-                    Log.i(TAG, "Android acoustic echo cancellation enabled: ${acousticEchoCanceler?.enabled == true}")
+                    Log.i(TAG, "Android acoustic echo cancellation initialized when supported")
                 } else {
                     Log.i(TAG, "Android acoustic echo cancellation is not available on this device")
                 }
