@@ -135,7 +135,19 @@ export async function startEzraLiveVoiceSession(
         if (serverContent?.turnComplete) {
           const finalOutput = transcriptionText(serverContent?.outputTranscription ?? message?.outputTranscription);
           if (finalOutput) callbacks.onOutputTranscript?.(finalOutput, true);
-          callbacks.onTurnComplete?.();
+          // Gemini can signal turnComplete before all queued PCM chunks have
+          // finished writing to AudioTrack. Do not return to listening or clear
+          // the speaking state until the complete reply has reached the speaker.
+          const completedGeneration = playbackGeneration;
+          void playbackQueue.then(() => {
+            if (active && completedGeneration === playbackGeneration) {
+              callbacks.onTurnComplete?.();
+            }
+          }).catch(error => {
+            if (active) callbacks.onError?.(
+              error instanceof Error ? error.message : 'تعذّر إكمال تشغيل صوت Gemini.',
+            );
+          });
         }
       },
       onError: message => {
