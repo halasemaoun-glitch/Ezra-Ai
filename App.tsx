@@ -1855,9 +1855,11 @@ export default function App() {
     if (voiceHome) return;
     if (isListening) ExpoSpeechRecognitionModule.stop();
     if (speakingMessageId) {
+      speechPlaybackGenerationRef.current += 1;
       Speech.stop();
       activeSpokenTextRef.current = '';
       EzraHabibiTts?.stopAudio().catch(() => {});
+      activeHabibiSpeechRef.current = null;
       setSpeakingMessageId(null);
     }
     setVoiceLevel(0);
@@ -3246,6 +3248,7 @@ export default function App() {
     const generation = ++speechPlaybackGenerationRef.current;
     Speech.stop();
     await EzraHabibiTts?.stopAudio().catch(() => {});
+    if (speechPlaybackGenerationRef.current !== generation) return;
     activeHabibiSpeechRef.current = null;
     activeSpokenTextRef.current = text;
     setSpeakingMessageId(messageId);
