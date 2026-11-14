@@ -19,7 +19,7 @@ export type GeminiLiveConnection = {
 
 const LIVE_MODEL = 'models/gemini-3.8-live';
 const LIVE_SOCKET_URL =
-  'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained';
+  'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained';
 
 export async function connectEzraGeminiLive(
   responseLanguage: 'ar' | 'en',
@@ -68,7 +68,11 @@ export async function connectEzraGeminiLive(
         nextSocket.send(JSON.stringify({
           setup: {
             model: LIVE_MODEL,
-            ...(resumptionHandle ? { sessionResumption: { handle: resumptionHandle } } : {}),
+            generationConfig: { responseModalities: ["AUDIO"] },
+            sessionResumption: resumptionHandle ? { handle: resumptionHandle } : {},
+            contextWindowCompression: { slidingWindow: {} },
+            inputAudioTranscription: {},
+            outputAudioTranscription: {},
           },
         }));
       } catch {
