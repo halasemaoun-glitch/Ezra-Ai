@@ -100,6 +100,15 @@ jobs:
         run: cd android && ./gradlew :app:compileDebugKotlin
       - name: Build standalone Android APK with embedded JavaScript bundle
         run: cd android && ./gradlew :app:assembleRelease
+      - name: Sign standalone APK with temporary debug certificate
+        run: |
+          mkdir -p "$HOME/.android"
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            keytool -genkeypair -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey -keypass android -dname "CN=Android Debug,O=Android,C=US" -keyalg RSA -keysize 2048 -validity 10000
+          fi
+          /usr/local/lib/android/sdk/build-tools/36.0.0/apksigner sign --ks "$HOME/.android/debug.keystore" --ks-pass pass:android --key-pass pass:android --out android/app/build/outputs/apk/release/app-release-signed.apk android/app/build/outputs/apk/release/app-release.apk
+          /usr/local/lib/android/sdk/build-tools/36.0.0/apksigner verify --verbose android/app/build/outputs/apk/release/app-release-signed.apk
+          mv android/app/build/outputs/apk/release/app-release-signed.apk android/app/build/outputs/apk/release/app-release.apk
       - name: Upload standalone Android APK artifact
         uses: actions/upload-artifact@v4
         with:
