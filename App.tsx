@@ -1715,7 +1715,7 @@ export default function App() {
       setVoiceRetrying(false);
       setVoiceRetryMessage('');
       Alert.alert('إذن الميكروفون أو خدمة الصوت', 'تحقق من إذن الميكروفون ومن تفعيل خدمة التعرّف على الكلام في إعدادات الهاتف.');
-    } else if (event.error === 'no-speech') {
+    } else if (event.error === 'no-speech' || event.error === 'speech-timeout') {
       // Do not discard words already recognized before Android reported no-speech.
       if (partialTranscript) {
         setMessage(partialTranscript);
