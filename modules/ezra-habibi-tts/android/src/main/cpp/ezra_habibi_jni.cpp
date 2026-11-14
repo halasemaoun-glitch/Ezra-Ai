@@ -201,7 +201,7 @@ Java_expo_modules_ezrahabibitts_EzraHabibiTtsModule_nativeInitialize(
   }
   // F5-TTS accepts mel frame budgets only in [256, 8192]. 128 makes session_create fail.
   // Keep the minimum supported budget to reduce peak memory on mid-range Android devices.
-  status = audiocpp_options_set(sessionOptions, "frame_budget", "256");
+  status = audiocpp_options_set(sessionOptions, "f5_tts.frame_budget", "256");
   if (status == AUDIOCPP_OK) {
     status = audiocpp_session_create(g_model, "tts", "offline", &backend, sessionOptions, &g_session);
   }
