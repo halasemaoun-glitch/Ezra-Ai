@@ -451,7 +451,6 @@ export default function App() {
   const [selectedEnglishTtsVoice, setSelectedEnglishTtsVoice] = useState<string | null>(null);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const speechPlaybackGenerationRef = useRef(0);
-  const speechPlaybackGenerationRef = useRef(0);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [chatLoading, setChatLoading] = useState(false);
   const [sending, setSending] = useState(false);
