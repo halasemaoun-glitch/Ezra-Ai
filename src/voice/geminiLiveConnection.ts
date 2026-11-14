@@ -10,6 +10,7 @@ export type GeminiLiveCallbacks = {
 export type GeminiLiveConnection = {
   socket: WebSocket;
   sendAudio: (base64Pcm: string) => void;
+  endAudioStream: () => void;
   sendText: (text: string) => void;
   close: () => void;
 };
@@ -32,45 +33,78 @@ export async function connectEzraGeminiLive(
   const socket = new WebSocket(
     `${LIVE_SOCKET_URL}?access_token=${encodeURIComponent(data.token)}`,
   );
-  let opened = false;
+  let setupCompleted = false;
   let closed = false;
+  let settled = false;
+  let setupTimer: ReturnType<typeof setTimeout> | null = null;
 
   await new Promise<void>((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      if (!opened) {
-        socket.close();
-        reject(new Error('انتهت مهلة الاتصال بخدمة الصوت.'));
-      }
-    }, 15000);
+    const failSetup = (message: string) => {
+      if (settled) return;
+      settled = true;
+      if (setupTimer) clearTimeout(setupTimer);
+      socket.close();
+      reject(new Error(message));
+    };
+
+    const connectionTimer = setTimeout(() => {
+      failSetup('انتهت مهلة الاتصال بخدمة Gemini Live.');
+    }, 20000);
+
     socket.onopen = () => {
-      opened = true;
-      clearTimeout(timeout);
-      socket.send(JSON.stringify({
-        setup: {
-          model: LIVE_MODEL,
-        },
-      }));
+      setupTimer = setTimeout(() => {
+        failSetup('لم تكتمل تهيئة جلسة Gemini Live في الوقت المحدد.');
+      }, 15000);
+      try {
+        socket.send(JSON.stringify({
+          setup: { model: LIVE_MODEL },
+        }));
+      } catch {
+        clearTimeout(connectionTimer);
+        failSetup('تعذّر إرسال إعدادات جلسة Gemini Live.');
+      }
     };
+
     socket.onerror = () => {
-      clearTimeout(timeout);
-      if (!opened) reject(new Error('تعذر الاتصال بخدمة Gemini Live.'));
-      else callbacks.onError?.('انقطع الاتصال بخدمة Gemini Live.');
+      if (!setupCompleted) {
+        clearTimeout(connectionTimer);
+        failSetup('تعذر الاتصال بخدمة Gemini Live.');
+      } else {
+        callbacks.onError?.('انقطع الاتصال بخدمة Gemini Live.');
+      }
     };
+
     socket.onclose = event => {
-      clearTimeout(timeout);
       closed = true;
-      if (!opened) reject(new Error(event.reason || 'رفض Gemini Live الاتصال.'));
-      callbacks.onClose?.(event.code, event.reason || '');
+      clearTimeout(connectionTimer);
+      if (setupTimer) clearTimeout(setupTimer);
+      if (!setupCompleted) {
+        failSetup(event.reason || 'رفض Gemini Live إعداد الجلسة.');
+      } else {
+        callbacks.onClose?.(event.code, event.reason || '');
+      }
     };
+
     socket.onmessage = event => {
       let parsed: any;
-      try { parsed = JSON.parse(String(event.data)); }
-      catch { callbacks.onError?.('وصلت رسالة صوتية غير مفهومة.'); return; }
+      try {
+        parsed = JSON.parse(String(event.data));
+      } catch {
+        callbacks.onError?.('وصلت رسالة من Gemini Live بتنسيق غير مفهوم.');
+        return;
+      }
+
       if (parsed.setupComplete) {
+        setupCompleted = true;
+        settled = true;
+        clearTimeout(connectionTimer);
+        if (setupTimer) clearTimeout(setupTimer);
         callbacks.onOpen?.();
         resolve();
       } else if (parsed.error) {
-        callbacks.onError?.(parsed.error.message || 'حدث خطأ في جلسة Gemini Live.');
+        const message = parsed.error.message || 'حدث خطأ أثناء إعداد جلسة Gemini Live.';
+        if (!setupCompleted) failSetup(message);
+        else callbacks.onError?.(message);
       } else {
         callbacks.onMessage?.(parsed);
       }
@@ -91,6 +125,7 @@ export async function connectEzraGeminiLive(
         audio: { data: base64Pcm, mimeType: 'audio/pcm;rate=16000' },
       },
     }),
+    endAudioStream: () => send({ realtimeInput: { audioStreamEnd: true } }),
     sendText: text => send({ realtimeInput: { text } }),
     close: () => {
       closed = true;
