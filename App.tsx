@@ -2458,6 +2458,11 @@ export default function App() {
         uploadedAttachmentPath = `${session.user.id}/${conversationId}/${messageId}/${safeName}`;
         uploadedAttachmentMime = contentType;
         uploadedAttachmentSize = localSize;
+        const { data: authData, error: authError } = await supabase.auth.getSession();
+        const uploadSession = authData.session ?? session;
+        if (authError || !uploadSession?.access_token) {
+          throw new Error('انتهت جلسة الدخول. سجّل الدخول من جديد ثم أعد إرسال المرفق.');
+        }
         const objectPath = uploadedAttachmentPath.split('/').map(encodeURIComponent).join('/');
         const uploadUrl = `${SUPABASE_URL}/storage/v1/object/ezra-chat-attachments/${objectPath}`;
         const uploadResult = await FileSystem.uploadAsync(uploadUrl, attachment.uri, {
@@ -2465,7 +2470,7 @@ export default function App() {
           uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
           headers: {
             apikey: SUPABASE_PUBLISHABLE_KEY,
-            Authorization: `Bearer ${session.access_token}`,
+            Authorization: `Bearer ${uploadSession.access_token}`,
             'Content-Type': contentType,
             'Cache-Control': '3600',
             'x-upsert': 'false',
