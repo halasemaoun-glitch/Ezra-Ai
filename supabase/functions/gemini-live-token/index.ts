@@ -72,11 +72,11 @@ Deno.serve(async (req: Request) => {
     });
     const now = Date.now();
     const payload = {
-      uses: 1,
+      uses: 5,
       expireTime: new Date(now + 30 * 60 * 1000).toISOString(),
       newSessionExpireTime: new Date(now + 60 * 1000).toISOString(),
       liveConnectConstraints: {
-        model: "gemini-3.8-live",
+        model: "models/gemini-3.8-live",
         config: {
           responseModalities: ["AUDIO"],
           sessionResumption: {},
@@ -112,7 +112,7 @@ Deno.serve(async (req: Request) => {
     // The long-lived Google API key never leaves this server function.
     return new Response(JSON.stringify({
       token: tokenData.name,
-      model: "gemini-3.8-live",
+      model: "models/gemini-3.8-live",
       expiresAt: payload.expireTime,
     }), { status: 200, headers: jsonHeaders });
   } catch (error) {
