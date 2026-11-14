@@ -72,7 +72,7 @@ Deno.serve(async (req: Request) => {
     });
     const now = Date.now();
     const payload = {
-      uses: 5,
+      uses: 1,
       expireTime: new Date(now + 30 * 60 * 1000).toISOString(),
       newSessionExpireTime: new Date(now + 60 * 1000).toISOString(),
       liveConnectConstraints: {
@@ -90,7 +90,7 @@ Deno.serve(async (req: Request) => {
     };
 
     const tokenResponse = await fetch(
-      "https://generativelanguage.googleapis.com/v1alpha/authTokens",
+      "https://generativelanguage.googleapis.com/v1beta/auth_tokens",
       {
         method: "POST",
         headers: {
