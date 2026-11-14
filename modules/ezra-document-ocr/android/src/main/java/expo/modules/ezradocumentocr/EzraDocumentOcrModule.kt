@@ -34,7 +34,7 @@ class EzraDocumentOcrModule : Module() {
       val context = appContext.reactContext?.applicationContext
         ?: throw IllegalStateException("Android application context is unavailable")
       val maxPages = requestedMaxPages.coerceIn(1, 300)
-      val maxOutputChars = requestedMaxOutputChars.coerceIn(10_000, 4 * 1024 * 1024)
+      val maxOutputChars = requestedMaxOutputChars.coerceIn(10_000, 16 * 1024 * 1024)
 
       runBlocking(Dispatchers.IO) {
         val tessdataDir = File(context.filesDir, "tesseract/tessdata")
