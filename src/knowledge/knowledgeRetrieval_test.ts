@@ -48,3 +48,13 @@ Deno.test('deleted documents are never retrieved and empty queries return no chu
     throw new Error('Stop-word-only query should not retrieve content');
   }
 });
+
+Deno.test('retrieval still supplies a source excerpt when the question uses different wording', () => {
+  const docs = [
+    document('source', 'ملاحظات المحاضرة.pdf', 'تتكون المادة من طبقات متعددة وتؤدي وظيفة الحماية والدعم.'),
+  ];
+  const result = retrieveKnowledgeChunks(docs, 'اشرح لي دور هذا الجزء في الجسم');
+  if (!result.length || result[0].document.id !== 'source') {
+    throw new Error('A source document was silently omitted when lexical terms did not match');
+  }
+});
