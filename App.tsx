@@ -1862,12 +1862,8 @@ export default function App() {
     setVoiceLevel(0);
   }, [voiceHome, isListening, speakingMessageId]);
 
-  useEffect(() => {
-    if (!voicePrefsLoaded || !appIsActive || !session || !voiceHome || !autoListen || backgroundWakeEnabled || !speakingMessageId || isListening || sending || chatLoading) return;
-    interruptVoiceFramesRef.current = 0;
-    const timer = setTimeout(() => beginListening(true), 180);
-    return () => clearTimeout(timer);
-  }, [voicePrefsLoaded, appIsActive, session?.user.id, voiceHome, autoListen, backgroundWakeEnabled, speakingMessageId, isListening, sending, chatLoading]);
+  // In fallback TTS mode, wait until playback finishes before reopening Android speech recognition.
+  // Gemini Live keeps its native microphone stream open continuously and does not use this recognizer.
 
   useEffect(() => {
     // Wait until persisted voice preferences are restored before opening the microphone.
@@ -2618,19 +2614,19 @@ export default function App() {
         const requestModel = forceGroqFallback ? DEFAULT_AI_MODELS.groq : aiPreferences.model;
 
         let timeoutId: ReturnType<typeof setTimeout> | undefined;
+        const requestBody = {
+          input: personalizedInput,
+          voiceMode: voiceReply,
+          responseLanguage,
+          provider: requestProvider,
+          model: requestModel,
+          ...(attachment?.kind === 'image' && attachment.base64
+            ? { imageDataUrl: `data:${attachment.mimeType || 'image/jpeg'};base64,${attachment.base64}` }
+            : {}),
+        };
         const aiRequest = await Promise.race([
-          supabase.functions.invoke('smart-service', {
-            body: {
-              input: personalizedInput,
-              voiceMode: voiceReply,
-              responseLanguage,
-              provider: requestProvider,
-              model: requestModel,
-              ...(attachment?.kind === 'image' && attachment.base64
-                ? { imageDataUrl: `data:${attachment.mimeType || 'image/jpeg'};base64,${attachment.base64}` }
-                : {}),
-            },
-          }).then(result => ({ kind: 'response' as const, result })),
+          supabase.functions.invoke('smart-service', { body: requestBody })
+            .then(result => ({ kind: 'response' as const, result })),
           new Promise<{ kind: 'timeout' }>(resolve => {
             timeoutId = setTimeout(() => resolve({ kind: 'timeout' }), attachment ? 60000 : 30000);
           }),
@@ -2651,11 +2647,26 @@ export default function App() {
           return;
         }
 
-        const { data: aiData, error: aiError } = aiRequest.result;
+        let { data: aiData, error: aiError } = aiRequest.result;
+        // Gemini's free endpoint can temporarily return 503 under high demand.
+        // Retry once through the already-configured Groq service instead of leaving the user without a reply.
+        if (requestProvider === 'gemini' && aiError) {
+          const status = (aiError as any)?.context?.status;
+          if (status !== 401 && status !== 403) {
+            const fallbackResult = await supabase.functions.invoke('smart-service', {
+              body: { ...requestBody, provider: 'groq', model: DEFAULT_AI_MODELS.groq },
+            });
+            if (!fallbackResult.error && typeof fallbackResult.data?.reply === 'string' && fallbackResult.data.reply.trim()) {
+              aiData = { ...fallbackResult.data, fallbackFrom: 'gemini' };
+              aiError = null;
+              console.warn('Gemini was unavailable; EZRA completed this turn through Groq fallback.');
+            }
+          }
+        }
         const groqVisionRequest = requestProvider === 'groq' && attachment?.kind === 'image' && !!attachment.base64;
-        const selectedAiConfigUnavailable = requestProvider === 'gemini'
+        const selectedAiConfigUnavailable = !aiError && !aiData?.fallbackFrom && (requestProvider === 'gemini'
           ? aiData?.provider !== 'gemini' || aiData?.model !== requestModel
-          : !groqVisionRequest && requestModel !== DEFAULT_AI_MODELS.groq && aiData?.model !== requestModel;
+          : !groqVisionRequest && requestModel !== DEFAULT_AI_MODELS.groq && aiData?.model !== requestModel);
         if (aiError || typeof aiData?.reply !== 'string' || !aiData.reply.trim() || selectedAiConfigUnavailable) {
           setAssistantConnection('offline');
           const context = (aiError as any)?.context;
@@ -4214,6 +4225,11 @@ export default function App() {
                       }}
                     ><Text style={styles.rateButtonText}>English</Text></TouchableOpacity>
                   </View>
+                </View>
+                <View style={{ padding: 15, borderRadius: 15, backgroundColor: '#241625', borderWidth: 1, borderColor: '#80516F', gap: 7 }}>
+                  <Text style={{ color: '#F5DDED', fontSize: 14, fontWeight: '800', textAlign: 'right' }}>Gemini Live — المحرك الأساسي للمحادثة الصوتية</Text>
+                  <Text style={{ color: '#D8C2D2', fontSize: 11, lineHeight: 19, textAlign: 'right' }}>يبدأ تلقائيًا عند تشغيل الاستماع على Android: يستمع ويتحدث مباشرة عبر جلسة صوتية واحدة. إذا تعذّر اتصال Gemini أو انتهت الحصة، ينتقل EZRA إلى Groq للرد ثم Habibi للصوت العربي عند جاهزيته، وصوت Android كاحتياط أخير.</Text>
+                  <Text style={{ color: '#A9D7B9', fontSize: 10, textAlign: 'right' }}>لا يحتاج إلى تنزيل نموذج صوت منفصل حتى يبدأ Gemini Live.</Text>
                 </View>
                 <View style={styles.settingRow}>
                   <View style={styles.settingCopy}>
