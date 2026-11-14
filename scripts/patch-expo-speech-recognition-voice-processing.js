@@ -79,13 +79,13 @@ source = replaceExactlyOnce(
 
 source = replaceExactlyOnce(
   source,
-  '        audioRecorder?.stop()\n        stoppedAtMillis = System.currentTimeMillis()\n        audioRecorder?.release()\n',
+  '        audioRecorder?.stop()\n        audioRecorder?.release()\n        audioRecorder = null\n',
   `        audioRecorder?.stop()
         // Release the effect before releasing the AudioRecord session it is attached to.
         acousticEchoCanceler?.release()
         acousticEchoCanceler = null
-        stoppedAtMillis = System.currentTimeMillis()
         audioRecorder?.release()
+        audioRecorder = null
 `,
   'release AEC lifecycle',
 );
