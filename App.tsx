@@ -26,6 +26,7 @@ import {
 import * as DocumentPicker from 'expo-document-picker';
 import * as Clipboard from 'expo-clipboard';
 import * as FileSystem from 'expo-file-system/legacy';
+import { File } from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import * as Speech from 'expo-speech';
 import {
@@ -2416,19 +2417,23 @@ export default function App() {
         const contentType = allowedMimeTypes.includes(attachment.mimeType ?? '')
           ? attachment.mimeType!
           : (mimeByExtension[extension] ?? (attachment.kind === 'image' ? 'image/jpeg' : 'text/plain'));
-        const fileResponse = await fetch(attachment.uri);
-        if (!fileResponse.ok) throw new Error('تعذّر قراءة الملف المحدد.');
-        const fileBlob = await fileResponse.blob();
-        if (!fileBlob.size || fileBlob.size > 5 * 1024 * 1024) {
-          throw new Error('حجم المرفق غير صالح أو يتجاوز الحد المسموح (5 ميغابايت).');
+        // Use Expo's native File object directly. Avoid fetch(file://...) + blob(),
+        // which copied the entire attachment into JS memory and rejected files over 5 MiB.
+        const attachmentFile = new File(attachment.uri);
+        const fileSize = attachmentFile.size || attachment.sizeBytes || 0;
+        if (!attachmentFile.exists || !fileSize) {
+          throw new Error('تعذّر قراءة الملف المحدد من مساحة تخزين الهاتف.');
+        }
+        if (fileSize > MAX_DOCUMENT_SOURCE_BYTES) {
+          throw new Error('حجم المرفق يتجاوز الحد المسموح (50 ميغابايت).');
         }
         const safeName = attachment.name.normalize('NFKC').replace(/[^\p{L}\p{N}._-]/gu, '_').slice(0, 100) || 'attachment';
         uploadedAttachmentPath = `${session.user.id}/${conversationId}/${messageId}/${safeName}`;
         uploadedAttachmentMime = contentType;
-        uploadedAttachmentSize = fileBlob.size;
+        uploadedAttachmentSize = fileSize;
         const { error: uploadError } = await supabase.storage
           .from('ezra-chat-attachments')
-          .upload(uploadedAttachmentPath, fileBlob, {
+          .upload(uploadedAttachmentPath, attachmentFile, {
             contentType,
             cacheControl: '3600',
             upsert: false,
