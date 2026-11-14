@@ -3057,7 +3057,10 @@ export default function App() {
       if (Platform.OS === 'android' && !liveVoiceUnavailableRef.current) {
         liveVoiceConnectingRef.current = true;
         try {
-          const microphonePermission = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
+          const microphoneAlreadyGranted = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
+          const microphonePermission = microphoneAlreadyGranted
+            ? PermissionsAndroid.RESULTS.GRANTED
+            : await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
           if (microphonePermission !== PermissionsAndroid.RESULTS.GRANTED) {
             throw new Error('لم يتم منح إذن الميكروفون لتشغيل Gemini Live.');
           }
