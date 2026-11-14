@@ -1833,12 +1833,15 @@ export default function App() {
   useEffect(() => {
     if (appIsActive && voiceHome && autoListen && session?.user.id) return;
     const activeLiveSession = liveVoiceSessionRef.current;
+    const wasConnecting = liveVoiceConnectingRef.current;
     liveVoiceSessionRef.current = null;
     liveVoiceUnavailableRef.current = false;
     liveVoiceConnectingRef.current = false;
     if (activeLiveSession) void activeLiveSession.stop();
-    setIsListening(false);
-    setSpeakingMessageId(null);
+    if (activeLiveSession || wasConnecting) {
+      setIsListening(false);
+      setSpeakingMessageId(null);
+    }
   }, [appIsActive, voiceHome, autoListen, session?.user.id]);
 
   useEffect(() => {
