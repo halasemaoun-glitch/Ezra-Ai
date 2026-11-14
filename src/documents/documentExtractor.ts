@@ -222,21 +222,11 @@ export async function extractDocumentTextFromUri(
     throw new Error('حجم الملف يتجاوز الحد الأقصى البالغ 50 ميغابايت.');
   }
 
-  // The known failing use case is a large scanned book PDF. Avoid Ream.parse()
-  // on the JS thread; Android's PdfRenderer/Tesseract implementation runs on IO.
-  const LARGE_PDF_DIRECT_OCR_BYTES = 8 * 1024 * 1024;
-  if (
-    extension === 'pdf' &&
-    Platform.OS === 'android' &&
-    EzraDocumentOcr &&
-    typeof sourceSizeBytes === 'number' &&
-    sourceSizeBytes >= LARGE_PDF_DIRECT_OCR_BYTES
-  ) {
+  // Every Android PDF is processed natively off the JS thread: PDFBox first
+  // extracts an embedded text layer, then PdfRenderer/Tesseract handles scanned pages.
+  if (extension === 'pdf' && Platform.OS === 'android' && EzraDocumentOcr) {
     const content = await extractScannedPdfText(sourceUri);
     const extractedBytes = new TextEncoder().encode(content).byteLength;
-    if (!content.trim()) {
-      throw new Error('لم يتمكن OCR من العثور على نص واضح في صفحات PDF.');
-    }
     if (extractedBytes > maxExtractedBytes) {
       throw new Error('النص المستخرج أكبر من الحد المسموح (50 ميغابايت). قسّم المستند إلى ملفات أصغر.');
     }
