@@ -2401,7 +2401,7 @@ export default function App() {
     }
   };
 
-  const sendMessage = async (voiceReply = false, voiceText?: string) => {
+  const sendMessage = async (voiceReply = false, voiceText?: string, forceGroqFallback = false) => {
     const text = (voiceText ?? message).trim();
     if ((!text && !attachment) || !session || !conversationId || sending) return;
     chatShouldAutoScrollRef.current = true;
@@ -2605,6 +2605,8 @@ export default function App() {
         const personalizedInput = personalizationSections.length
           ? `${personalizationSections.join('\n\n')}\n\n${conversationInput}`
           : conversationInput;
+        const requestProvider = forceGroqFallback ? 'groq' : aiPreferences.provider;
+        const requestModel = forceGroqFallback ? DEFAULT_AI_MODELS.groq : aiPreferences.model;
 
         let timeoutId: ReturnType<typeof setTimeout> | undefined;
         const aiRequest = await Promise.race([
@@ -2613,8 +2615,8 @@ export default function App() {
               input: personalizedInput,
               voiceMode: voiceReply,
               responseLanguage,
-              provider: aiPreferences.provider,
-              model: aiPreferences.model,
+              provider: requestProvider,
+              model: requestModel,
               ...(attachment?.kind === 'image' && attachment.base64
                 ? { imageDataUrl: `data:${attachment.mimeType || 'image/jpeg'};base64,${attachment.base64}` }
                 : {}),
@@ -2641,16 +2643,16 @@ export default function App() {
         }
 
         const { data: aiData, error: aiError } = aiRequest.result;
-        const groqVisionRequest = aiPreferences.provider === 'groq' && attachment?.kind === 'image' && !!attachment.base64;
-        const selectedAiConfigUnavailable = aiPreferences.provider === 'gemini'
-          ? aiData?.provider !== 'gemini' || aiData?.model !== aiPreferences.model
-          : !groqVisionRequest && aiPreferences.model !== DEFAULT_AI_MODELS.groq && aiData?.model !== aiPreferences.model;
+        const groqVisionRequest = requestProvider === 'groq' && attachment?.kind === 'image' && !!attachment.base64;
+        const selectedAiConfigUnavailable = requestProvider === 'gemini'
+          ? aiData?.provider !== 'gemini' || aiData?.model !== requestModel
+          : !groqVisionRequest && requestModel !== DEFAULT_AI_MODELS.groq && aiData?.model !== requestModel;
         if (aiError || typeof aiData?.reply !== 'string' || !aiData.reply.trim() || selectedAiConfigUnavailable) {
           setAssistantConnection('offline');
           const context = (aiError as any)?.context;
           const details = [
             selectedAiConfigUnavailable
-              ? (aiPreferences.provider === 'gemini'
+              ? (requestProvider === 'gemini'
               ? 'لم تؤكد الخدمة تشغيل Gemini. يلزم نشر تحديث smart-service وإضافة GEMINI_API_KEY في أسرار Supabase أولاً.'
               : 'لم تؤكد الخدمة تشغيل نموذج Groq المختار. يلزم نشر تحديث smart-service لتفعيل اختيار النموذج.')
               : null,
@@ -2966,7 +2968,7 @@ export default function App() {
         setVoiceRetryMessage('');
         if (appIsActiveRef.current && voiceHome) {
           setMessage(pendingUserText);
-          void sendMessage(true, pendingUserText);
+          void sendMessage(true, pendingUserText, true);
         }
       }, 350);
     } else {
