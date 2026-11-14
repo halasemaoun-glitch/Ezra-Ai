@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.ParcelFileDescriptor
 import dev.ffmpegkit.tesseract.TesseractConfig
 import dev.ffmpegkit.tesseract.TesseractOCR
+import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import kotlinx.coroutines.Dispatchers
@@ -116,7 +117,7 @@ class EzraDocumentOcrModule : Module() {
           ocr.release()
         }
       }
-    }
+    }.runOnQueue(Queues.IO)
   }
 
   private fun openPdfDescriptor(context: Context, uriString: String): ParcelFileDescriptor {
