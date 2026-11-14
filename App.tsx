@@ -2651,16 +2651,21 @@ export default function App() {
         // Gemini's free endpoint can temporarily return 503 under high demand.
         // Retry once through the already-configured Groq service instead of leaving the user without a reply.
         if (requestProvider === 'gemini' && aiError) {
-          const status = (aiError as any)?.context?.status;
-          if (status !== 401 && status !== 403) {
-            const fallbackResult = await supabase.functions.invoke('smart-service', {
-              body: { ...requestBody, provider: 'groq', model: DEFAULT_AI_MODELS.groq },
+          // Fall back for every Gemini transport/provider failure, including invalid keys
+          // and gateway errors. The user should still receive a Groq reply when available.
+          const fallbackResult = await supabase.functions.invoke('smart-service', {
+            body: { ...requestBody, provider: 'groq', model: DEFAULT_AI_MODELS.groq },
+          });
+          if (!fallbackResult.error && typeof fallbackResult.data?.reply === 'string' && fallbackResult.data.reply.trim()) {
+            aiData = { ...fallbackResult.data, fallbackFrom: 'gemini' };
+            aiError = null;
+            console.warn('Gemini was unavailable; EZRA completed this turn through Groq fallback.');
+          } else {
+            console.error('Gemini and Groq fallback both failed:', {
+              geminiError: aiError,
+              groqError: fallbackResult.error,
+              groqData: fallbackResult.data,
             });
-            if (!fallbackResult.error && typeof fallbackResult.data?.reply === 'string' && fallbackResult.data.reply.trim()) {
-              aiData = { ...fallbackResult.data, fallbackFrom: 'gemini' };
-              aiError = null;
-              console.warn('Gemini was unavailable; EZRA completed this turn through Groq fallback.');
-            }
           }
         }
         const groqVisionRequest = requestProvider === 'groq' && attachment?.kind === 'image' && !!attachment.base64;
