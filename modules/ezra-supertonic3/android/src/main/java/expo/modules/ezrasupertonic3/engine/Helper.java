@@ -254,7 +254,7 @@ class UnicodeProcessor {
 /**
  * Text-to-Speech inference class
  */
-public class TextToSpeech {
+class TextToSpeech {
     private Config config;
     private UnicodeProcessor textProcessor;
     private OrtSession dpSession;
@@ -504,7 +504,7 @@ public class TextToSpeech {
 /**
  * Style holder class
  */
-public class Style {
+class Style {
     public OnnxTensor ttlTensor;
     public OnnxTensor dpTensor;
     
@@ -522,7 +522,7 @@ public class Style {
 /**
  * TTS result holder
  */
-public class TTSResult {
+class TTSResult {
     public float[] wav;
     public float[] duration;
     
