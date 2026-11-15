@@ -45,6 +45,7 @@ import { retrieveDentalClinicalCases } from './src/study/dentalKnowledge';
 import { DENTAL_CLINICAL_CASES } from './src/study/clinicalCases';
 import { supabase } from './src/lib/supabase';
 import { DEFAULT_EZRA_VOICE, detectEzraSpeechLanguage } from './src/voice/voiceProfile';
+import EzraSupertonic3, { type SupertonicModelStatus } from './modules/ezra-supertonic3';
 import { diacritizeArabicLocally } from './src/text/ichkil';
 import { startEzraLiveVoiceSession, type EzraLiveVoiceSession } from './src/voice/geminiLiveAudioSession';
 import { AI_MODELS, AI_PROVIDER_OPTIONS, DEFAULT_AI_MODELS, normalizeAiModel, normalizeAiProvider, type AiProvider } from './src/ai/aiModelSettings';
@@ -395,6 +396,14 @@ export default function App() {
   const [habibiEngineReady, setHabibiEngineReady] = useState(false);
   const [habibiEngineBusy, setHabibiEngineBusy] = useState(false);
   const [habibiEngineError, setHabibiEngineError] = useState('');
+  const [supertonicStatus, setSupertonicStatus] = useState<SupertonicModelStatus | null>(null);
+  const [supertonicEnabled, setSupertonicEnabled] = useState(false);
+  const [supertonicBusy, setSupertonicBusy] = useState(false);
+  const [supertonicReady, setSupertonicReady] = useState(false);
+  const [supertonicProgress, setSupertonicProgress] = useState(0);
+  const [supertonicError, setSupertonicError] = useState('');
+  const supertonicReadyRef = useRef(false);
+  const activeSupertonicSpeechRef = useRef<{ text: string; messageId: string } | null>(null);
   const activeHabibiSpeechRef = useRef<{ text: string; messageId: string } | null>(null);
   const activeAudarSpeechRef = useRef<{ text: string; messageId: string } | null>(null);
   const audarReadyRef = useRef(false);
@@ -3542,6 +3551,138 @@ export default function App() {
     }
   };
 
+  const refreshSupertonicStatus = async () => {
+    if (Platform.OS !== 'android' || !EzraSupertonic3) return null;
+    try {
+      const status = await EzraSupertonic3.getModelStatus();
+      setSupertonicStatus(status);
+      return status;
+    } catch (error) {
+      console.warn('Could not read Supertonic model status:', error);
+      return null;
+    }
+  };
+
+  const ensureSupertonicReady = async () => {
+    if (Platform.OS !== 'android' || !EzraSupertonic3) return false;
+    if (supertonicReadyRef.current) return true;
+    const status = await EzraSupertonic3.getModelStatus();
+    setSupertonicStatus(status);
+    if (!status.installed) return false;
+    await EzraSupertonic3.initialize();
+    supertonicReadyRef.current = true;
+    setSupertonicReady(true);
+    return true;
+  };
+
+  const installSupertonicVoice = async () => {
+    if (Platform.OS !== 'android' || !EzraSupertonic3 || supertonicBusy) return;
+    setSupertonicBusy(true);
+    setSupertonicError('');
+    setSupertonicProgress(0);
+    const progressListener = EzraSupertonic3.addListener('onDownloadProgress', event => {
+      if ('fileIndex' in event && event.fileCount > 0) {
+        setSupertonicProgress(Math.round(((event.fileIndex - 1 + event.fileProgress) / event.fileCount) * 100));
+      }
+    });
+    try {
+      let status = await EzraSupertonic3.getModelStatus();
+      setSupertonicStatus(status);
+      if (!status.installed) {
+        status = await EzraSupertonic3.downloadModel();
+        setSupertonicStatus(status);
+      }
+      await EzraSupertonic3.initialize();
+      supertonicReadyRef.current = true;
+      setSupertonicReady(true);
+      setSupertonicEnabled(true);
+      await AsyncStorage.setItem('ezra:supertonic3Enabled', 'true');
+      Alert.alert('تم تجهيز صوت EZRA', 'تم تحميل نموذج Supertonic 3 وتجهيزه على الهاتف. سيُستخدم للردود العربية العادية، مع بقاء الصوت الاحتياطي متاحًا.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'تعذّر تجهيز Supertonic 3.';
+      setSupertonicError(message);
+      console.warn('Supertonic setup failed; existing TTS engines remain available:', error);
+      Alert.alert('تعذّر تجهيز Supertonic 3', 'لم يكتمل تنزيل النموذج أو تهيئته. لم نغيّر محركات الصوت الحالية، ويمكن إعادة المحاولة.');
+    } finally {
+      progressListener.remove();
+      setSupertonicBusy(false);
+      await refreshSupertonicStatus();
+    }
+  };
+
+  useEffect(() => {
+    let active = true;
+    if (Platform.OS === 'android' && EzraSupertonic3) {
+      void (async () => {
+        const [status, enabled] = await Promise.all([
+          EzraSupertonic3.getModelStatus().catch(() => null),
+          AsyncStorage.getItem('ezra:supertonic3Enabled').catch(() => null),
+        ]);
+        if (!active) return;
+        if (status) setSupertonicStatus(status);
+        if (enabled === 'true' && status?.installed) {
+          try {
+            await EzraSupertonic3.initialize();
+            if (active) {
+              supertonicReadyRef.current = true;
+              setSupertonicReady(true);
+              setSupertonicEnabled(true);
+            }
+          } catch (error) {
+            console.warn('Saved Supertonic preference could not initialize; fallback remains active:', error);
+            if (active) setSupertonicError(error instanceof Error ? error.message : 'تعذّر تشغيل Supertonic.');
+          }
+        }
+      })();
+    }
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!EzraSupertonic3) return;
+    const finished = EzraSupertonic3.addListener('onPlaybackFinished', () => {
+      activeSupertonicSpeechRef.current = null;
+      finishVoiceCaptureAfterPlayback();
+      setSpeakingMessageId(null);
+      resumeBackgroundWake();
+    });
+    const failed = EzraSupertonic3.addListener('onPlaybackError', event => {
+      const pending = activeSupertonicSpeechRef.current;
+      activeSupertonicSpeechRef.current = null;
+      supertonicReadyRef.current = false;
+      setSupertonicReady(false);
+      if (pending && activeSpokenTextRef.current === pending.text) {
+        const fallbackVoice = ttsVoices.find(voice => voice.identifier === selectedTtsVoice && voice.language.toLowerCase().startsWith('ar'));
+        Speech.speak(pending.text, {
+          language: 'ar',
+          ...(fallbackVoice ? { voice: fallbackVoice.identifier } : {}),
+          rate: speechRate,
+          pitch: speechPitch,
+          volume: 1,
+          onDone: () => {
+            finishVoiceCaptureAfterPlayback();
+            setSpeakingMessageId(current => current === pending.messageId ? null : current);
+            resumeBackgroundWake();
+          },
+          onStopped: () => {
+            finishVoiceCaptureAfterPlayback();
+            setSpeakingMessageId(current => current === pending.messageId ? null : current);
+            resumeBackgroundWake();
+          },
+          onError: () => {
+            finishVoiceCaptureAfterPlayback();
+            setSpeakingMessageId(current => current === pending.messageId ? null : current);
+            resumeBackgroundWake();
+          },
+        });
+      } else {
+        setSpeakingMessageId(null);
+      }
+      console.warn('Supertonic playback failed:', event);
+    });
+    return () => { finished.remove(); failed.remove(); };
+  }, [selectedTtsVoice, speechRate, speechPitch, ttsVoices]);
+
   const copyMessage = async (text: string, messageId: string) => {
     try {
       await Clipboard.setStringAsync(text);
@@ -3561,6 +3702,7 @@ export default function App() {
       finishVoiceCaptureAfterPlayback();
       EzraHabibiTts?.stopAudio().catch(() => {});
       EzraAudarTts?.stopAudio().catch(() => {});
+      EzraSupertonic3?.stopAudio().catch(() => {});
       activeAudarSpeechRef.current = null;
       activeHabibiSpeechRef.current = null;
       setSpeakingMessageId(null);
@@ -3569,6 +3711,7 @@ export default function App() {
     Speech.stop();
     await EzraHabibiTts?.stopAudio().catch(() => {});
     await EzraAudarTts?.stopAudio().catch(() => {});
+    await EzraSupertonic3?.stopAudio().catch(() => {});
     activeAudarSpeechRef.current = null;
     activeHabibiSpeechRef.current = null;
     activeSpokenTextRef.current = text;
@@ -3585,6 +3728,26 @@ export default function App() {
         console.warn('Ichkil diacritization unavailable; speaking original Arabic text:', error);
       }
       if (activeSpokenTextRef.current !== text) return;
+    }
+
+    if ((speechLanguage === 'ar' || speechLanguage === 'en') && supertonicEnabled && EzraSupertonic3 && Platform.OS === 'android') {
+      try {
+        const ready = await ensureSupertonicReady();
+        if (activeSpokenTextRef.current !== text) return;
+        if (ready) {
+          const outputPath = `${FileSystem.cacheDirectory || FileSystem.documentDirectory || ''}ezra-supertonic3-${Date.now()}.wav`;
+          const generated = await EzraSupertonic3.synthesize(speechText, speechLanguage, outputPath, speechRate);
+          if (activeSpokenTextRef.current !== text) return;
+          activeSupertonicSpeechRef.current = { text, messageId };
+          await EzraSupertonic3.playAudio(generated.path);
+          return;
+        }
+      } catch (error) {
+        activeSupertonicSpeechRef.current = null;
+        supertonicReadyRef.current = false;
+        setSupertonicReady(false);
+        console.warn('Supertonic synthesis unavailable; falling back to existing voice engines:', error);
+      }
     }
 
     if (speechLanguage === 'ar' && EzraAudarTts && Platform.OS === 'android') {
@@ -4477,6 +4640,39 @@ export default function App() {
                     <Text style={styles.memorySaveText}>اختيار صوت Gemini</Text>
                   </TouchableOpacity>
                 </View>
+                <View style={{ padding: 15, borderRadius: 15, backgroundColor: '#241625', borderWidth: 1, borderColor: '#80516F', gap: 9 }}>
+                  <Text style={{ color: '#F5DDED', fontSize: 14, fontWeight: '800', textAlign: 'right' }}>Supertonic 3 — صوت محلي على الهاتف</Text>
+                  <Text style={{ color: '#D8C2D2', fontSize: 11, lineHeight: 19, textAlign: 'right' }}>
+                    {supertonicStatus?.installed
+                      ? 'النموذج موجود على الهاتف. بعد التفعيل سيولّد EZRA الصوت العربي محليًا دون إرسال النص إلى خدمة صوت خارجية.'
+                      : 'حمّلي ملفات الصوت مرة واحدة (قد تحتاج مساحة تخزين كبيرة واتصال إنترنت). بعد ذلك يعمل التوليد محليًا دون إنترنت.'}
+                  </Text>
+                  <Text style={{ color: supertonicReady ? '#A9D7B9' : supertonicError ? '#E7A2A2' : '#D9B77A', fontSize: 10, textAlign: 'right' }}>
+                    {supertonicBusy ? `جارٍ تنزيل ملفات الصوت… ${supertonicProgress}%` : supertonicReady ? '✓ المحرك جاهز' : supertonicStatus?.installed ? 'النموذج محمّل · يحتاج تهيئة أو تفعيل' : 'لم يتم تنزيل النموذج بعد'}
+                  </Text>
+                  {!!supertonicError && <Text style={{ color: '#E7A2A2', fontSize: 10, textAlign: 'right' }} numberOfLines={2}>{supertonicError}</Text>}
+                  <TouchableOpacity
+                    onPress={installSupertonicVoice}
+                    disabled={supertonicBusy || Platform.OS !== 'android' || !EzraSupertonic3}
+                    accessibilityRole="button"
+                    style={{ borderRadius: 13, borderWidth: 1, borderColor: '#B86E9C', backgroundColor: supertonicBusy ? '#352536' : '#633D59', paddingVertical: 13, alignItems: 'center', opacity: supertonicBusy ? 0.65 : 1 }}
+                  >
+                    <Text style={{ color: '#FFF0F8', fontSize: 12, fontWeight: '800' }}>
+                      {supertonicBusy ? 'جارٍ التجهيز…' : supertonicStatus?.installed ? (supertonicEnabled ? 'إعادة تهيئة صوت Supertonic 3' : 'تفعيل صوت Supertonic 3') : 'تنزيل وتفعيل صوت Supertonic 3'}
+                    </Text>
+                  </TouchableOpacity>
+                  {supertonicEnabled && (
+                    <TouchableOpacity onPress={async () => {
+                      setSupertonicEnabled(false);
+                      supertonicReadyRef.current = false;
+                      setSupertonicReady(false);
+                      await AsyncStorage.setItem('ezra:supertonic3Enabled', 'false').catch(() => {});
+                      await EzraSupertonic3?.shutdown().catch(() => {});
+                    }} accessibilityRole="button" style={{ alignItems: 'center', paddingVertical: 6 }}>
+                      <Text style={{ color: '#D8A7C2', fontSize: 11 }}>إيقاف استخدام Supertonic والعودة للمحركات السابقة</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
                 <View style={styles.settingRow}>
                   <View style={styles.settingCopy}>
                     <Text style={styles.settingTitle}>محركات النطق للردود العادية</Text>
@@ -4491,7 +4687,7 @@ export default function App() {
                 >
                   <Text style={{ color: '#E9B8D8', fontSize: 12, fontWeight: '800' }}>إعادة ضبط اللغة والصوت</Text>
                 </TouchableOpacity>
-                <Text style={styles.settingsFootnote}>Gemini Live هو محرك المحادثة الصوتية المباشرة. أما الردود العادية فتستخدم Audar Flash بصوت demo_male_3 بعد تشكيل العربية عبر Ichkil، ثم Habibi وAndroid كبدائل تلقائية عند التعذّر. زر المقاطعة يوقف محركات الصوت الثلاثة ويوقف الكلام الجاري قبل استئناف الاستماع. عند تفعيل «يا EZRA» تعمل خدمة استماع أمامية بإشعار دائم وقد يقيّدها نظام توفير البطارية.</Text>
+                <Text style={styles.settingsFootnote}>Gemini Live هو محرك المحادثة الصوتية المباشرة. أما الردود العادية فتستخدم Audar Flash بصوت demo_male_3 بعد تشكيل العربية عبر Ichkil، ثم Supertonic 3 عند تفعيله، ثم Audar وHabibi وAndroid كبدائل تلقائية عند التعذّر. زر المقاطعة يوقف محركات الصوت الثلاثة ويوقف الكلام الجاري قبل استئناف الاستماع. عند تفعيل «يا EZRA» تعمل خدمة استماع أمامية بإشعار دائم وقد يقيّدها نظام توفير البطارية.</Text>
                   </>
                 )}
                 </ScrollView>
