@@ -64,7 +64,7 @@ jobs:
           mkdir -p "$ASSET_DIR"
           curl --fail --location --retry 3 --silent --show-error \
             --header "Authorization: Bearer ${HF_TOKEN}" \
-            "https://huggingface.co/neuphonic/neucodec-onnx-decoder-int8/resolve/main/model_int8.onnx" \
+            "https://huggingface.co/neuphonic/neucodec-onnx-decoder-int8/resolve/main/model.onnx" \
             --output "$ASSET_DIR/model_int8.onnx"
           test "$(stat -c%s "$ASSET_DIR/model_int8.onnx")" -ge 250000000
           curl --fail --location --retry 3 --silent --show-error \
