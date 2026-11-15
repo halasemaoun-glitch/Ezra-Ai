@@ -173,3 +173,19 @@ jobs:
         run: npm run typecheck
       - name: Bundle Android app
         run: npx expo export --platform android
+      - name: Publish downloadable APK release
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/ezra/audar-android-voice'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ezra-audar-${{ github.run_number }}
+          name: EZRA AI Android APK (Audar) - Build ${{ github.run_number }}
+          prerelease: true
+          generate_release_notes: false
+          body: |
+            Automatic test build of EZRA AI for Android.
+            Includes Gemini Live, Audar TTS, Ichkil and Habibi fallback.
+            Debug-signed APK for device testing; not a production-signed release.
+          files: android/app/build/outputs/apk/release/app-release.apk
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
