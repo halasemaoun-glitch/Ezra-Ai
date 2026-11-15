@@ -4006,13 +4006,40 @@ export default function App() {
             </View>
             <TouchableOpacity onPress={() => setSettingsVisible(true)} style={styles.voiceTopButton} accessibilityLabel="الإعدادات"><Text style={styles.voiceTopButtonText}>⚙</Text></TouchableOpacity>
           </View>
-          <View style={styles.voiceOrbWrap}>
+          <TouchableOpacity
+            style={styles.voiceOrbWrap}
+            onPress={startListening}
+            activeOpacity={0.94}
+            accessibilityRole="button"
+            accessibilityLabel={speakingMessageId ? 'مقاطعة إزرا والتحدث الآن' : isListening ? 'إيقاف الاستماع' : 'التحدث مع إزرا عبر الكرة'}
+            accessibilityHint="اضغط على كرة إزرا لبدء المحادثة الصوتية أو إيقافها"
+          >
             <EzraOrb status={voiceStatus} voiceLevel={voiceLevel} />
-          </View>
+          </TouchableOpacity>
           <View style={styles.voiceStateBlock} accessibilityLiveRegion="polite">
             <Text style={styles.voiceStateEnglish}>{voiceStatusEnglish}</Text>
             <Text style={styles.voiceStateArabic}>{voiceStatusArabic}</Text>
           </View>
+          {(() => {
+            const liveOutput = liveVoiceOutputTranscriptRef.current.trim();
+            const latestMessage = [...messages].reverse().find(item => item.id !== 'welcome' && item.text.trim());
+            const previewText = isListening && message.trim()
+              ? message.trim()
+              : liveOutput || latestMessage?.text || 'اضغط على الكرة وابدأ الحديث معي';
+            const previewLabel = isListening && message.trim()
+              ? 'ما أسمعه منك'
+              : liveOutput || latestMessage?.sender === 'ezra'
+                ? 'رد إزرا'
+                : latestMessage?.sender === 'user'
+                  ? 'آخر ما قلته'
+                  : 'ابدأ محادثة صوتية';
+            return (
+              <View style={styles.homeVoicePreview} accessibilityLiveRegion="polite">
+                <Text style={styles.homeVoicePreviewLabel}>{previewLabel}</Text>
+                <Text style={styles.homeVoicePreviewText} numberOfLines={3}>{previewText}</Text>
+              </View>
+            );
+          })()}
           <View style={styles.voiceMicWrap}>
             <Animated.View
               pointerEvents="none"
@@ -5306,6 +5333,9 @@ const styles = StyleSheet.create({
   mainTabLabelActive: { color: '#F0C5E2', fontWeight: '700' },
 
   voiceOrbWrap: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center' },
+  homeVoicePreview: { width: '100%', maxWidth: 360, minHeight: 62, maxHeight: 94, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 16, backgroundColor: 'rgba(25,19,31,0.82)', borderWidth: 1, borderColor: 'rgba(126,75,112,0.58)', marginBottom: 6, gap: 4 },
+  homeVoicePreviewLabel: { color: '#C58BB7', fontSize: 10, textAlign: 'right', fontWeight: '700' },
+  homeVoicePreviewText: { color: '#F5EAF3', fontSize: 12, lineHeight: 19, textAlign: 'right' },
   voiceStateBlock: { width: '100%', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 8, paddingTop: 2, paddingBottom: 10 },
   voiceStateEnglish: { color: '#FFF0FA', fontSize: 25, lineHeight: 32, fontWeight: '800', letterSpacing: 0.15, textAlign: 'center' },
   voiceStateArabic: { color: '#D8C2D5', fontSize: 20, lineHeight: 28, fontWeight: '500', textAlign: 'center' },
