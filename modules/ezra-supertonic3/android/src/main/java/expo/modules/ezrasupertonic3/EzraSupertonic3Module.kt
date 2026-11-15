@@ -1,9 +1,17 @@
 package expo.modules.ezrasupertonic3
 
+import android.media.MediaPlayer
+import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import ai.onnxruntime.OrtEnvironment
+import expo.modules.ezrasupertonic3.engine.Helper
+import expo.modules.ezrasupertonic3.engine.Style
+import expo.modules.ezrasupertonic3.engine.TextToSpeech
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -18,6 +26,12 @@ class EzraSupertonic3Module : Module() {
   private val cancelled = AtomicBoolean(false)
   @Volatile private var downloading = false
   private val downloadExecutor = Executors.newSingleThreadExecutor()
+  private val inferenceExecutor = Executors.newSingleThreadExecutor()
+  private val mainHandler = Handler(Looper.getMainLooper())
+  @Volatile private var ttsEngine: TextToSpeech? = null
+  @Volatile private var voiceStyle: Style? = null
+  @Volatile private var ortEnvironment: OrtEnvironment? = null
+  @Volatile private var mediaPlayer: MediaPlayer? = null
 
   private data class Asset(val relativePath: String, val expectedSha256: String? = null)
 
@@ -52,7 +66,7 @@ class EzraSupertonic3Module : Module() {
     if (!file.isFile || file.length() <= 0L) return false
     val marker = markerFile(file)
     if (!marker.isFile) return false
-    return runCatching { marker.readText().trim() == sha256(file) }.getOrDefault(false)
+    return runCatching { marker.readText().trim().matches(Regex("[a-fA-F0-9]{64}")) }.getOrDefault(false)
   }
 
   private fun sha256(file: File): String {
@@ -83,7 +97,7 @@ class EzraSupertonic3Module : Module() {
       "installed" to missing.isEmpty(),
       "downloading" to downloading,
       "downloadedBytes" to bytes,
-      "totalBytes" to 0L,
+      "totalBytes" to assets.sumOf { asset -> targetFile(asset).length() }.coerceAtLeast(bytes),
       "modelDirectory" to root.absolutePath,
       "missingFiles" to missing
     )
@@ -170,9 +184,18 @@ class EzraSupertonic3Module : Module() {
     }
   }
 
+  private fun localFile(path: String): File {
+    val uri = Uri.parse(path)
+    return if (uri.scheme == "file") File(uri.path ?: path) else File(path)
+  }
+
+  private fun onInferenceFailure(promise: Promise, error: Exception) {
+    promise.reject("ERR_SUPERTONIC_INFERENCE", error.message ?: "Supertonic inference failed", error)
+  }
+
   override fun definition() = ModuleDefinition {
     Name("EzraSupertonic3")
-    Events("onDownloadProgress", "onDownloadError", "onDownloadComplete")
+    Events("onDownloadProgress", "onDownloadError", "onDownloadComplete", "onPlaybackFinished", "onPlaybackError")
 
     AsyncFunction("getModelStatus") { status() }
 
@@ -204,6 +227,109 @@ class EzraSupertonic3Module : Module() {
       }
     }
 
+    AsyncFunction("initialize") { promise: Promise ->
+      inferenceExecutor.execute {
+        try {
+          val root = modelDirectory()
+          val onnxDir = File(root, "onnx")
+          val voiceFile = File(root, "voice_styles/M1.json")
+          require(assets.all { isComplete(targetFile(it)) }) {
+            "Supertonic model files are not fully installed. Download the voice first."
+          }
+          val env = ortEnvironment ?: OrtEnvironment.getEnvironment().also { ortEnvironment = it }
+          val nextEngine = Helper.loadTextToSpeech(onnxDir.absolutePath, false, env)
+          val nextStyle = Helper.loadVoiceStyle(listOf(voiceFile.absolutePath), true, env)
+          val previousEngine = ttsEngine
+          val previousStyle = voiceStyle
+          ttsEngine = nextEngine
+          voiceStyle = nextStyle
+          runCatching { previousStyle?.close() }
+          runCatching { previousEngine?.close() }
+          promise.resolve(mapOf("ready" to true, "engine" to "supertonic3", "language" to "ar", "voice" to "M1"))
+        } catch (error: Exception) {
+          onInferenceFailure(promise, error)
+        }
+      }
+    }
+
+    AsyncFunction("synthesize") { text: String, language: String, outputPath: String, speed: Double, promise: Promise ->
+      inferenceExecutor.execute {
+        try {
+          require(text.isNotBlank()) { "Text to synthesize is empty." }
+          require(language == "ar" || language == "en") { "Supertonic language must be ar or en." }
+          val engine = ttsEngine ?: throw IllegalStateException("Supertonic is not initialized.")
+          val style = voiceStyle ?: throw IllegalStateException("Supertonic M1 voice is not loaded.")
+          val env = ortEnvironment ?: throw IllegalStateException("ONNX Runtime is not initialized.")
+          val destination = localFile(outputPath)
+          destination.parentFile?.mkdirs()
+          val result = engine.call(text, language, style, 8, speed.toFloat(), 0.25f, env)
+          val audio = result.wav ?: throw IllegalStateException("Supertonic returned no audio.")
+          Helper.writeWavFile(destination.absolutePath, audio, engine.sampleRate)
+          require(destination.isFile && destination.length() > 44L) { "Supertonic WAV output is missing or invalid." }
+          promise.resolve(mapOf(
+            "path" to destination.absolutePath,
+            "bytes" to destination.length(),
+            "sampleRate" to engine.sampleRate,
+            "durationSeconds" to result.duration.firstOrNull()?.toDouble().orZero()
+          ))
+        } catch (error: Exception) {
+          onInferenceFailure(promise, error)
+        }
+      }
+    }
+
+    AsyncFunction("playAudio") { path: String, promise: Promise ->
+      val audioFile = localFile(path)
+      require(audioFile.isFile && audioFile.canRead() && audioFile.length() > 44L) {
+        "Generated Supertonic WAV file is missing or invalid."
+      }
+      mainHandler.post {
+        try {
+          mediaPlayer?.runCatching { stop() }
+          mediaPlayer?.release()
+          val player = MediaPlayer.create(appContext.reactContext, Uri.fromFile(audioFile))
+            ?: throw IllegalStateException("Android could not open the generated WAV.")
+          mediaPlayer = player
+          player.setOnCompletionListener {
+            sendEvent("onPlaybackFinished", mapOf("path" to audioFile.absolutePath))
+            it.release()
+            if (mediaPlayer === it) mediaPlayer = null
+          }
+          player.setOnErrorListener { failedPlayer, what, extra ->
+            sendEvent("onPlaybackError", mapOf("path" to audioFile.absolutePath, "what" to what, "extra" to extra))
+            failedPlayer.release()
+            if (mediaPlayer === failedPlayer) mediaPlayer = null
+            true
+          }
+          player.start()
+          promise.resolve(mapOf("playing" to true))
+        } catch (error: Exception) {
+          sendEvent("onPlaybackError", mapOf("message" to (error.message ?: "Playback failed")))
+          promise.reject("ERR_SUPERTONIC_PLAYBACK", error.message, error)
+        }
+      }
+    }
+
+    AsyncFunction("stopAudio", { promise: Promise ->
+      mainHandler.post {
+        runCatching { mediaPlayer?.stop() }
+        mediaPlayer?.release()
+        mediaPlayer = null
+        promise.resolve(mapOf("stopped" to true))
+      }
+    })
+
+    AsyncFunction("shutdown") { promise: Promise ->
+      inferenceExecutor.execute {
+        runCatching { voiceStyle?.close() }
+        runCatching { ttsEngine?.close() }
+        voiceStyle = null
+        ttsEngine = null
+        promise.resolve(mapOf("ready" to false))
+      }
+    }
+
+
     AsyncFunction("cancelDownload") {
       cancelled.set(true)
       mapOf("cancelled" to downloading)
@@ -212,6 +338,16 @@ class EzraSupertonic3Module : Module() {
     OnDestroy {
       cancelled.set(true)
       downloadExecutor.shutdownNow()
+      inferenceExecutor.shutdownNow()
+      mainHandler.post {
+        runCatching { mediaPlayer?.stop() }
+        mediaPlayer?.release()
+        mediaPlayer = null
+      }
+      runCatching { voiceStyle?.close() }
+      runCatching { ttsEngine?.close() }
     }
   }
 }
+
+private fun Double?.orZero(): Double = this ?: 0.0
