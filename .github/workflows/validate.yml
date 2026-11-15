@@ -1,7 +1,7 @@
 name: EZRA checks
 
 permissions:
-  contents: write
+  contents: write # Allow publishing the APK release asset
 
 concurrency:
   group: ezra-checks-${{ github.ref }}
