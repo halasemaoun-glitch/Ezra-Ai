@@ -1,7 +1,7 @@
 package expo.modules.ezrasupertonic3
 
 import android.os.SystemClock
-import expo.modules.kotlin.functions.Queues
+import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.File
@@ -10,12 +10,14 @@ import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** Downloads a pinned Supertonic 3 ONNX snapshot into app-private storage. */
 class EzraSupertonic3Module : Module() {
   private val cancelled = AtomicBoolean(false)
   @Volatile private var downloading = false
+  private val downloadExecutor = Executors.newSingleThreadExecutor()
 
   private data class Asset(val relativePath: String, val expectedSha256: String? = null)
 
@@ -172,34 +174,44 @@ class EzraSupertonic3Module : Module() {
     Name("EzraSupertonic3")
     Events("onDownloadProgress", "onDownloadError", "onDownloadComplete")
 
-    AsyncFunction("getModelStatus") { status() }.runOnQueue(Queues.IO)
+    AsyncFunction("getModelStatus") { status() }
 
-    AsyncFunction("downloadModel") {
-      if (downloading) throw IllegalStateException("Supertonic 3 download is already running")
+    AsyncFunction("downloadModel") { promise: Promise ->
+      if (downloading) {
+        promise.reject("ERR_SUPERTONIC_DOWNLOAD_ACTIVE", "Supertonic 3 download is already running", null)
+        return@AsyncFunction
+      }
       downloading = true
       cancelled.set(false)
-      try {
-        assets.forEachIndexed { index, asset ->
-          val file = targetFile(asset)
-          if (!isComplete(file)) downloadAsset(asset, index + 1, assets.size)
+      downloadExecutor.execute {
+        try {
+          assets.forEachIndexed { index, asset ->
+            val file = targetFile(asset)
+            if (!isComplete(file)) downloadAsset(asset, index + 1, assets.size)
+          }
+          val result = status()
+          if (result["installed"] != true) {
+            throw IllegalStateException("Model download finished but required files are missing")
+          }
+          sendEvent("onDownloadComplete", result)
+          promise.resolve(result)
+        } catch (error: Exception) {
+          sendEvent("onDownloadError", mapOf("message" to (error.message ?: "Unknown download error")))
+          promise.reject("ERR_SUPERTONIC_DOWNLOAD", error.message, error)
+        } finally {
+          downloading = false
         }
-        val result = status()
-        if (result["installed"] != true) {
-          throw IllegalStateException("Model download finished but required files are missing")
-        }
-        sendEvent("onDownloadComplete", result)
-        result
-      } catch (error: Exception) {
-        sendEvent("onDownloadError", mapOf("message" to (error.message ?: "Unknown download error")))
-        throw error
-      } finally {
-        downloading = false
       }
-    }.runOnQueue(Queues.IO)
+    }
 
     AsyncFunction("cancelDownload") {
       cancelled.set(true)
       mapOf("cancelled" to downloading)
-    }.runOnQueue(Queues.IO)
+    }
+
+    OnDestroy {
+      cancelled.set(true)
+      downloadExecutor.shutdownNow()
+    }
   }
 }
