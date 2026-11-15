@@ -28,6 +28,21 @@ device test confirms reliable audible playback.
   `supertone-oss-archive/supertonic-3` at revision
   `aafc6e32416a594460b32413efc49d7fe4ce6d46` for reproducibility.
 
+## Implementation progress
+
+- [x] Create a separate experimental Git branch.
+- [x] Add an Android Expo module package for model delivery.
+- [x] Pin downloads to the archived model snapshot and keep assets in app-private storage.
+- [x] Download the ONNX files, config, Unicode indexer, and M1 voice preset.
+- [x] Write downloads to temporary files, resume partial transfers when the server supports HTTP Range, and mark completed files with a locally verified SHA-256 digest.
+- [x] Expose download status, progress, completion, and cancellation to TypeScript.
+- [x] Add ONNX Runtime Android dependency and an isolated Android CI workflow.
+- [ ] Implement and validate actual ONNX speech synthesis on Android.
+- [ ] Connect the new engine to EZRA's voice flow behind an explicit opt-in.
+- [ ] Build and test an APK on the OPPO A76.
+
+The current code is the model-download foundation only. It does not generate or play speech yet, and it is not wired into the active EZRA voice flow.
+
 ## Integration approach
 
 1. Add a separate Expo native module for Android using ONNX Runtime Android.
