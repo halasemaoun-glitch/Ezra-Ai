@@ -3,6 +3,7 @@ package expo.modules.ezraaudartts
 import android.app.ActivityManager
 import android.content.Context
 import android.media.AudioAttributes
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.StatFs
@@ -35,6 +36,17 @@ class EzraAudarTtsModule : Module() {
   private var referenceCodes = IntArray(0)
   private var mediaPlayer: MediaPlayer? = null
   private var mediaPlayerFile: File? = null
+  @Volatile private var playbackAudioManager: AudioManager? = null
+  @Volatile private var previousPlaybackAudioMode: Int? = null
+
+  private fun restorePlaybackAudioRoute() {
+    val manager = playbackAudioManager
+    if (manager != null) {
+      try { previousPlaybackAudioMode?.let { manager.mode = it } } catch (_: Exception) {}
+    }
+    playbackAudioManager = null
+    previousPlaybackAudioMode = null
+  }
 
   private fun localFile(path: String): File {
     val uri = Uri.parse(path)
@@ -195,9 +207,17 @@ class EzraAudarTtsModule : Module() {
       require(audioFile.isFile && audioFile.length() > 44L) { "Audar output WAV is missing or invalid." }
       mediaPlayer?.release()
       mediaPlayerFile?.delete()
+      restorePlaybackAudioRoute()
+      val manager = appContext.reactContext?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+      if (manager != null) {
+        previousPlaybackAudioMode = manager.mode
+        playbackAudioManager = manager
+        try { manager.mode = AudioManager.MODE_NORMAL } catch (_: Exception) {}
+      }
       val player = MediaPlayer()
       mediaPlayer = player
       mediaPlayerFile = audioFile
+      player.setVolume(1.0f, 1.0f)
       player.setAudioAttributes(
         AudioAttributes.Builder()
           .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -210,6 +230,7 @@ class EzraAudarTtsModule : Module() {
         if (mediaPlayer === it) mediaPlayer = null
         audioFile.delete()
         if (mediaPlayerFile == audioFile) mediaPlayerFile = null
+        restorePlaybackAudioRoute()
         sendEvent("onPlaybackFinished", mapOf("path" to path))
       }
       player.setOnErrorListener { failed, what, extra ->
@@ -217,6 +238,7 @@ class EzraAudarTtsModule : Module() {
         if (mediaPlayer === failed) mediaPlayer = null
         audioFile.delete()
         if (mediaPlayerFile == audioFile) mediaPlayerFile = null
+        restorePlaybackAudioRoute()
         sendEvent("onPlaybackError", mapOf("what" to what, "extra" to extra))
         true
       }
@@ -228,6 +250,7 @@ class EzraAudarTtsModule : Module() {
         mediaPlayer = null
         mediaPlayerFile = null
         audioFile.delete()
+        restorePlaybackAudioRoute()
         throw IllegalStateException("Android could not play Audar audio.", error)
       }
       mapOf("playing" to true)
@@ -241,6 +264,7 @@ class EzraAudarTtsModule : Module() {
       mediaPlayer = null
       mediaPlayerFile?.delete()
       mediaPlayerFile = null
+      restorePlaybackAudioRoute()
       mapOf("stopped" to true)
     }.runOnQueue(Queues.MAIN)
 
@@ -249,6 +273,7 @@ class EzraAudarTtsModule : Module() {
       mediaPlayer = null
       mediaPlayerFile?.delete()
       mediaPlayerFile = null
+      restorePlaybackAudioRoute()
       decoderSession?.close()
       decoderSession = null
       ortEnvironment = null
