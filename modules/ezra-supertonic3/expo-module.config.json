@@ -1,6 +1,6 @@
 {
   "platforms": ["android"],
   "android": {
-    "modules": ["expo.modules.ezrasupertonic3.EzraSupertonic3Module"]
+    "modules": ["expo.modules.ezrasupertonic3.engine.EzraSupertonic3Module"]
   }
 }
