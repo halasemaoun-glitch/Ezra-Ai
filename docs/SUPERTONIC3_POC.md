@@ -37,9 +37,12 @@ device test confirms reliable audible playback.
 - [x] Write downloads to temporary files, resume partial transfers when the server supports HTTP Range, and mark completed files with a locally verified SHA-256 digest.
 - [x] Expose download status, progress, completion, and cancellation to TypeScript.
 - [x] Add ONNX Runtime Android dependency and an isolated Android CI workflow.
-- [ ] Implement and validate actual ONNX speech synthesis on Android.
-- [ ] Connect the new engine to EZRA's voice flow behind an explicit opt-in.
-- [ ] Build and test an APK on the OPPO A76.
+- [x] Port the archived Java ONNX inference pipeline into the Android Expo module and replace desktop-only WAV writing with Android-compatible PCM WAV output.
+- [x] Add ONNX Runtime Android and Jackson dependencies, with CPU thread limits for mid-range devices.
+- [x] Expose initialization, Arabic/English synthesis, WAV playback, stop, and shutdown APIs.
+- [x] Add an explicit model download/activation control in EZRA voice settings; Supertonic becomes the primary ordinary-message TTS only after activation, with existing fallbacks preserved.
+- [ ] Pass TypeScript and Android native build checks.
+- [ ] Build and test an APK on the OPPO A76 and listen to generated Arabic speech.
 
 The current code is the model-download foundation only. It does not generate or play speech yet, and it is not wired into the active EZRA voice flow.
 
@@ -67,3 +70,13 @@ The current code is the model-download foundation only. It does not generate or 
 - The app remains responsive and does not crash or run out of memory on the
   target device.
 - The user listens to the generated Arabic sample and approves the voice.
+
+
+## Current implementation notes
+
+- The native inference path follows the archived `java/Helper.java` and `java/ExampleONNX.java` reference, using the M1 preset and Arabic language tag.
+- The app only attempts Supertonic for ordinary Arabic/English message playback after the user explicitly downloads and activates it in Settings → Voice.
+- Gemini Live audio is unchanged. Audar, Habibi, and Android system TTS remain in the project as fallbacks.
+- The model is downloaded into the app-private files directory, not embedded in the APK.
+- A GitHub Actions workflow compiles an arm64 Android debug APK and uploads it as an artifact when the checks pass.
+- No device listening test has been performed yet; naturalness, voice depth, latency, and memory use must be judged on the target OPPO A76.
