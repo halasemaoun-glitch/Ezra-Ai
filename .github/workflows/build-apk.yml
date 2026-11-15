@@ -78,6 +78,9 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
           python -m pip install librosa soundfile neucodec
+          # NeuCodec imports torchtune, which still expects the pre-0.18 NF4Tensor module path.
+          python -m pip install "torchao>=0.12,<0.18"
+          python -c "from torchao.dtypes.nf4tensor import NF4Tensor; from neucodec import NeuCodec; print('NeuCodec imports OK')"
 
       - name: Generate demo_male_3 reference codes
         run: |
