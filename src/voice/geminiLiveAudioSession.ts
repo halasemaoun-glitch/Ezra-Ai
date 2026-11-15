@@ -72,6 +72,7 @@ export async function startEzraLiveVoiceSession(
   let micSubscription: { remove: () => void } | null = null;
   let errorSubscription: { remove: () => void } | null = null;
   let stopped = false;
+  let responseTimeout: ReturnType<typeof setTimeout> | null = null;
   const pendingMicChunks: string[] = [];
   const pendingText: string[] = [];
 
@@ -79,6 +80,8 @@ export async function startEzraLiveVoiceSession(
     if (stopped) return;
     stopped = true;
     active = false;
+    if (responseTimeout) clearTimeout(responseTimeout);
+    responseTimeout = null;
     playbackGeneration += 1;
     micSubscription?.remove();
     errorSubscription?.remove();
@@ -134,18 +137,31 @@ export async function startEzraLiveVoiceSession(
         }
 
         const inputText = transcriptionText(message?.inputTranscription ?? serverContent?.inputTranscription);
-        if (inputText) callbacks.onInputTranscript?.(inputText, true);
+        if (inputText) {
+          callbacks.onInputTranscript?.(inputText, true);
+          if (responseTimeout) clearTimeout(responseTimeout);
+          responseTimeout = setTimeout(() => {
+            responseTimeout = null;
+            if (active) callbacks.onError?.('لم يصل رد صوتي من Gemini Live خلال المهلة؛ سأحوّل إلى المحرك الاحتياطي.');
+          }, 20000);
+        }
         const interimInput = transcriptionText(message?.interimInputTranscription ?? serverContent?.interimInputTranscription);
         if (interimInput) callbacks.onInputTranscript?.(interimInput, false);
 
         const outputText = transcriptionText(message?.outputTranscription ?? serverContent?.outputTranscription);
-        if (outputText) callbacks.onOutputTranscript?.(outputText, false);
+        if (outputText) {
+          if (responseTimeout) clearTimeout(responseTimeout);
+          responseTimeout = null;
+          callbacks.onOutputTranscript?.(outputText, false);
+        }
 
         const parts = serverContent?.modelTurn?.parts;
         if (Array.isArray(parts)) {
           for (const part of parts) {
             const audio = part?.inlineData;
             if (typeof audio?.data !== 'string' || !audio.data) continue;
+            if (responseTimeout) clearTimeout(responseTimeout);
+            responseTimeout = null;
             const generation = playbackGeneration;
             callbacks.onAssistantAudioStarted?.();
             playbackQueue = playbackQueue.then(async () => {
