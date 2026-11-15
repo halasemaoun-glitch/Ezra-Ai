@@ -6,7 +6,7 @@ import sys
 
 import librosa
 import torch
-from neucodec import NeuCodec
+from neucodec import DistillNeuCodec
 
 source = pathlib.Path(sys.argv[1])
 destination = pathlib.Path(sys.argv[2])
@@ -16,7 +16,7 @@ audio, _ = librosa.load(str(source), sr=16000, mono=True)
 if audio.size < 80000 or audio.size > 240000:
     raise SystemExit(f"Reference duration must be 5–15 seconds; got {audio.size / 16000:.2f}s")
 
-codec = NeuCodec.from_pretrained("neuphonic/neucodec")
+codec = DistillNeuCodec.from_pretrained("neuphonic/distill-neucodec")
 codec.eval().to("cpu")
 waveform = torch.from_numpy(audio).float().unsqueeze(0).unsqueeze(0)
 with torch.inference_mode():
