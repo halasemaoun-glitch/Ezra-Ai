@@ -44,6 +44,15 @@ class EzraSupertonic3Module : Module() {
     return target
   }
 
+  private fun markerFile(file: File) = File(file.parentFile, file.name + ".complete")
+
+  private fun isComplete(file: File): Boolean {
+    if (!file.isFile || file.length() <= 0L) return false
+    val marker = markerFile(file)
+    if (!marker.isFile) return false
+    return runCatching { marker.readText().trim() == sha256(file) }.getOrDefault(false)
+  }
+
   private fun sha256(file: File): String {
     val digest = MessageDigest.getInstance("SHA-256")
     FileInputStream(file).use { input ->
@@ -61,7 +70,7 @@ class EzraSupertonic3Module : Module() {
     val root = modelDirectory()
     val missing = assets.filter { asset ->
       val file = targetFile(asset)
-      !file.isFile || file.length() <= 0L ||
+      !isComplete(file) ||
         (asset.expectedSha256 != null && sha256(file) != asset.expectedSha256)
     }.map { it.relativePath }
     val bytes = assets.sumOf { asset ->
@@ -146,6 +155,14 @@ class EzraSupertonic3Module : Module() {
       if (!partial.renameTo(destination)) {
         throw IllegalStateException("Cannot finalize model file: ${asset.relativePath}")
       }
+      val marker = markerFile(destination)
+      val markerTemp = File(marker.parentFile, marker.name + ".tmp")
+      markerTemp.writeText(sha256(destination))
+      if (marker.exists()) marker.delete()
+      if (!markerTemp.renameTo(marker)) {
+        destination.delete()
+        throw IllegalStateException("Cannot finalize model integrity marker: ${asset.relativePath}")
+      }
     } finally {
       connection.disconnect()
     }
@@ -164,7 +181,7 @@ class EzraSupertonic3Module : Module() {
       try {
         assets.forEachIndexed { index, asset ->
           val file = targetFile(asset)
-          if (!file.isFile || file.length() <= 0L) downloadAsset(asset, index + 1, assets.size)
+          if (!isComplete(file)) downloadAsset(asset, index + 1, assets.size)
         }
         val result = status()
         if (result["installed"] != true) {
