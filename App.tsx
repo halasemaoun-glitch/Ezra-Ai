@@ -3426,8 +3426,8 @@ export default function App() {
       if (capacity.lowMemory || capacity.availableRamBytes < 1_800 * 1024 * 1024) {
         throw new Error('Audar يحتاج إلى 1.8 GB من الذاكرة الحرة على الأقل قبل التحميل.');
       }
-      if (capacity.availableStorageBytes < 600 * 1024 * 1024) {
-        throw new Error('المساحة الحرة غير كافية لتنزيل نموذج Audar (462 MB تقريبًا).');
+      if (capacity.availableStorageBytes < 1_000_000_000) {
+        throw new Error('المساحة الحرة غير كافية لملفات Audar وNeuCodec؛ يلزم نحو 1 GB إضافي.');
       }
 
       const directory = `${FileSystem.documentDirectory}audar/`;
