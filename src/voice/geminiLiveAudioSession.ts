@@ -66,6 +66,7 @@ export async function startEzraLiveVoiceSession(
   let active = true;
   let playbackGeneration = 0;
   let interruptedAwaitingTurnComplete = false;
+  let receivedAudioForTurn = false;
   let playbackQueue = Promise.resolve();
   let connection: GeminiLiveConnection | null = null;
   let micSubscription: { remove: () => void } | null = null;
@@ -148,7 +149,8 @@ export async function startEzraLiveVoiceSession(
             callbacks.onAssistantAudioStarted?.();
             playbackQueue = playbackQueue.then(async () => {
               if (!active || generation !== playbackGeneration) return;
-              await NativeLiveAudio.playPcmChunk(audio.data);
+              const playback = await NativeLiveAudio.playPcmChunk(audio.data);
+              if (playback.writtenBytes > 0) receivedAudioForTurn = true;
             }).catch(error => {
               if (active && generation === playbackGeneration) {
                 callbacks.onError?.(error instanceof Error ? error.message : 'تعذّر تشغيل صوت Gemini.');
@@ -167,9 +169,17 @@ export async function startEzraLiveVoiceSession(
           const completedGeneration = playbackGeneration;
           void playbackQueue.then(async () => {
             if (!active || completedGeneration !== playbackGeneration) return;
+            const hadAudio = receivedAudioForTurn;
+            receivedAudioForTurn = false;
+            if (!hadAudio) {
+              callbacks.onError?.('أكمل Gemini الرد دون إرسال صوت قابل للتشغيل؛ سأحوّل الرد إلى محرك الصوت الاحتياطي.');
+              return;
+            }
             const playback = await NativeLiveAudio.awaitPlaybackComplete();
             if (playback.completed && active && completedGeneration === playbackGeneration) {
               callbacks.onTurnComplete?.();
+            } else if (active && completedGeneration === playbackGeneration) {
+              callbacks.onError?.('لم يكتمل إخراج صوت Gemini على الجهاز؛ سأحوّل إلى محرك الصوت الاحتياطي.');
             }
           }).catch(error => {
             if (active && completedGeneration === playbackGeneration) callbacks.onError?.(
