@@ -1,5 +1,9 @@
 name: EZRA checks
 
+concurrency:
+  group: ezra-checks-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches:
@@ -35,6 +39,10 @@ jobs:
             exit 1
           fi
           echo "HF_TOKEN is present and NeuCodec decoder metadata is accessible."
+      - name: Set up Python for Audar reference encoding
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
       - name: Prepare Audar voice assets for Android
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
@@ -48,7 +56,7 @@ jobs:
           from huggingface_hub import hf_hub_download
           decoder = hf_hub_download(
               repo_id="neuphonic/neucodec-onnx-decoder-int8",
-              filename="model_int8.onnx",
+              filename="model.onnx",
               token=os.environ["HF_TOKEN"],
           )
           shutil.copy2(decoder, "modules/ezra-audar-tts/android/src/main/assets/audar/model_int8.onnx")
