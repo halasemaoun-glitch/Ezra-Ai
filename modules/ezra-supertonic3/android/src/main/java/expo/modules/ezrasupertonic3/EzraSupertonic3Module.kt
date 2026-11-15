@@ -1,4 +1,4 @@
-package expo.modules.ezrasupertonic3
+package expo.modules.ezrasupertonic3.engine
 
 import android.media.MediaPlayer
 import android.net.Uri
@@ -9,9 +9,6 @@ import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import ai.onnxruntime.OrtEnvironment
-import expo.modules.ezrasupertonic3.engine.Helper
-import expo.modules.ezrasupertonic3.engine.Style
-import expo.modules.ezrasupertonic3.engine.TextToSpeech
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -308,6 +305,7 @@ class EzraSupertonic3Module : Module() {
           promise.reject("ERR_SUPERTONIC_PLAYBACK", error.message, error)
         }
       }
+      Unit
     }
 
     AsyncFunction("stopAudio") { promise: Promise ->
@@ -317,6 +315,7 @@ class EzraSupertonic3Module : Module() {
         mediaPlayer = null
         promise.resolve(mapOf("stopped" to true))
       }
+      Unit
     }
 
     AsyncFunction("shutdown") { promise: Promise ->
