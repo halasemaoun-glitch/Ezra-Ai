@@ -66,11 +66,13 @@ export async function startEzraLiveVoiceSession(
   let active = true;
   let playbackGeneration = 0;
   let interruptedAwaitingTurnComplete = false;
+  let receivedAudioForTurn = false;
   let playbackQueue = Promise.resolve();
   let connection: GeminiLiveConnection | null = null;
   let micSubscription: { remove: () => void } | null = null;
   let errorSubscription: { remove: () => void } | null = null;
   let stopped = false;
+  let responseTimeout: ReturnType<typeof setTimeout> | null = null;
   const pendingMicChunks: string[] = [];
   const pendingText: string[] = [];
 
@@ -78,6 +80,8 @@ export async function startEzraLiveVoiceSession(
     if (stopped) return;
     stopped = true;
     active = false;
+    if (responseTimeout) clearTimeout(responseTimeout);
+    responseTimeout = null;
     playbackGeneration += 1;
     micSubscription?.remove();
     errorSubscription?.remove();
@@ -123,6 +127,7 @@ export async function startEzraLiveVoiceSession(
         const serverContent = message?.serverContent;
         if (serverContent?.interrupted) {
           interruptedAwaitingTurnComplete = true;
+          receivedAudioForTurn = false;
           playbackGeneration += 1;
           playbackQueue = Promise.resolve();
           void NativeLiveAudio.clearPlayback().catch(error => {
@@ -132,23 +137,37 @@ export async function startEzraLiveVoiceSession(
         }
 
         const inputText = transcriptionText(message?.inputTranscription ?? serverContent?.inputTranscription);
-        if (inputText) callbacks.onInputTranscript?.(inputText, true);
+        if (inputText) {
+          callbacks.onInputTranscript?.(inputText, true);
+          if (responseTimeout) clearTimeout(responseTimeout);
+          responseTimeout = setTimeout(() => {
+            responseTimeout = null;
+            if (active) callbacks.onError?.('لم يصل رد صوتي من Gemini Live خلال المهلة؛ سأحوّل إلى المحرك الاحتياطي.');
+          }, 20000);
+        }
         const interimInput = transcriptionText(message?.interimInputTranscription ?? serverContent?.interimInputTranscription);
         if (interimInput) callbacks.onInputTranscript?.(interimInput, false);
 
         const outputText = transcriptionText(message?.outputTranscription ?? serverContent?.outputTranscription);
-        if (outputText) callbacks.onOutputTranscript?.(outputText, false);
+        if (outputText) {
+          if (responseTimeout) clearTimeout(responseTimeout);
+          responseTimeout = null;
+          callbacks.onOutputTranscript?.(outputText, false);
+        }
 
         const parts = serverContent?.modelTurn?.parts;
         if (Array.isArray(parts)) {
           for (const part of parts) {
             const audio = part?.inlineData;
             if (typeof audio?.data !== 'string' || !audio.data) continue;
+            if (responseTimeout) clearTimeout(responseTimeout);
+            responseTimeout = null;
             const generation = playbackGeneration;
             callbacks.onAssistantAudioStarted?.();
             playbackQueue = playbackQueue.then(async () => {
               if (!active || generation !== playbackGeneration) return;
-              await NativeLiveAudio.playPcmChunk(audio.data);
+              const playback = await NativeLiveAudio.playPcmChunk(audio.data);
+              if (playback.writtenBytes > 0) receivedAudioForTurn = true;
             }).catch(error => {
               if (active && generation === playbackGeneration) {
                 callbacks.onError?.(error instanceof Error ? error.message : 'تعذّر تشغيل صوت Gemini.');
@@ -167,9 +186,17 @@ export async function startEzraLiveVoiceSession(
           const completedGeneration = playbackGeneration;
           void playbackQueue.then(async () => {
             if (!active || completedGeneration !== playbackGeneration) return;
+            const hadAudio = receivedAudioForTurn;
+            receivedAudioForTurn = false;
+            if (!hadAudio) {
+              callbacks.onError?.('أكمل Gemini الرد دون إرسال صوت قابل للتشغيل؛ سأحوّل الرد إلى محرك الصوت الاحتياطي.');
+              return;
+            }
             const playback = await NativeLiveAudio.awaitPlaybackComplete();
             if (playback.completed && active && completedGeneration === playbackGeneration) {
               callbacks.onTurnComplete?.();
+            } else if (active && completedGeneration === playbackGeneration) {
+              callbacks.onError?.('لم يكتمل إخراج صوت Gemini على الجهاز؛ سأحوّل إلى محرك الصوت الاحتياطي.');
             }
           }).catch(error => {
             if (active && completedGeneration === playbackGeneration) callbacks.onError?.(

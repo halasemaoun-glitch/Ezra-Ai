@@ -6,6 +6,7 @@ on:
       - ezra/habibi-android-spike
       - ezra/stability-voice-memory-files
       - ezra/live-voice-and-file-fix
+      - ezra/android-audio-output-repair
     paths:
       - '.github/workflows/build-apk.yml'
       - 'App.tsx'
@@ -16,6 +17,7 @@ on:
       - 'app/**'
       - 'assets/**'
       - 'modules/**'
+      - 'scripts/**'
       - 'index.ts'
   workflow_dispatch:
 
@@ -24,9 +26,9 @@ permissions:
 
 jobs:
   android-apk:
-    name: Generate OPPO-compatible Android APK
+    name: Generate OPPO-compatible Android APK with Audar assets
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - name: Checkout latest EZRA branch
         uses: actions/checkout@v4
@@ -38,11 +40,56 @@ jobs:
         with:
           node-version: 22
 
+      - name: Set up Python for Audar reference preparation
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+
+      - name: Download gated NeuCodec INT8 decoder and public demo reference
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${HF_TOKEN:-}" ]; then
+            echo "::error::GitHub Actions secret HF_TOKEN is missing. Add it under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          ASSET_DIR="modules/ezra-audar-tts/android/src/main/assets/audar"
+          mkdir -p "$ASSET_DIR"
+          curl --fail --location --retry 3 --silent --show-error \
+            --header "Authorization: Bearer ${HF_TOKEN}" \
+            "https://huggingface.co/neuphonic/neucodec-onnx-decoder-int8/resolve/main/model.onnx" \
+            --output "$ASSET_DIR/model_int8.onnx"
+          test "$(stat -c%s "$ASSET_DIR/model_int8.onnx")" -ge 250000000
+          curl --fail --location --retry 3 --silent --show-error \
+            "https://huggingface.co/audarai/Audar-TTS-V1-Flash/resolve/main/samples/demo_male_3_source.wav" \
+            --output /tmp/demo_male_3_source.wav
+          test "$(stat -c%s /tmp/demo_male_3_source.wav)" -gt 100000
+          echo "NeuCodec decoder and Audar reference WAV downloaded and size-checked."
+
+      - name: Install CPU PyTorch and NeuCodec reference dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install librosa soundfile neucodec
+          # NeuCodec imports torchtune, which still expects the pre-0.18 NF4Tensor module path.
+          python -m pip install "torchao>=0.12,<0.18"
+          python -c "from torchao.dtypes.nf4tensor import NF4Tensor; from neucodec import NeuCodec; print('NeuCodec imports OK')"
+
+      - name: Generate demo_male_3 reference codes
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python scripts/prepare_audar_reference.py \
+            /tmp/demo_male_3_source.wav \
+            modules/ezra-audar-tts/android/src/main/assets/audar/demo_male_3_reference.json
+          test -s modules/ezra-audar-tts/android/src/main/assets/audar/demo_male_3_reference.json
 
       - name: Install JavaScript dependencies
         run: npm install --no-audit --no-fund
@@ -71,7 +118,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: EZRA-OPPO-A76-Android-APK
+          name: EZRA-OPPO-A76-AUDAR-Android-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
