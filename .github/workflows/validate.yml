@@ -55,6 +55,7 @@ jobs:
           curl -fL "https://raw.githubusercontent.com/AudarAI/Audar-TTS-V1/main/NOTICE" -o modules/ezra-audar-tts/android/src/main/assets/audar/AUDAR-NOTICE.txt
           curl -fL "https://raw.githubusercontent.com/neuphonic/neucodec/main/LICENSE" -o modules/ezra-audar-tts/android/src/main/assets/audar/NEUCODEC-APACHE-2.0.txt
           curl -fL "https://huggingface.co/audarai/Audar-TTS-V1-Flash/raw/main/README.md" -o modules/ezra-audar-tts/android/src/main/assets/audar/Audar-Flash-Model-Card.md
+          curl -fL "https://huggingface.co/neuphonic/distill-neucodec/raw/main/README.md" -o modules/ezra-audar-tts/android/src/main/assets/audar/Distill-NeuCodec-Model-Card.md
           cat > modules/ezra-audar-tts/android/src/main/assets/audar/EZRA-AUDAR-MODIFICATIONS.txt <<'NOTICE'
           EZRA independently integrates Audar-TTS-V1-Flash Q4_K_M with llama.cpp and the NeuCodec INT8 ONNX decoder for on-device Arabic speech synthesis. The integration and Android bridge are modifications made by the EZRA project; they are not an official AudarAI release and are not endorsed or maintained by AudarAI. The bundled demo_male_3 reference is a synthetic voice profile supplied by AudarAI.
           NOTICE
