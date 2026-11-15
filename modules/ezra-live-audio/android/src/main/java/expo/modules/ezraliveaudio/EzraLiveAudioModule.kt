@@ -147,7 +147,7 @@ class EzraLiveAudioModule : Module() {
       val track = AudioTrack.Builder()
         .setAudioAttributes(
           AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+            .setUsage(AudioAttributes.USAGE_MEDIA)
             .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
             .build()
         )
@@ -171,8 +171,9 @@ class EzraLiveAudioModule : Module() {
         if (previousSpeakerphoneOn == null) previousSpeakerphoneOn = manager.isSpeakerphoneOn
         audioManager = manager
         try {
-          manager.mode = AudioManager.MODE_IN_COMMUNICATION
-          manager.isSpeakerphoneOn = true
+          // Keep assistant playback on Android's media loudspeaker route.
+          manager.mode = AudioManager.MODE_NORMAL
+          manager.isSpeakerphoneOn = false
         } catch (_: Exception) {}
       }
       track.play()
