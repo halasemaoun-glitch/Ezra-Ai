@@ -32,12 +32,22 @@ class EzraLiveAudioModule : Module() {
   private val playbackEpoch = AtomicInteger(0)
   private val submittedPlaybackFrames = AtomicLong(0)
   @Volatile private var audioManager: AudioManager? = null
+  @Volatile private var ichkilEngine: IchkilTashkeelEngine? = null
   @Volatile private var previousAudioMode: Int? = null
   @Volatile private var previousSpeakerphoneOn: Boolean? = null
 
   override fun definition() = ModuleDefinition {
     Name("EzraLiveAudio")
     Events("onAudioChunk", "onAudioError")
+
+    AsyncFunction("diacritizeArabic") { text: String ->
+      val context = appContext.reactContext ?: throw IllegalStateException("EZRA Android context is unavailable.")
+      val engine = ichkilEngine ?: synchronized(this@EzraLiveAudioModule) {
+        ichkilEngine ?: IchkilTashkeelEngine(context).also { ichkilEngine = it }
+      }
+      engine.diacritize(text)
+    }
+
 
     AsyncFunction("startRecording") {
       if (recording.get()) return@AsyncFunction mapOf("started" to true, "alreadyRunning" to true)
