@@ -53,9 +53,14 @@ internal class IchkilTashkeelEngine(context: Context) {
     require(vocab.containsKey("<unk>")) { "Ichkil vocabulary is missing <unk>." }
     require(config.optInt("num_tags", 16) == 16) { "Unsupported Ichkil label count." }
     downloadIfNeeded(modelFile, modelUrl)
-    val actualHash = sha256(modelFile)
+    var actualHash = sha256(modelFile)
+    if (!actualHash.equals(expectedSha256, ignoreCase = true)) {
+      modelFile.delete()
+      downloadIfNeeded(modelFile, modelUrl)
+      actualHash = sha256(modelFile)
+    }
     require(actualHash.equals(expectedSha256, ignoreCase = true)) {
-      "Ichkil model checksum mismatch; the cached model was rejected."
+      "Ichkil model checksum mismatch; the downloaded model was rejected."
     }
     val options = OrtSession.SessionOptions().apply { setIntraOpNumThreads(2) }
     session = environment.createSession(modelFile.absolutePath, options)
