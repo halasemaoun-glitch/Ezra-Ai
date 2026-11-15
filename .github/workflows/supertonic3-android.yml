@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - ezra/supertonic3-android-poc
+      - ezra/home-orb-voice-chat
   pull_request:
     branches:
       - main
