@@ -45,6 +45,7 @@ import { retrieveDentalClinicalCases } from './src/study/dentalKnowledge';
 import { DENTAL_CLINICAL_CASES } from './src/study/clinicalCases';
 import { supabase } from './src/lib/supabase';
 import { DEFAULT_EZRA_VOICE, detectEzraSpeechLanguage } from './src/voice/voiceProfile';
+import { diacritizeArabicLocally } from './src/text/ichkil';
 import { startEzraLiveVoiceSession, type EzraLiveVoiceSession } from './src/voice/geminiLiveAudioSession';
 import { AI_MODELS, AI_PROVIDER_OPTIONS, DEFAULT_AI_MODELS, normalizeAiModel, normalizeAiProvider, type AiProvider } from './src/ai/aiModelSettings';
 import { DEFAULT_MIC_SENSITIVITY, normalizeMicSensitivity, scaleMicLevel } from './src/voice/micSensitivity';
@@ -3474,9 +3475,19 @@ export default function App() {
     const speechLanguage = DEFAULT_EZRA_VOICE.automaticOutputLanguage
       ? detectEzraSpeechLanguage(text, responseLanguage)
       : responseLanguage;
+    let speechText = text;
+    if (speechLanguage === 'ar' && Platform.OS === 'android') {
+      try {
+        speechText = await diacritizeArabicLocally(text);
+      } catch (error) {
+        // Keep voice replies available if the optional local model cannot load.
+        console.warn('Ichkil diacritization unavailable; speaking original Arabic text:', error);
+      }
+      if (activeSpokenTextRef.current !== text) return;
+    }
 
     if (speechLanguage === 'ar' && habibiEngineReady && EzraHabibiTts && Platform.OS === 'android') {
-      await playHabibiMessage(text, messageId);
+      await playHabibiMessage(speechText, messageId);
       return;
     }
 
@@ -3485,7 +3496,7 @@ export default function App() {
       .sort((a, b) => Number(b.quality === 'Enhanced') - Number(a.quality === 'Enhanced'))[0];
     const selectedVoiceForLanguage = speechLanguage === 'en' ? selectedEnglishTtsVoice : selectedTtsVoice;
     const preferredVoice = ttsVoices.find(voice => voice.identifier === selectedVoiceForLanguage && voice.language.toLowerCase().startsWith(speechLanguage)) || matchingVoice;
-    Speech.speak(text, {
+    Speech.speak(speechText, {
       language: speechLanguage,
       ...(preferredVoice ? { voice: preferredVoice.identifier } : {}),
       rate: speechRate,

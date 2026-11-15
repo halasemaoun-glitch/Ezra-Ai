@@ -8,6 +8,7 @@ on:
       - ezra/habibi-android-spike
       - ezra/live-voice-and-file-fix
       - ezra/gemini-live-stability
+      - ezra/ichkil-on-device
   pull_request:
     branches: [main]
   workflow_dispatch:

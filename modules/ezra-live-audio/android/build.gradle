@@ -10,3 +10,8 @@ android {
     versionName '0.1.0'
   }
 }
+
+
+dependencies {
+  implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.24.3'
+}
