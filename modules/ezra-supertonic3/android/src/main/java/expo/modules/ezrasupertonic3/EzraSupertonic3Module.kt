@@ -310,14 +310,14 @@ class EzraSupertonic3Module : Module() {
       }
     }
 
-    AsyncFunction("stopAudio", { promise: Promise ->
+    AsyncFunction("stopAudio") { promise: Promise ->
       mainHandler.post {
         runCatching { mediaPlayer?.stop() }
         mediaPlayer?.release()
         mediaPlayer = null
         promise.resolve(mapOf("stopped" to true))
       }
-    })
+    }
 
     AsyncFunction("shutdown") { promise: Promise ->
       inferenceExecutor.execute {
