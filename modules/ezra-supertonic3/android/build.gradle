@@ -11,3 +11,9 @@ android {
     minSdkVersion 24
   }
 }
+
+dependencies {
+  // CPU-only ONNX Runtime for local Supertonic inference; model weights are
+  // downloaded separately into app-private storage and are not bundled in the APK.
+  implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.23.1'
+}
