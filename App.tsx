@@ -131,6 +131,20 @@ type EzraHabibiTtsModule = {
 // Android's installed TTS voices are the free fallback for ordinary messages.
 const EzraHabibiTts: EzraHabibiTtsModule | null = null;
 
+type EzraAudarTtsModule = {
+  getDeviceCapacity: () => Promise<{ availableRamBytes: number; totalRamBytes: number; lowMemory: boolean; availableStorageBytes: number }>;
+  initialize: (modelPath: string) => Promise<{ ready: true; voice: 'demo_male_3'; decoder: string }>;
+  synthesize: (text: string, outputPath: string) => Promise<{ path: string; bytes: number; sampleRate: number }>;
+  playAudio: (path: string) => Promise<{ playing: true }>;
+  stopAudio: () => Promise<{ stopped: true }>;
+  shutdown: () => Promise<{ ready: false }>;
+  addListener: (eventName: 'onPlaybackFinished' | 'onPlaybackError', listener: (event: { path?: string; what?: number; extra?: number }) => void) => { remove: () => void };
+};
+
+const EzraAudarTts: EzraAudarTtsModule | null = Platform.OS === 'android'
+  ? requireNativeModule<EzraAudarTtsModule>('EzraAudarTts')
+  : null;
+
 const formatBytes = (bytes: number) => {
   if (!Number.isFinite(bytes) || bytes < 0) return 'غير متاح';
   const gb = bytes / (1024 ** 3);
@@ -382,6 +396,9 @@ export default function App() {
   const [habibiEngineBusy, setHabibiEngineBusy] = useState(false);
   const [habibiEngineError, setHabibiEngineError] = useState('');
   const activeHabibiSpeechRef = useRef<{ text: string; messageId: string } | null>(null);
+  const activeAudarSpeechRef = useRef<{ text: string; messageId: string } | null>(null);
+  const audarReadyRef = useRef(false);
+  const audarInitPromiseRef = useRef<Promise<boolean> | null>(null);
   const activeSpokenTextRef = useRef('');
   const habibiAutoInitStartedRef = useRef(false);
   const [autoSpeak, setAutoSpeak] = useState(true);
@@ -509,6 +526,7 @@ export default function App() {
         ExpoSpeechRecognitionModule.stop();
         Speech.stop();
         EzraHabibiTts?.stopAudio().catch(() => {});
+        EzraAudarTts?.stopAudio().catch(() => {});
         setIsListening(false);
         setSpeakingMessageId(null);
         setVoiceLevel(0);
@@ -3398,6 +3416,66 @@ export default function App() {
     }
   };
 
+  const ensureAudarReady = async (): Promise<boolean> => {
+    if (!EzraAudarTts || Platform.OS !== 'android' || !FileSystem.documentDirectory) return false;
+    if (audarReadyRef.current) return true;
+    if (audarInitPromiseRef.current) return audarInitPromiseRef.current;
+
+    const initialization = (async () => {
+      const capacity = await EzraAudarTts.getDeviceCapacity();
+      if (capacity.lowMemory || capacity.availableRamBytes < 1_800 * 1024 * 1024) {
+        throw new Error('Audar يحتاج إلى 1.8 GB من الذاكرة الحرة على الأقل قبل التحميل.');
+      }
+      if (capacity.availableStorageBytes < 600 * 1024 * 1024) {
+        throw new Error('المساحة الحرة غير كافية لتنزيل نموذج Audar (462 MB تقريبًا).');
+      }
+
+      const directory = `${FileSystem.documentDirectory}audar/`;
+      await FileSystem.makeDirectoryAsync(directory, { intermediates: true }).catch(() => {});
+      const modelPath = `${directory}Audar-TTS-V1-Flash-Q4_K_M.gguf`;
+      let modelInfo = await FileSystem.getInfoAsync(modelPath);
+      if (modelInfo.exists && (!modelInfo.size || modelInfo.size < 400_000_000)) {
+        await FileSystem.deleteAsync(modelPath, { idempotent: true });
+        modelInfo = { exists: false } as typeof modelInfo;
+      }
+      if (!modelInfo.exists) {
+        const task = FileSystem.createDownloadResumable(
+          'https://huggingface.co/audarai/Audar-TTS-V1-Flash/resolve/main/Audar-TTS-V1-Flash-Q4_K_M.gguf',
+          modelPath
+        );
+        const downloaded = await task.downloadAsync();
+        if (!downloaded || downloaded.status < 200 || downloaded.status >= 300) {
+          throw new Error('تعذّر تنزيل نموذج Audar Flash من Hugging Face.');
+        }
+      }
+      const verifiedModel = await FileSystem.getInfoAsync(modelPath);
+      if (!verifiedModel.exists || !verifiedModel.size || verifiedModel.size < 400_000_000) {
+        throw new Error('ملف نموذج Audar غير مكتمل؛ أعد المحاولة مع اتصال إنترنت مستقر.');
+      }
+      const result = await EzraAudarTts.initialize(modelPath);
+      audarReadyRef.current = result.ready;
+      return result.ready;
+    })();
+
+    audarInitPromiseRef.current = initialization;
+    try {
+      return await initialization;
+    } finally {
+      audarInitPromiseRef.current = null;
+    }
+  };
+
+  const playAudarMessage = async (text: string, messageId: string) => {
+    if (!EzraAudarTts) throw new Error('Audar Android runtime is unavailable.');
+    const active = { text, messageId };
+    activeAudarSpeechRef.current = active;
+    const outputDirectory = FileSystem.cacheDirectory || FileSystem.documentDirectory || '';
+    const outputPath = `${outputDirectory}ezra-audar-${Date.now()}.wav`;
+    const generated = await EzraAudarTts.synthesize(text, outputPath);
+    if (activeAudarSpeechRef.current !== active) return;
+    await EzraAudarTts.playAudio(generated.path);
+  };
+
   const playHabibiMessage = async (text: string, messageId: string) => {
     if (!EzraHabibiTts) return;
     const active = { text, messageId };
@@ -3469,6 +3547,8 @@ export default function App() {
     }
     Speech.stop();
     await EzraHabibiTts?.stopAudio().catch(() => {});
+    await EzraAudarTts?.stopAudio().catch(() => {});
+    activeAudarSpeechRef.current = null;
     activeHabibiSpeechRef.current = null;
     activeSpokenTextRef.current = text;
     setSpeakingMessageId(messageId);
@@ -3484,6 +3564,22 @@ export default function App() {
         console.warn('Ichkil diacritization unavailable; speaking original Arabic text:', error);
       }
       if (activeSpokenTextRef.current !== text) return;
+    }
+
+    if (speechLanguage === 'ar' && EzraAudarTts && Platform.OS === 'android') {
+      try {
+        const ready = await ensureAudarReady();
+        if (activeSpokenTextRef.current !== text) return;
+        if (ready) {
+          await playAudarMessage(speechText, messageId);
+          return;
+        }
+      } catch (error) {
+        activeAudarSpeechRef.current = null;
+        audarReadyRef.current = false;
+        await EzraAudarTts.shutdown().catch(() => {});
+        console.warn('Audar unavailable; using the existing Android speech fallback:', error);
+      }
     }
 
     if (speechLanguage === 'ar' && habibiEngineReady && EzraHabibiTts && Platform.OS === 'android') {
@@ -3519,6 +3615,49 @@ export default function App() {
       },
     });
   };
+
+  useEffect(() => {
+    if (!EzraAudarTts) return;
+    const finished = EzraAudarTts.addListener('onPlaybackFinished', () => {
+      const completed = activeAudarSpeechRef.current;
+      activeAudarSpeechRef.current = null;
+      finishVoiceCaptureAfterPlayback();
+      if (completed) setSpeakingMessageId(current => current === completed.messageId ? null : current);
+      resumeBackgroundWake();
+    });
+    const failed = EzraAudarTts.addListener('onPlaybackError', () => {
+      const pending = activeAudarSpeechRef.current;
+      activeAudarSpeechRef.current = null;
+      audarReadyRef.current = false;
+      EzraAudarTts.shutdown().catch(() => {});
+      if (pending) {
+        const fallbackArabicVoice = ttsVoices.find(voice => voice.identifier === selectedTtsVoice && voice.language.toLowerCase().startsWith('ar'));
+        Speech.speak(pending.text, {
+          language: 'ar',
+          ...(fallbackArabicVoice ? { voice: fallbackArabicVoice.identifier } : {}),
+          rate: speechRate,
+          pitch: speechPitch,
+          volume: 1,
+          onDone: () => {
+            finishVoiceCaptureAfterPlayback();
+            setSpeakingMessageId(current => current === pending.messageId ? null : current);
+            resumeBackgroundWake();
+          },
+          onStopped: () => {
+            finishVoiceCaptureAfterPlayback();
+            setSpeakingMessageId(current => current === pending.messageId ? null : current);
+            resumeBackgroundWake();
+          },
+          onError: () => {
+            finishVoiceCaptureAfterPlayback();
+            setSpeakingMessageId(current => current === pending.messageId ? null : current);
+            resumeBackgroundWake();
+          },
+        });
+      }
+    });
+    return () => { finished.remove(); failed.remove(); };
+  }, [selectedTtsVoice, speechRate, speechPitch, ttsVoices]);
 
   useEffect(() => {
     if (!EzraHabibiTts) return;
