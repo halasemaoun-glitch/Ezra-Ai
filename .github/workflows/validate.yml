@@ -20,6 +20,21 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Verify Hugging Face gated NeuCodec decoder access
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          if [ -z "$HF_TOKEN" ]; then
+            echo "HF_TOKEN repository secret is missing."
+            exit 1
+          fi
+          status=$(curl -sS -o /tmp/hf-model.json -w '%{http_code}' -H "Authorization: Bearer $HF_TOKEN" "https://huggingface.co/api/models/neuphonic/neucodec-onnx-decoder-int8")
+          if [ "$status" != "200" ]; then
+            echo "Hugging Face NeuCodec decoder access check failed (HTTP $status)."
+            cat /tmp/hf-model.json
+            exit 1
+          fi
+          echo "HF_TOKEN is present and NeuCodec decoder metadata is accessible."
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
