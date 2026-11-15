@@ -3152,10 +3152,17 @@ export default function App() {
               setIsListening(true);
             },
             onError: message => {
-              if (liveVoiceSessionRef.current) fallbackFromGeminiLive(message);
+              // The socket can fail before startEzraLiveVoiceSession resolves and
+              // assigns liveVoiceSessionRef. Include the in-flight state so an
+              // early token/setup/socket failure cannot leave a silent mic session.
+              if (liveVoiceSessionRef.current || liveVoiceConnectingRef.current) {
+                fallbackFromGeminiLive(message);
+              }
             },
             onClosed: (code, reason) => {
-              if (liveVoiceSessionRef.current) fallbackFromGeminiLive(reason || `WebSocket closed (${code})`);
+              if (liveVoiceSessionRef.current || liveVoiceConnectingRef.current) {
+                fallbackFromGeminiLive(reason || `WebSocket closed (${code})`);
+              }
             },
           }, selectedGeminiLiveVoice);
           if (!appIsActiveRef.current || !autoListenRef.current || !voiceHome || liveVoiceUnavailableRef.current) {
