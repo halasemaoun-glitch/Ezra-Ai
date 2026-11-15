@@ -83,6 +83,8 @@ jobs:
           python -c "from torchao.dtypes.nf4tensor import NF4Tensor; from neucodec import NeuCodec; print('NeuCodec imports OK')"
 
       - name: Generate demo_male_3 reference codes
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           python scripts/prepare_audar_reference.py \
             /tmp/demo_male_3_source.wav \
