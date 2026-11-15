@@ -124,6 +124,7 @@ export async function startEzraLiveVoiceSession(
         const serverContent = message?.serverContent;
         if (serverContent?.interrupted) {
           interruptedAwaitingTurnComplete = true;
+          receivedAudioForTurn = false;
           playbackGeneration += 1;
           playbackQueue = Promise.resolve();
           void NativeLiveAudio.clearPlayback().catch(error => {
