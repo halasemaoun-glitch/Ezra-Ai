@@ -786,19 +786,31 @@ public class Helper {
         // Load config
         Config config = loadCfgs(onnxDir);
         
-        // Create session options
+        // Keep CPU usage predictable on mid-range Android devices.
         OrtSession.SessionOptions opts = new OrtSession.SessionOptions();
-        
-        // Load models
-        OrtSession dpSession = env.createSession(onnxDir + "/duration_predictor.onnx", opts);
-        OrtSession textEncSession = env.createSession(onnxDir + "/text_encoder.onnx", opts);
-        OrtSession vectorEstSession = env.createSession(onnxDir + "/vector_estimator.onnx", opts);
-        OrtSession vocoderSession = env.createSession(onnxDir + "/vocoder.onnx", opts);
-        
-        // Load text processor
-        UnicodeProcessor textProcessor = new UnicodeProcessor(onnxDir + "/unicode_indexer.json");
-        
-        return new TextToSpeech(config, textProcessor, dpSession, textEncSession, vectorEstSession, vocoderSession);
+        opts.setIntraOpNumThreads(2);
+        opts.setInterOpNumThreads(1);
+        opts.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT);
+        OrtSession dpSession = null;
+        OrtSession textEncSession = null;
+        OrtSession vectorEstSession = null;
+        OrtSession vocoderSession = null;
+        try {
+            dpSession = env.createSession(onnxDir + "/duration_predictor.onnx", opts);
+            textEncSession = env.createSession(onnxDir + "/text_encoder.onnx", opts);
+            vectorEstSession = env.createSession(onnxDir + "/vector_estimator.onnx", opts);
+            vocoderSession = env.createSession(onnxDir + "/vocoder.onnx", opts);
+            UnicodeProcessor textProcessor = new UnicodeProcessor(onnxDir + "/unicode_indexer.json");
+            return new TextToSpeech(config, textProcessor, dpSession, textEncSession, vectorEstSession, vocoderSession);
+        } catch (IOException | OrtException | RuntimeException error) {
+            if (vocoderSession != null) vocoderSession.close();
+            if (vectorEstSession != null) vectorEstSession.close();
+            if (textEncSession != null) textEncSession.close();
+            if (dpSession != null) dpSession.close();
+            throw error;
+        } finally {
+            opts.close();
+        }
     }
     
     /**
