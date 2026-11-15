@@ -29,7 +29,7 @@ export type SupertonicNativeModule = {
   stopAudio(): Promise<{ stopped: true }>;
   shutdown(): Promise<{ ready: false }>;
   addListener(
-    eventName: 'onDownloadProgress' | 'onDownloadError' | 'onDownloadComplete',
+    eventName: 'onDownloadProgress' | 'onDownloadError' | 'onDownloadComplete' | 'onPlaybackFinished' | 'onPlaybackError',
     listener: (event: SupertonicDownloadProgress | { message: string } | SupertonicModelStatus) => void
   ): { remove(): void };
 };
