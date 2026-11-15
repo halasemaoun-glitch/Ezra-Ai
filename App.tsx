@@ -1622,7 +1622,12 @@ export default function App() {
     if (isListening) ExpoSpeechRecognitionModule.stop();
     Speech.stop();
     activeSpokenTextRef.current = '';
-    EzraHabibiTts?.stopAudio().catch(() => {});
+    activeAudarSpeechRef.current = null;
+    activeHabibiSpeechRef.current = null;
+    void Promise.all([
+      EzraAudarTts?.stopAudio().catch(() => {}),
+      EzraHabibiTts?.stopAudio().catch(() => {}),
+    ]);
     setIsListening(false);
     setSpeakingMessageId(null);
     setVoiceHome(true);
@@ -1750,9 +1755,13 @@ export default function App() {
         voiceInterruptionConfirmedRef.current = true;
         interruptVoiceFramesRef.current = 0;
         Speech.stop();
-        EzraHabibiTts?.stopAudio().catch(() => {});
-        activeHabibiSpeechRef.current = null;
         activeSpokenTextRef.current = '';
+        activeAudarSpeechRef.current = null;
+        activeHabibiSpeechRef.current = null;
+        void Promise.all([
+          EzraAudarTts?.stopAudio().catch(() => {}),
+          EzraHabibiTts?.stopAudio().catch(() => {}),
+        ]);
         setSpeakingMessageId(null);
         setVoiceLevel(0);
       }
@@ -1885,7 +1894,12 @@ export default function App() {
     if (speakingMessageId) {
       Speech.stop();
       activeSpokenTextRef.current = '';
-      EzraHabibiTts?.stopAudio().catch(() => {});
+      activeAudarSpeechRef.current = null;
+      activeHabibiSpeechRef.current = null;
+      void Promise.all([
+        EzraAudarTts?.stopAudio().catch(() => {}),
+        EzraHabibiTts?.stopAudio().catch(() => {}),
+      ]);
       setSpeakingMessageId(null);
     }
     setVoiceLevel(0);
@@ -3274,10 +3288,15 @@ export default function App() {
       wakeServiceStartedRef.current = false;
     }
     if (speakingMessageId) {
-      Speech.stop();
+      // Cancel every possible speech engine, including Audar, before reopening the mic.
       activeSpokenTextRef.current = '';
-      EzraHabibiTts?.stopAudio().catch(() => {});
+      activeAudarSpeechRef.current = null;
       activeHabibiSpeechRef.current = null;
+      Speech.stop();
+      await Promise.all([
+        EzraAudarTts?.stopAudio().catch(() => {}),
+        EzraHabibiTts?.stopAudio().catch(() => {}),
+      ]);
       setSpeakingMessageId(null);
       voiceTurnInProgressRef.current = false;
       voiceRequestStartedRef.current = false;
@@ -4425,7 +4444,7 @@ export default function App() {
                 </View>
                 <View style={{ padding: 15, borderRadius: 15, backgroundColor: '#241625', borderWidth: 1, borderColor: '#80516F', gap: 8 }}>
                   <Text style={{ color: '#F5DDED', fontSize: 14, fontWeight: '800', textAlign: 'right' }}>Gemini Live — الصوت المباشر الأساسي</Text>
-                  <Text style={{ color: '#D8C2D2', fontSize: 11, lineHeight: 19, textAlign: 'right' }}>هذا المحرك يستمع ويرد بصوت مولّد من Gemini نفسه. لا يستخدم قارئ Android أثناء جلسة Live. إذا تعذّر الاتصال، ينتقل EZRA إلى Groq للرد ثم إلى صوت Android المثبّت على الهاتف كخيار احتياطي مجاني.</Text>
+                  <Text style={{ color: '#D8C2D2', fontSize: 11, lineHeight: 19, textAlign: 'right' }}>هذا المحرك مسؤول عن المحادثة الصوتية المباشرة ويولّد الصوت من Gemini نفسه. إذا تعذّر الاتصال، يعود EZRA إلى الاستماع المحلي والرد النصي عبر نموذج المحادثة الاحتياطي، ثم ينطق الرد بمحرك Audar للعربية أو بمحركات النطق الاحتياطية. Audar لا يستبدل Gemini Live.</Text>
                   <Text style={{ color: '#A9D7B9', fontSize: 10, lineHeight: 17, textAlign: 'right' }}>حالة Gemini Live: {geminiLiveStatus}</Text>
                 </View>
                 <View style={[styles.settingRow, { flexDirection: 'column', alignItems: 'stretch', gap: 10 }]}>
@@ -4460,8 +4479,8 @@ export default function App() {
                 </View>
                 <View style={styles.settingRow}>
                   <View style={styles.settingCopy}>
-                    <Text style={styles.settingTitle}>الصوت الاحتياطي</Text>
-                    <Text style={styles.settingHint}>عند تعذّر Gemini Live، يستخدم EZRA أصوات Android المجانية المثبّتة على هاتفك. يمكنك اختيار صوت عربي وإنجليزي من الخيارات أدناه.</Text>
+                    <Text style={styles.settingTitle}>محركات النطق للردود العادية</Text>
+                    <Text style={styles.settingHint}>للنصوص والردود العادية: العربية تمر أولاً عبر Ichkil لضبط التشكيل ثم تُنطق تلقائياً بصوت Audar Flash — demo_male_3. إذا تعذّر Audar، ينتقل EZRA إلى Habibi ثم إلى صوت Android المثبّت. في المحادثة المباشرة يبقى صوت Gemini Live مستقلاً.</Text>
                   </View>
                 </View>
                 <TouchableOpacity
@@ -4472,7 +4491,7 @@ export default function App() {
                 >
                   <Text style={{ color: '#E9B8D8', fontSize: 12, fontWeight: '800' }}>إعادة ضبط اللغة والصوت</Text>
                 </TouchableOpacity>
-                <Text style={styles.settingsFootnote}>تستخدم المحادثة المباشرة صوت Gemini Live نفسه. عند تعذّر الاتصال، يستخدم EZRA محرك تحويل النص إلى كلام المثبّت في Android دون اشتراك أو رسوم إضافية. عند تفعيل «يا EZRA» تعمل خدمة استماع أمامية بإشعار دائم ويمكنها إيقاظ التطبيق عند التقاط كلمة التنبيه. قد يقيّد النظام الخدمة أو يوقفها بسبب توفير البطارية؛ أوقف الميزة من هنا متى شئت.</Text>
+                <Text style={styles.settingsFootnote}>Gemini Live هو محرك المحادثة الصوتية المباشرة. أما الردود العادية فتستخدم Audar Flash بصوت demo_male_3 بعد تشكيل العربية عبر Ichkil، ثم Habibi وAndroid كبدائل تلقائية عند التعذّر. زر المقاطعة يوقف محركات الصوت الثلاثة ويوقف الكلام الجاري قبل استئناف الاستماع. عند تفعيل «يا EZRA» تعمل خدمة استماع أمامية بإشعار دائم وقد يقيّدها نظام توفير البطارية.</Text>
                   </>
                 )}
                 </ScrollView>
