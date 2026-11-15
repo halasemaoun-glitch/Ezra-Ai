@@ -20,23 +20,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Verify Hugging Face gated model access
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: |
-          if [ -z "$HF_TOKEN" ]; then
-            echo "HF_TOKEN repository secret is missing."
-            exit 1
-          fi
-          status=$(curl -sS -o /tmp/hf-model.json -w "%{http_code}" \\
-            -H "Authorization: Bearer $HF_TOKEN" \\
-            https://huggingface.co/api/models/neuphonic/distill-neucodec)
-          if [ "$status" != "200" ]; then
-            echo "Hugging Face gated model access check failed (HTTP $status)."
-            cat /tmp/hf-model.json
-            exit 1
-          fi
-          echo "HF_TOKEN is present and gated model metadata is accessible."
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
