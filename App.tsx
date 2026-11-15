@@ -248,6 +248,11 @@ const appendVoiceTranscriptSegment = (current: string, incoming: string) => {
   return [previous, ...nextWords.slice(overlap)].filter(Boolean).join(' ');
 };
 
+// The home voice experience uses speech recognition + the selected local TTS engine,
+ // so Supertonic can speak the same assistant replies shown in chat. Gemini Live remains
+ // in the codebase as an optional path, but is not selected for the main orb conversation.
+const USE_GEMINI_LIVE_FOR_HOME = false;
+
 const WELCOME_MESSAGE: Message = {
   id: 'welcome',
   sender: 'ezra',
@@ -266,7 +271,7 @@ const activeMotionLevel = (index: number, listening: boolean, thinking: boolean,
   return 0.18;
 };
 
-function EzraOrb({ status, voiceLevel = 0 }: { status: string; voiceLevel?: number }) {
+function EzraOrb({ status, voiceLevel = 0, onPress }: { status: string; voiceLevel?: number; onPress?: () => void }) {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const stageSize = Math.min(384, Math.max(240, Math.min(screenWidth - 20, screenHeight - 410)));
   const waveform = useRef(Array.from({ length: 9 }, () => new Animated.Value(0.18))).current;
@@ -309,9 +314,17 @@ function EzraOrb({ status, voiceLevel = 0 }: { status: string; voiceLevel?: numb
   const caption = listening ? 'أنا أسمعك… خذ وقتك' : thinking ? 'أرتّب أفكاري لأجيبك' : speaking ? 'أنا معك، ويمكنك مقاطعتي' : 'أنا هنا عندما تحتاجني';
   return (
     <View style={styles.orbSection}>
-      <View style={[styles.orbStage, { width: stageSize, height: stageSize }]}>
-        <EzraOrb3D status={status} level={listening ? voiceLevel : 0} />
-      </View>
+      <TouchableOpacity
+        activeOpacity={0.94}
+        onPress={onPress}
+        disabled={!onPress}
+        accessibilityRole={onPress ? 'button' : undefined}
+        accessibilityLabel="اضغط على كرة EZRA لبدء التحدث"
+      >
+        <View style={[styles.orbStage, { width: stageSize, height: stageSize }]}>
+          <EzraOrb3D status={status} level={listening ? voiceLevel : 0} />
+        </View>
+      </TouchableOpacity>
       <View style={[styles.orbStatusPill, active && styles.orbStatusPillActive]}>
         <View style={[styles.orbStatusDot, active && styles.orbStatusDotActive]} />
         <Text style={styles.orbStatus} accessibilityLiveRegion="polite">{status}</Text>
@@ -3096,7 +3109,7 @@ export default function App() {
     voiceStartInFlightRef.current = true;
     voiceRecognitionSessionIdRef.current += 1;
     try {
-      if (Platform.OS === 'android' && !liveVoiceUnavailableRef.current) {
+      if (USE_GEMINI_LIVE_FOR_HOME && Platform.OS === 'android' && !liveVoiceUnavailableRef.current) {
         liveVoiceConnectingRef.current = true;
         try {
           const microphoneAlreadyGranted = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
@@ -3957,6 +3970,8 @@ export default function App() {
   }
 
   if (voiceHome) {
+    const latestVoiceAssistantMessage = [...messages].reverse().find(item => item.sender === 'ezra' && item.id !== 'welcome')?.text ?? '';
+    const latestVoiceUserMessage = [...messages].reverse().find(item => item.sender === 'user')?.text ?? '';
     const liveAssistantSpeaking = !!liveVoiceSessionRef.current && !!speakingMessageId;
     const voiceStatus = liveAssistantSpeaking
       ? 'إزرا يتحدث'
@@ -4007,11 +4022,23 @@ export default function App() {
             <TouchableOpacity onPress={() => setSettingsVisible(true)} style={styles.voiceTopButton} accessibilityLabel="الإعدادات"><Text style={styles.voiceTopButtonText}>⚙</Text></TouchableOpacity>
           </View>
           <View style={styles.voiceOrbWrap}>
-            <EzraOrb status={voiceStatus} voiceLevel={voiceLevel} />
+            <EzraOrb status={voiceStatus} voiceLevel={voiceLevel} onPress={startListening} />
           </View>
           <View style={styles.voiceStateBlock} accessibilityLiveRegion="polite">
             <Text style={styles.voiceStateEnglish}>{voiceStatusEnglish}</Text>
             <Text style={styles.voiceStateArabic}>{voiceStatusArabic}</Text>
+          </View>
+          <View style={styles.voiceConversationPreview} accessibilityLiveRegion="polite">
+            <Text style={styles.voiceConversationLabel}>
+              {isListening && message.trim() ? 'أسمعك الآن' : sending ? 'رسالتك' : 'آخر رد من EZRA'}
+            </Text>
+            <Text style={styles.voiceConversationText} numberOfLines={2}>
+              {isListening && message.trim()
+                ? message.trim()
+                : sending && latestVoiceUserMessage
+                  ? latestVoiceUserMessage
+                  : latestVoiceAssistantMessage || 'اضغطي على الكرة أو زر الميكروفون وابدئي الحديث معي.'}
+            </Text>
           </View>
           <View style={styles.voiceMicWrap}>
             <Animated.View
@@ -5306,7 +5333,10 @@ const styles = StyleSheet.create({
   mainTabLabelActive: { color: '#F0C5E2', fontWeight: '700' },
 
   voiceOrbWrap: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center' },
-  voiceStateBlock: { width: '100%', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 8, paddingTop: 2, paddingBottom: 10 },
+  voiceStateBlock: { width: '100%', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 8, paddingTop: 2, paddingBottom: 6 },
+  voiceConversationPreview: { width: '100%', maxWidth: 360, minHeight: 58, maxHeight: 82, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 15, backgroundColor: 'rgba(32,20,34,0.78)', borderWidth: 1, borderColor: 'rgba(181,141,174,0.28)', justifyContent: 'center', marginBottom: 2 },
+  voiceConversationLabel: { color: '#C58BB7', fontSize: 9, fontWeight: '800', textAlign: 'right', marginBottom: 4 },
+  voiceConversationText: { color: '#F5EAF3', fontSize: 12, lineHeight: 18, textAlign: 'right' },
   voiceStateEnglish: { color: '#FFF0FA', fontSize: 25, lineHeight: 32, fontWeight: '800', letterSpacing: 0.15, textAlign: 'center' },
   voiceStateArabic: { color: '#D8C2D5', fontSize: 20, lineHeight: 28, fontWeight: '500', textAlign: 'center' },
 
