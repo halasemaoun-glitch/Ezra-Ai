@@ -75,6 +75,15 @@ Deno.serve(async (req: Request) => {
       uses: 1,
       expireTime: new Date(now + 30 * 60 * 1000).toISOString(),
       newSessionExpireTime: new Date(now + 60 * 1000).toISOString(),
+      // Bind the one-use token to EZRA's native-audio Live model and modality.
+      // This prevents a client from changing the model or switching the session
+      // to an unintended response mode.
+      liveConnectConstraints: {
+        model: "models/gemini-3.8-live",
+        config: {
+          responseModalities: ["AUDIO"],
+        },
+      },
     };
 
     const tokenResponse = await fetch(
