@@ -1,5 +1,8 @@
 name: EZRA checks
 
+permissions:
+  contents: write
+
 concurrency:
   group: ezra-checks-${{ github.ref }}
   cancel-in-progress: true
