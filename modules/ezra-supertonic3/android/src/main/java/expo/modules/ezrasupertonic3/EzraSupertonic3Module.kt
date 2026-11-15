@@ -259,7 +259,7 @@ class EzraSupertonic3Module : Module() {
           val env = ortEnvironment ?: throw IllegalStateException("ONNX Runtime is not initialized.")
           val destination = localFile(outputPath)
           destination.parentFile?.mkdirs()
-          val result = engine.call(text, language, style, 8, speed.toFloat(), 0.25f, env)
+          val result = engine.call(text, language, style, 5, speed.toFloat(), 0.25f, env)
           val audio = result.wav ?: throw IllegalStateException("Supertonic returned no audio.")
           Helper.writeWavFile(destination.absolutePath, audio, engine.sampleRate)
           require(destination.isFile && destination.length() > 44L) { "Supertonic WAV output is missing or invalid." }
