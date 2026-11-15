@@ -79,7 +79,9 @@ export async function connectEzraGeminiLive(
               },
             },
             systemInstruction: { parts: [{ text: systemInstruction }] },
-            ...(resumptionHandle ? { sessionResumption: { handle: resumptionHandle } } : {}),
+            // Match the sessionResumption constraint bound into the ephemeral token.
+            // An empty object starts a resumable session; a handle resumes an existing one.
+            sessionResumption: resumptionHandle ? { handle: resumptionHandle } : {},
             contextWindowCompression: { slidingWindow: {} },
             inputAudioTranscription: {},
             outputAudioTranscription: {},
