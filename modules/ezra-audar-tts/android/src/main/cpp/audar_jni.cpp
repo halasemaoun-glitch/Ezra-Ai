@@ -73,7 +73,7 @@ Java_expo_modules_ezraaudartts_EzraAudarTtsModule_nativeInitialize(
   g_vocab = llama_model_get_vocab(g_model);
   llama_context_params contextParams = llama_context_default_params();
   contextParams.n_ctx = 4096;
-  contextParams.n_batch = 512;
+  contextParams.n_batch = 1024;
   contextParams.n_ubatch = 512;
   contextParams.n_threads = std::max(1, static_cast<int>(threads));
   contextParams.n_threads_batch = std::max(1, static_cast<int>(threads));
