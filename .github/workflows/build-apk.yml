@@ -6,6 +6,7 @@ on:
       - ezra/habibi-android-spike
       - ezra/stability-voice-memory-files
       - ezra/live-voice-and-file-fix
+      - ezra/android-audio-output-repair
     paths:
       - '.github/workflows/build-apk.yml'
       - 'App.tsx'
