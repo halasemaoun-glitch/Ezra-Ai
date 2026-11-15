@@ -3436,7 +3436,7 @@ export default function App() {
       let modelInfo = await FileSystem.getInfoAsync(modelPath);
       if (modelInfo.exists && (!modelInfo.size || modelInfo.size < 400_000_000)) {
         await FileSystem.deleteAsync(modelPath, { idempotent: true });
-        modelInfo = { exists: false } as typeof modelInfo;
+        modelInfo = await FileSystem.getInfoAsync(modelPath);
       }
       if (!modelInfo.exists) {
         const task = FileSystem.createDownloadResumable(
@@ -3541,6 +3541,8 @@ export default function App() {
       activeSpokenTextRef.current = '';
       finishVoiceCaptureAfterPlayback();
       EzraHabibiTts?.stopAudio().catch(() => {});
+      EzraAudarTts?.stopAudio().catch(() => {});
+      activeAudarSpeechRef.current = null;
       activeHabibiSpeechRef.current = null;
       setSpeakingMessageId(null);
       return;
