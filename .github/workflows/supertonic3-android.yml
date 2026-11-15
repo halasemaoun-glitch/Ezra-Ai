@@ -36,6 +36,20 @@ jobs:
       - name: Generate Android native project
         run: npx expo prebuild --platform android --no-install
 
+      - name: Embed the JavaScript bundle in the installable debug APK
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("android/app/build.gradle")
+          content = path.read_text()
+          marker = "react {\\n"
+          if marker not in content:
+              raise SystemExit("React Native Gradle react block not found")
+          if "debuggableVariants = []" not in content:
+              content = content.replace(marker, marker + "    debuggableVariants = []\\n", 1)
+          path.write_text(content)
+          PY
+
       - name: Compile Android debug APK
         working-directory: android
         run: ./gradlew --no-daemon -PreactNativeArchitectures=arm64-v8a :app:assembleDebug
