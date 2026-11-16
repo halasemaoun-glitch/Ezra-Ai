@@ -186,6 +186,30 @@ type Message = {
   attachment?: Attachment;
 };
 
+const splitSpeechIntoChunks = (value: string, maxCharacters = 160): string[] => {
+  const sentences = value.match(/[^.!?؟؛\\n]+[.!?؟؛\\n]*/gu) ?? [value];
+  const chunks: string[] = [];
+  let pending = '';
+  const flush = () => { if (pending.trim()) chunks.push(pending.trim()); pending = ''; };
+  for (const sentence of sentences) {
+    const candidate = pending ? `${pending} ${sentence}` : sentence;
+    if (Array.from(candidate).length <= maxCharacters) {
+      pending = candidate;
+      continue;
+    }
+    flush();
+    const words = sentence.trim().split(/\\s+/u);
+    for (const word of words) {
+      const next = pending ? `${pending} ${word}` : word;
+      if (Array.from(next).length > maxCharacters && pending) flush();
+      pending = pending ? `${pending} ${word}` : word;
+      if (Array.from(pending).length >= maxCharacters) flush();
+    }
+  }
+  flush();
+  return chunks.length ? chunks : [value];
+};
+
 const normalizeVoiceEchoText = (value: string) => value
   .normalize('NFKC')
   .toLocaleLowerCase()
@@ -416,7 +440,7 @@ export default function App() {
   const [supertonicProgress, setSupertonicProgress] = useState(0);
   const [supertonicError, setSupertonicError] = useState('');
   const supertonicReadyRef = useRef(false);
-  const activeSupertonicSpeechRef = useRef<{ text: string; messageId: string } | null>(null);
+  const activeSupertonicSpeechRef = useRef<{ text: string; messageId: string; chunks?: string[]; index?: number; language?: 'ar' | 'en' } | null>(null);
   const activeHabibiSpeechRef = useRef<{ text: string; messageId: string } | null>(null);
   const activeAudarSpeechRef = useRef<{ text: string; messageId: string } | null>(null);
   const audarReadyRef = useRef(false);
@@ -3651,9 +3675,56 @@ export default function App() {
     return () => { active = false; };
   }, []);
 
+  const playNextSupertonicChunk = async () => {
+    const active = activeSupertonicSpeechRef.current;
+    if (!active?.chunks || active.index === undefined || !active.language) return;
+    if (active.index >= active.chunks.length) {
+      activeSupertonicSpeechRef.current = null;
+      finishVoiceCaptureAfterPlayback();
+      setSpeakingMessageId(current => current === active.messageId ? null : current);
+      resumeBackgroundWake();
+      return;
+    }
+    try {
+      let chunkText = active.chunks[active.index];
+      if (active.language === 'ar') {
+        try { chunkText = await diacritizeArabicLocally(chunkText); }
+        catch (error) { console.warn('Ichkil chunk unavailable; using original Arabic text:', error); }
+      }
+      if (activeSupertonicSpeechRef.current !== active || activeSpokenTextRef.current !== active.text) return;
+      const ready = await ensureSupertonicReady();
+      if (!ready) throw new Error('Supertonic is not ready for chunk playback.');
+      const outputPath = `${FileSystem.cacheDirectory || FileSystem.documentDirectory || ''}ezra-supertonic3-${Date.now()}-${active.index}.wav`;
+      const generated = await EzraSupertonic3!.synthesize(chunkText, active.language, outputPath, speechRate);
+      if (activeSupertonicSpeechRef.current !== active || activeSpokenTextRef.current !== active.text) return;
+      await EzraSupertonic3!.playAudio(generated.path);
+    } catch (error) {
+      if (activeSupertonicSpeechRef.current !== active) return;
+      activeSupertonicSpeechRef.current = null;
+      supertonicReadyRef.current = false;
+      setSupertonicReady(false);
+      console.warn('Supertonic chunk playback failed; falling back to Android TTS:', error);
+      Speech.speak(active.text, {
+        language: active.language,
+        rate: speechRate,
+        pitch: speechPitch,
+        volume: 1,
+        onDone: () => { finishVoiceCaptureAfterPlayback(); setSpeakingMessageId(current => current === active.messageId ? null : current); resumeBackgroundWake(); },
+        onStopped: () => { finishVoiceCaptureAfterPlayback(); setSpeakingMessageId(current => current === active.messageId ? null : current); resumeBackgroundWake(); },
+        onError: () => { finishVoiceCaptureAfterPlayback(); setSpeakingMessageId(current => current === active.messageId ? null : current); resumeBackgroundWake(); },
+      });
+    }
+  };
+
   useEffect(() => {
     if (!EzraSupertonic3) return;
     const finished = EzraSupertonic3.addListener('onPlaybackFinished', () => {
+      const active = activeSupertonicSpeechRef.current;
+      if (active?.chunks && active.index !== undefined) {
+        active.index += 1;
+        void playNextSupertonicChunk();
+        return;
+      }
       activeSupertonicSpeechRef.current = null;
       finishVoiceCaptureAfterPlayback();
       setSpeakingMessageId(null);
@@ -3727,13 +3798,15 @@ export default function App() {
     await EzraSupertonic3?.stopAudio().catch(() => {});
     activeAudarSpeechRef.current = null;
     activeHabibiSpeechRef.current = null;
+    activeSupertonicSpeechRef.current = null;
     activeSpokenTextRef.current = text;
     setSpeakingMessageId(messageId);
     const speechLanguage = DEFAULT_EZRA_VOICE.automaticOutputLanguage
       ? detectEzraSpeechLanguage(text, responseLanguage)
       : responseLanguage;
     let speechText = text;
-    if (speechLanguage === 'ar' && Platform.OS === 'android') {
+    const useSupertonic = (speechLanguage === 'ar' || speechLanguage === 'en') && supertonicEnabled && !!EzraSupertonic3 && Platform.OS === 'android';
+    if (speechLanguage === 'ar' && Platform.OS === 'android' && !useSupertonic) {
       try {
         speechText = await diacritizeArabicLocally(text);
       } catch (error) {
@@ -3743,16 +3816,19 @@ export default function App() {
       if (activeSpokenTextRef.current !== text) return;
     }
 
-    if ((speechLanguage === 'ar' || speechLanguage === 'en') && supertonicEnabled && EzraSupertonic3 && Platform.OS === 'android') {
+    if (useSupertonic) {
       try {
         const ready = await ensureSupertonicReady();
         if (activeSpokenTextRef.current !== text) return;
         if (ready) {
-          const outputPath = `${FileSystem.cacheDirectory || FileSystem.documentDirectory || ''}ezra-supertonic3-${Date.now()}.wav`;
-          const generated = await EzraSupertonic3.synthesize(speechText, speechLanguage, outputPath, speechRate);
-          if (activeSpokenTextRef.current !== text) return;
-          activeSupertonicSpeechRef.current = { text, messageId };
-          await EzraSupertonic3.playAudio(generated.path);
+          activeSupertonicSpeechRef.current = {
+            text,
+            messageId,
+            chunks: splitSpeechIntoChunks(text),
+            index: 0,
+            language: speechLanguage as 'ar' | 'en',
+          };
+          await playNextSupertonicChunk();
           return;
         }
       } catch (error) {
@@ -3761,6 +3837,12 @@ export default function App() {
         setSupertonicReady(false);
         console.warn('Supertonic synthesis unavailable; falling back to existing voice engines:', error);
       }
+    }
+
+    if (speechLanguage === 'ar' && Platform.OS === 'android' && speechText === text) {
+      try { speechText = await diacritizeArabicLocally(text); }
+      catch (error) { console.warn('Ichkil diacritization unavailable; using original Arabic text:', error); }
+      if (activeSpokenTextRef.current !== text) return;
     }
 
     if (speechLanguage === 'ar' && EzraAudarTts && Platform.OS === 'android') {
