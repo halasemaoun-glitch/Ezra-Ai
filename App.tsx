@@ -187,7 +187,7 @@ type Message = {
 };
 
 const splitSpeechIntoChunks = (value: string, maxCharacters = 160): string[] => {
-  const sentences = value.match(/[^.!?؟؛\\n]+[.!?؟؛\\n]*/gu) ?? [value];
+  const sentences = value.match(/[^.!?؟؛\n]+[.!?؟؛\n]*/gu) ?? [value];
   const chunks: string[] = [];
   let pending = '';
   const flush = () => { if (pending.trim()) chunks.push(pending.trim()); pending = ''; };
@@ -198,7 +198,7 @@ const splitSpeechIntoChunks = (value: string, maxCharacters = 160): string[] => 
       continue;
     }
     flush();
-    const words = sentence.trim().split(/\\s+/u);
+    const words = sentence.trim().split(/\s+/u);
     for (const word of words) {
       const next = pending ? `${pending} ${word}` : word;
       if (Array.from(next).length > maxCharacters && pending) flush();
@@ -2583,7 +2583,7 @@ export default function App() {
         const diagnostic = error
           ? [error.message, error.details, error.hint, error.code ? `Code: ${error.code}` : null]
               .filter(Boolean)
-              .join('\\n\\n')
+              .join('\n\n')
           : 'Supabase returned no saved message row.';
         Alert.alert('لم تُحفظ الرسالة', diagnostic);
         voiceTurnInProgressRef.current = false;
@@ -2652,8 +2652,8 @@ export default function App() {
           : [];
         const dentalReferenceGuidance = relevantDentalReferences.length
           ? relevantDentalReferences.map(({ reference, score }) =>
-              `Built-in dental learning reference — ${reference.title} (category: ${reference.category}; relevance: ${score})\\n${reference.summary}\\n${reference.keyPoints.join('\\n')}\\nSources: ${(reference.sources ?? []).map(source => source.label + ' ' + source.url).join(' | ')}`
-            ).join('\\n\\n').slice(0, 6500)
+              `Built-in dental learning reference — ${reference.title} (category: ${reference.category}; relevance: ${score})\n${reference.summary}\n${reference.keyPoints.join('\n')}\nSources: ${(reference.sources ?? []).map(source => source.label + ' ' + source.url).join(' | ')}`
+            ).join('\n\n').slice(0, 6500)
           : (assistantMode === 'dentist' || assistantMode === 'study'
               ? 'No matching built-in dental reference was retrieved. Answer from reliable general knowledge only when confident, state uncertainty, and do not invent citations or clinical facts.'
               : '');
@@ -2662,8 +2662,8 @@ export default function App() {
           ? retrieveDentalClinicalCases(userInput, DENTAL_CLINICAL_CASES, { limit: 3, minScore: 2 })
           : [];
         const clinicalCaseGuidance = relevantClinicalCases.map(({ clinicalCase, score }) =>
-          `Clinical case reference (${score}): ${clinicalCase.title} — ${clinicalCase.specialty}\\nPresentation: ${clinicalCase.presentation}\\nHistory to collect: ${clinicalCase.historyToCollect.join('; ')}\\nClinical findings: ${clinicalCase.clinicalFindings.join('; ')}\\nRed flags: ${clinicalCase.redFlags.join('; ')}\\nDifferential diagnoses: ${clinicalCase.differentials.map(item => item.diagnosis + ' | supports: ' + item.supportingClues.join(', ') + ' | missing/opposing: ' + item.opposingOrMissingClues.join(', ')).join(' || ')}\\nInvestigations: ${clinicalCase.investigations.join('; ')}\\nManagement principles: ${clinicalCase.management.join('; ')}\\nComplications: ${clinicalCase.complications.join('; ')}\\nFollow-up: ${clinicalCase.followUp.join('; ')}\\nEvidence: ${clinicalCase.sources.map(source => source.label + ' ' + source.url).join(' | ')}`
-        ).join('\\n\\n').slice(0, 10500);
+          `Clinical case reference (${score}): ${clinicalCase.title} — ${clinicalCase.specialty}\nPresentation: ${clinicalCase.presentation}\nHistory to collect: ${clinicalCase.historyToCollect.join('; ')}\nClinical findings: ${clinicalCase.clinicalFindings.join('; ')}\nRed flags: ${clinicalCase.redFlags.join('; ')}\nDifferential diagnoses: ${clinicalCase.differentials.map(item => item.diagnosis + ' | supports: ' + item.supportingClues.join(', ') + ' | missing/opposing: ' + item.opposingOrMissingClues.join(', ')).join(' || ')}\nInvestigations: ${clinicalCase.investigations.join('; ')}\nManagement principles: ${clinicalCase.management.join('; ')}\nComplications: ${clinicalCase.complications.join('; ')}\nFollow-up: ${clinicalCase.followUp.join('; ')}\nEvidence: ${clinicalCase.sources.map(source => source.label + ' ' + source.url).join(' | ')}`
+        ).join('\n\n').slice(0, 10500);
 
         const aiGuidance = [
           aiPreferences.responseDepth === 'مختصر'
@@ -2788,7 +2788,7 @@ export default function App() {
                 ? JSON.stringify(context.body)
                 : null,
             !aiError && aiData ? JSON.stringify(aiData) : null,
-          ].filter(Boolean).join('\\n\\n');
+          ].filter(Boolean).join('\n\n');
           console.error('EZRA AI request failed:', { aiError, aiData });
           Alert.alert(
             'تعذّر على إزرا الرد',
@@ -3782,6 +3782,7 @@ export default function App() {
   const speak = async (text: string, messageId: string) => {
     if (speakingMessageId === messageId) {
       Speech.stop();
+      activeSupertonicSpeechRef.current = null;
       activeSpokenTextRef.current = '';
       finishVoiceCaptureAfterPlayback();
       EzraHabibiTts?.stopAudio().catch(() => {});
