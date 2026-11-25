@@ -1,0 +1,63 @@
+name: Gemini Live repair - Android APK
+
+on:
+  push:
+    branches:
+      - ezra/gemini-live-connection-fix
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  android-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install JavaScript dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: TypeScript check
+        run: npm run typecheck
+
+      - name: Generate Android native project
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Embed the JavaScript bundle in the installable debug APK
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("android/app/build.gradle")
+          content = path.read_text()
+          marker = "react {\n"
+          if marker not in content:
+              raise SystemExit("React Native Gradle react block not found")
+          if "debuggableVariants = []" not in content:
+              content = content.replace(marker, marker + "    debuggableVariants = []\n", 1)
+          path.write_text(content)
+          PY
+
+      - name: Compile Android debug APK
+        working-directory: android
+        run: ./gradlew --no-daemon -PreactNativeArchitectures=arm64-v8a :app:assembleDebug
+
+      - name: Upload Android debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: EZRA-Gemini-Live-Connection-Fix-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
