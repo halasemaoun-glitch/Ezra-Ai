@@ -275,7 +275,7 @@ const appendVoiceTranscriptSegment = (current: string, incoming: string) => {
 // The home voice experience uses speech recognition + the selected local TTS engine,
  // so Supertonic can speak the same assistant replies shown in chat. Gemini Live remains
  // in the codebase as an optional path, but is not selected for the main orb conversation.
-const USE_GEMINI_LIVE_FOR_HOME = false;
+const USE_GEMINI_LIVE_FOR_HOME = true;
 
 const WELCOME_MESSAGE: Message = {
   id: 'welcome',
