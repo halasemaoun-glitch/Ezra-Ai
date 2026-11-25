@@ -7,6 +7,7 @@ on:
       - ezra/stability-voice-memory-files
       - ezra/live-voice-and-file-fix
       - ezra/android-audio-output-repair
+      - ezra/gemini-live-connection-fix
     paths:
       - '.github/workflows/build-apk.yml'
       - 'App.tsx'
